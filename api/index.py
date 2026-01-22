@@ -177,6 +177,10 @@ def login():
     if not email or not password:
         return jsonify({'error': 'Email and password required'}), 400
     
+    if supabase is None:
+        logger.error("Supabase client not initialized")
+        return jsonify({'error': 'Database connection error. Please check server logs.'}), 500
+    
     try:
         # Authenticate with Supabase
         response = supabase.auth.sign_in_with_password({
@@ -380,15 +384,24 @@ def get_campaign(campaign_id):
 def update_campaign(campaign_id):
     """Update campaign."""
     data = request.json
+    client = supabase_admin or supabase
+    
+    # Only include fields that are provided
+    update_data = {}
+    if 'name' in data:
+        update_data['name'] = data['name']
+    if 'domain' in data:
+        update_data['domain'] = data['domain']
+    if 'settings' in data:
+        update_data['settings'] = data['settings']
+    if 'status' in data:
+        update_data['status'] = data['status']
+    
+    if not update_data:
+        return jsonify({'error': 'No fields to update'}), 400
     
     try:
-        response = supabase.table('campaigns').update({
-            'name': data.get('name'),
-            'domain': data.get('domain'),
-            'settings': data.get('settings'),
-            'status': data.get('status')
-        }).eq('id', campaign_id).execute()
-        
+        response = client.table('campaigns').update(update_data).eq('id', campaign_id).execute()
         return jsonify({'campaign': response.data[0]})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

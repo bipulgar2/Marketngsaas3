@@ -207,7 +207,8 @@
             { id: 'competitors', label: 'Competitors', icon: 'users' },
             { id: 'links', label: 'Links', icon: 'link' },
             { id: 'tasks', label: 'Tasks', icon: 'check-square' },
-            { id: 'reports', label: 'Reports', icon: 'bar-chart-2' }
+            { id: 'reports', label: 'Reports', icon: 'bar-chart-2' },
+            { id: 'client-settings', label: 'Settings', icon: 'settings', clientOnly: true }
         ];
 
         const SIDE_TABS = {
@@ -266,6 +267,13 @@
                 { id: 'analytics', label: 'Analytics' },
                 { id: 'wins', label: 'Wins' },
                 { id: 'exports', label: 'Exports' }
+            ],
+            'client-settings': [
+                { id: 'general', label: 'General' },
+                { id: 'google', label: 'Google (GSC, GA4)' },
+                { id: 'cms', label: 'CMS Access' },
+                { id: 'analytics', label: 'Analytics Tools' },
+                { id: 'competitors', label: 'Competitors' }
             ]
         };
 
@@ -306,7 +314,9 @@
         // =========================================================================
         function buildTopTabs() {
             const container = document.getElementById('topTabs');
-            container.innerHTML = TOP_TABS.map(tab => `
+            // Filter out client-only tabs when no client is selected
+            const visibleTabs = TOP_TABS.filter(tab => !tab.clientOnly || currentClient);
+            container.innerHTML = visibleTabs.map(tab => `
                 <button onclick="switchTopTab('${tab.id}')" 
                     class="top-tab flex items-center gap-1.5 text-sm text-gray-400 transition-colors ${tab.id === currentTopTab ? 'active' : ''}">
                     <i data-lucide="${tab.icon}" class="w-4 h-4"></i>
@@ -327,7 +337,8 @@
                 'competitors': 'Competitors',
                 'links': 'Links',
                 'tasks': 'Tasks',
-                'reports': 'Reports'
+                'reports': 'Reports',
+                'client-settings': 'Client Settings'
             };
 
             document.getElementById('sidebarTitle').textContent = titleMap[currentTopTab] || 'Navigation';
@@ -615,17 +626,293 @@
                     <button onclick="runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
                         <i data-lucide="play" class="w-4 h-4"></i> Run Audit
                     </button>`;
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                        <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">${currentClient?.name || 'Client'} — ${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
+                        <p class="text-gray-400">This section will show ${currentSideTab} data for ${currentClient?.domain || 'selected client'}.</p>
+                        <p class="text-xs text-gray-500 mt-4">Implementation coming in Phase 2</p>
+                    </div>`;
+            } else if (currentTopTab === 'client-settings') {
+                await loadClientSettingsContent();
+            } else {
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                        <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">${currentClient?.name || 'Client'} — ${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
+                        <p class="text-gray-400">This section will show ${currentSideTab} data for ${currentClient?.domain || 'selected client'}.</p>
+                        <p class="text-xs text-gray-500 mt-4">Implementation coming in Phase 2</p>
+                    </div>`;
             }
 
-            contentArea.innerHTML = `
-                <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-                    <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
-                    <h3 class="text-lg font-semibold text-white mb-2">${currentClient?.name || 'Client'} — ${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
-                    <p class="text-gray-400">This section will show ${currentSideTab} data for ${currentClient?.domain || 'selected client'}.</p>
-                    <p class="text-xs text-gray-500 mt-4">Implementation coming in Phase 2</p>
-                </div>`;
+            lucide.createIcons();
+        }
+
+        async function loadClientSettingsContent() {
+            const contentArea = document.getElementById('contentArea');
+            const pageActions = document.getElementById('pageActions');
+
+            if (!currentClient) {
+                contentArea.innerHTML = `<div class="text-center text-gray-500 py-12">Select a client to view settings</div>`;
+                return;
+            }
+
+            // Fetch current settings
+            let settings = currentClient.settings || {};
+
+            pageActions.innerHTML = `
+                <button onclick="saveClientSettings()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
+                    <i data-lucide="save" class="w-4 h-4"></i> Save Settings
+                </button>`;
+
+            if (currentSideTab === 'general') {
+                contentArea.innerHTML = `
+                    <div class="max-w-2xl">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                            <h3 class="text-lg font-semibold text-white mb-4">General Information</h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">Client Name</label>
+                                    <input type="text" id="setting_name" value="${currentClient.name || ''}" 
+                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">Domain</label>
+                                    <input type="text" id="setting_domain" value="${currentClient.domain || ''}" 
+                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">Language</label>
+                                    <select id="setting_language" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                        <option value="English" ${settings.language === 'English' ? 'selected' : ''}>English</option>
+                                        <option value="Spanish" ${settings.language === 'Spanish' ? 'selected' : ''}>Spanish</option>
+                                        <option value="French" ${settings.language === 'French' ? 'selected' : ''}>French</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">Location</label>
+                                    <select id="setting_location" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                        <option value="US" ${settings.location === 'US' ? 'selected' : ''}>United States</option>
+                                        <option value="UK" ${settings.location === 'UK' ? 'selected' : ''}>United Kingdom</option>
+                                        <option value="IN" ${settings.location === 'IN' ? 'selected' : ''}>India</option>
+                                        <option value="AU" ${settings.location === 'AU' ? 'selected' : ''}>Australia</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            } else if (currentSideTab === 'google') {
+                contentArea.innerHTML = `
+                    <div class="max-w-2xl">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                            <h3 class="text-lg font-semibold text-white mb-2">Google Search Console</h3>
+                            <p class="text-xs text-gray-400 mb-4">Property URL from GSC</p>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">GSC Property URL</label>
+                                    <input type="text" id="setting_gsc_property" value="${settings.gsc_property || ''}" placeholder="https://example.com/"
+                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                            <h3 class="text-lg font-semibold text-white mb-2">Google Analytics 4</h3>
+                            <p class="text-xs text-gray-400 mb-4">Your GA4 property ID</p>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">GA4 Property ID</label>
+                                    <input type="text" id="setting_ga4_property" value="${settings.ga4_property || ''}" placeholder="123456789"
+                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            } else if (currentSideTab === 'cms') {
+                contentArea.innerHTML = `
+                    <div class="max-w-2xl">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                            <h3 class="text-lg font-semibold text-white mb-2">WordPress</h3>
+                            <p class="text-xs text-gray-400 mb-4">REST API credentials for content publishing</p>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">WordPress URL</label>
+                                    <input type="text" id="setting_wp_url" value="${settings.wp_url || ''}" placeholder="https://example.com"
+                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">Username</label>
+                                    <input type="text" id="setting_wp_user" value="${settings.wp_user || ''}" placeholder="admin"
+                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">Application Password</label>
+                                    <input type="password" id="setting_wp_app_password" value="${settings.wp_app_password || ''}" placeholder="xxxx xxxx xxxx xxxx"
+                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                    <p class="text-xs text-gray-500 mt-1">Generate from WordPress → Users → Your Profile → Application Passwords</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                            <h3 class="text-lg font-semibold text-white mb-2">Shopify (Optional)</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">Shopify Store URL</label>
+                                    <input type="text" id="setting_shopify_store" value="${settings.shopify_store || ''}" placeholder="example.myshopify.com"
+                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-400 mb-1">Admin API Access Token</label>
+                                    <input type="password" id="setting_shopify_token" value="${settings.shopify_token || ''}" placeholder="shpat_..."
+                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            } else if (currentSideTab === 'analytics') {
+                contentArea.innerHTML = `
+                    <div class="max-w-2xl">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                            <h3 class="text-lg font-semibold text-white mb-2">Microsoft Clarity</h3>
+                            <p class="text-xs text-gray-400 mb-4">For heatmaps and session recordings</p>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">Clarity Project ID</label>
+                                <input type="text" id="setting_clarity_id" value="${settings.clarity_id || ''}" placeholder="abc123xyz"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                            </div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                            <h3 class="text-lg font-semibold text-white mb-2">Ahrefs (Optional)</h3>
+                            <p class="text-xs text-gray-400 mb-4">For backlink and keyword data</p>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">Ahrefs API Token</label>
+                                <input type="password" id="setting_ahrefs_token" value="${settings.ahrefs_token || ''}" placeholder="API token"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>`;
+            } else if (currentSideTab === 'competitors') {
+                const competitors = settings.competitors || [];
+                contentArea.innerHTML = `
+                    <div class="max-w-2xl">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-white">Competitor Domains</h3>
+                                <button onclick="addCompetitorField()" class="text-sm text-violet-400 hover:text-violet-300">+ Add</button>
+                            </div>
+                            <div id="competitorsList" class="space-y-3">
+                                ${competitors.length ? competitors.map((c, i) => `
+                                    <div class="flex gap-2">
+                                        <input type="text" class="competitor-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" value="${c}" placeholder="competitor.com">
+                                        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-red-400 px-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                    </div>
+                                `).join('') : `
+                                    <div class="flex gap-2">
+                                        <input type="text" class="competitor-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="competitor.com">
+                                        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-red-400 px-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                    </div>`;
+            }
 
             lucide.createIcons();
+        }
+
+        function addCompetitorField() {
+            const list = document.getElementById('competitorsList');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2';
+            div.innerHTML = `
+                <input type="text" class="competitor-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="competitor.com">
+                <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-red-400 px-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            `;
+            list.appendChild(div);
+            lucide.createIcons();
+        }
+
+        async function saveClientSettings() {
+            if (!currentClient) return;
+
+            // Collect all settings from current page
+            const settings = { ...currentClient.settings };
+
+            // General
+            const name = document.getElementById('setting_name');
+            const domain = document.getElementById('setting_domain');
+            const language = document.getElementById('setting_language');
+            const location = document.getElementById('setting_location');
+
+            if (language) settings.language = language.value;
+            if (location) settings.location = location.value;
+
+            // Google
+            const gscProperty = document.getElementById('setting_gsc_property');
+            const ga4Property = document.getElementById('setting_ga4_property');
+            if (gscProperty) settings.gsc_property = gscProperty.value;
+            if (ga4Property) settings.ga4_property = ga4Property.value;
+
+            // CMS
+            const wpUrl = document.getElementById('setting_wp_url');
+            const wpUser = document.getElementById('setting_wp_user');
+            const wpAppPassword = document.getElementById('setting_wp_app_password');
+            const shopifyStore = document.getElementById('setting_shopify_store');
+            const shopifyToken = document.getElementById('setting_shopify_token');
+            if (wpUrl) settings.wp_url = wpUrl.value;
+            if (wpUser) settings.wp_user = wpUser.value;
+            if (wpAppPassword) settings.wp_app_password = wpAppPassword.value;
+            if (shopifyStore) settings.shopify_store = shopifyStore.value;
+            if (shopifyToken) settings.shopify_token = shopifyToken.value;
+
+            // Analytics
+            const clarityId = document.getElementById('setting_clarity_id');
+            const ahrefsToken = document.getElementById('setting_ahrefs_token');
+            if (clarityId) settings.clarity_id = clarityId.value;
+            if (ahrefsToken) settings.ahrefs_token = ahrefsToken.value;
+
+            // Competitors
+            const competitorInputs = document.querySelectorAll('.competitor-input');
+            if (competitorInputs.length) {
+                settings.competitors = Array.from(competitorInputs).map(i => i.value).filter(v => v.trim());
+            }
+
+            // Prepare update data
+            const updateData = { settings };
+            if (name) updateData.name = name.value;
+            if (domain) updateData.domain = domain.value;
+
+            try {
+                const res = await fetch(`/api/campaigns/${currentClient.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updateData)
+                });
+
+                if (res.ok) {
+                    const { campaign } = await res.json();
+                    // Update local state
+                    currentClient = campaign;
+                    const idx = clients.findIndex(c => c.id === campaign.id);
+                    if (idx >= 0) clients[idx] = campaign;
+
+                    showModal(`
+                        <div class="p-6 text-center">
+                            <div class="w-12 h-12 mx-auto mb-4 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                                <i data-lucide="check" class="w-6 h-6 text-emerald-400"></i>
+                            </div>
+                            <h3 class="text-lg font-semibold text-white mb-2">Settings Saved</h3>
+                            <p class="text-gray-400 text-sm mb-4">Client settings have been updated.</p>
+                            <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
+                        </div>
+                    `);
+                    lucide.createIcons();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'Failed to save settings');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
         }
 
         // =========================================================================

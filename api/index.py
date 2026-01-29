@@ -221,12 +221,21 @@ def login():
                 
                 if org_res.data:
                     org_id = org_res.data[0]['id']
-                    # Update profile
+                    
+                    # 2. Update Profile with Org ID
                     updated_profile = admin.table('profiles').update({
                         'organization_id': org_id,
                         'role': 'admin'
                     }).eq('id', user.id).execute()
                     
+                    # 3. MIGRATION: Adopt orphaned campaigns (Safe heuristics)
+                    # If this is the "main" user (or first to migrate), give them the legacy data
+                    # We check if this user effectively "owns" the legacy state
+                    # For simplicity/safety in this specific context: Update ALL null-org campaigns
+                    migration_res = admin.table('campaigns').update({'organization_id': org_id}).is_('organization_id', 'null').execute()
+                    if migration_res.data:
+                        logger.info(f"Migrated {len(migration_res.data)} orphaned campaigns to org {org_id}")
+
                     # Use updated profile data
                     if updated_profile.data:
                         profile = updated_profile

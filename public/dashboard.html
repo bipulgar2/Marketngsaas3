@@ -1505,6 +1505,139 @@
                         ${issueMap.size === 0 ? '<div class="text-center py-12 text-gray-500">No issues found! Great job.</div>' : ''}
                      </div>
                 `;
+            } else if (currentSideTab === 'core-web-vitals') {
+                // Calculate basic metrics from pages
+                let fast = 0, moderate = 0, slow = 0;
+                let totalLoad = 0;
+                let count = 0;
+
+                pages.forEach(p => {
+                    const t = p.time_to_interactive || 0;
+                    if (t > 0) {
+                        totalLoad += t;
+                        count++;
+                        if (t < 2500) fast++;
+                        else if (t < 4000) moderate++;
+                        else slow++;
+                    }
+                });
+
+                const avgLoad = count > 0 ? (totalLoad / count).toFixed(0) : 0;
+
+                contentArea.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl text-center">
+                            <div class="w-12 h-12 mx-auto bg-green-500/10 rounded-full flex items-center justify-center mb-4">
+                                <i data-lucide="zap" class="w-6 h-6 text-green-500"></i>
+                            </div>
+                            <h4 class="text-gray-400 text-sm font-medium mb-1">Avg Load Time</h4>
+                            <div class="text-3xl font-bold text-white">${avgLoad}ms</div>
+                            <p class="text-xs text-gray-500 mt-2">Time to Interactive</p>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl text-center">
+                            <div class="w-12 h-12 mx-auto bg-blue-500/10 rounded-full flex items-center justify-center mb-4">
+                                <i data-lucide="activity" class="w-6 h-6 text-blue-500"></i>
+                            </div>
+                            <h4 class="text-gray-400 text-sm font-medium mb-1">Performance Score</h4>
+                            <div class="text-3xl font-bold text-white">${summary.onpage_score ? summary.onpage_score.toFixed(0) : '-'}</div>
+                            <p class="text-xs text-gray-500 mt-2">On-Page Score</p>
+                        </div>
+                         <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl text-center">
+                            <div class="w-12 h-12 mx-auto bg-purple-500/10 rounded-full flex items-center justify-center mb-4">
+                                <i data-lucide="layers" class="w-6 h-6 text-purple-500"></i>
+                            </div>
+                            <h4 class="text-gray-400 text-sm font-medium mb-1">Total Pages</h4>
+                            <div class="text-3xl font-bold text-white">${pages.length}</div>
+                            <p class="text-xs text-gray-500 mt-2">Analyzed</p>
+                        </div>
+                    </div>
+
+                    <h3 class="font-medium text-white mb-4">Performance Distribution</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                         <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                                <span class="text-gray-300">Fast (< 2.5s)</span>
+                            </div>
+                            <span class="text-xl font-bold text-white">${fast}</span>
+                        </div>
+                         <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                <span class="text-gray-300">Moderate (2.5s - 4s)</span>
+                            </div>
+                            <span class="text-xl font-bold text-white">${moderate}</span>
+                        </div>
+                         <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                                <span class="text-gray-300">Slow (> 4s)</span>
+                            </div>
+                            <span class="text-xl font-bold text-white">${slow}</span>
+                        </div>
+                    </div>
+                `;
+
+            } else if (currentSideTab === 'page-speed') {
+                // Similar to CWV but focus on resources/size if available, else just load time table
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                        <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                             <h3 class="font-medium text-white">Page Speed Analysis</h3>
+                             <span class="text-xs text-gray-500">Sorted by Slowest</span>
+                        </div>
+                         <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-gray-400">
+                                <thead class="bg-gray-900/50 text-gray-500 font-medium border-b border-gray-800">
+                                    <tr>
+                                        <th class="p-3">URL</th>
+                                        <th class="p-3 text-right">Time to Interactive</th>
+                                        <th class="p-3 text-right">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-800">
+                                    ${pages
+                        .sort((a, b) => (b.time_to_interactive || 0) - (a.time_to_interactive || 0))
+                        .slice(0, 50).map(p => {
+                            const t = p.time_to_interactive || 0;
+                            const color = t < 2500 ? 'text-green-400' : (t < 4000 ? 'text-yellow-400' : 'text-red-400');
+                            return `
+                                    <tr>
+                                        <td class="p-3 max-w-md truncate text-white" title="${p.url}">${p.url}</td>
+                                        <td class="p-3 text-right font-mono ${color}">${t} ms</td>
+                                        <td class="p-3 text-right">
+                                            <span class="px-2 py-0.5 rounded text-xs ${t < 2500 ? 'bg-green-500/20 text-green-400' : (t < 4000 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400')}">
+                                                ${t < 2500 ? 'Good' : (t < 4000 ? 'Needs Improvement' : 'Poor')}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    `}).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            } else if (currentSideTab === 'schema-markup') {
+                // Placeholder for now as we don't have deep schema data in basic page objects yet
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                        <i data-lucide="code-2" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">Schema Analysis</h3>
+                        <p class="text-gray-400 max-w-md mx-auto mb-6">Detailed Schema.org validation requires the advanced extraction pipeline. Currently verifying basic metadata presence.</p>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left max-w-2xl mx-auto">
+                            ${pages.slice(0, 6).map(p => `
+                                <div class="bg-black/30 p-3 rounded-lg border border-gray-800">
+                                    <div class="text-white truncate text-sm mb-1">${p.url}</div>
+                                    <div class="flex items-center gap-2">
+                                        <i data-lucide="check-circle" class="w-3 h-3 text-green-500"></i>
+                                        <span class="text-xs text-gray-500">Basic Meta Tags found</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
+
             } else {
                 contentArea.innerHTML = `
                     <div class="flex flex-col items-center justify-center h-64 text-center text-gray-500">

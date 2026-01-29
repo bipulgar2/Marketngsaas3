@@ -777,6 +777,41 @@ def analyze_competitors():
 
 
 # =============================================================================
+# DEBUG / RESCUE ROUTES
+# =============================================================================
+
+@app.route('/api/debug/claim-orphans', methods=['POST'])
+@login_required
+def claim_orphans():
+    """Manual trigger to claim NULL-org campaigns for current user."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    
+    if not org_id:
+        return jsonify({'error': 'User has no organization to claim into'}), 400
+        
+    client = supabase_admin or supabase
+    try:
+        # Find orphaned campaigns
+        orphans = client.table('campaigns').select('id, name').is_('organization_id', 'null').execute()
+        count = len(orphans.data)
+        
+        # Update them
+        if count > 0:
+            client.table('campaigns').update({'organization_id': org_id}).is_('organization_id', 'null').execute()
+            
+        return jsonify({
+            'success': True,
+            'user_email': user['email'],
+            'target_org_id': org_id,
+            'orphans_found': count,
+            'orphans_claimed': orphans.data
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 

@@ -9,6 +9,13 @@ from flask import Flask, jsonify, request, render_template, redirect, url_for, s
 from flask_cors import CORS
 from dotenv import load_dotenv
 from functools import wraps
+from api.dataforseo_client import (
+    start_onpage_audit,
+    get_audit_status,
+    get_audit_summary,
+    get_page_issues
+)
+from api.utils import create_tasks_from_audit
 
 # Load environment variables
 load_dotenv()
@@ -539,20 +546,33 @@ def create_audit():
     client = supabase_admin or supabase
     
     try:
+        # Get campaign domain
+        campaign = client.table('campaigns').select('domain').eq('id', data.get('campaign_id')).single().execute()
+        if not campaign.data:
+            return jsonify({'error': 'Campaign not found'}), 404
+            
+        domain = campaign.data['domain']
+        
+        # Start DataForSEO audit
+        dfs_result = start_onpage_audit(domain)
+        
+        if not dfs_result.get('success'):
+            return jsonify({'error': f"Failed to start audit: {dfs_result.get('error')}"}), 500
+            
+        task_id = dfs_result.get('task_id')
+
         # Create audit record
         response = client.table('audits').insert({
             'campaign_id': data.get('campaign_id'),
             'type': data.get('type', 'technical'),
-            'status': 'pending',
+            'status': 'crawling',
+            'dataforseo_task_id': task_id,
             'results': {}
         }).execute()
         
         audit = response.data[0]
         
-        # TODO: Trigger background audit job via execution/run_audit.py
-        # For now, just return the created audit
-        
-        return jsonify({'audit': audit, 'message': 'Audit queued'})
+        return jsonify({'audit': audit, 'message': 'Audit started successfully'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -563,7 +583,46 @@ def get_audit(audit_id):
     """Get audit status and results."""
     try:
         response = supabase.table('audits').select('*, campaigns(name, domain)').eq('id', audit_id).single().execute()
-        return jsonify({'audit': response.data})
+        audit = response.data
+        
+        # Lazy status check for running audits
+        if audit['status'] == 'crawling' and audit.get('dataforseo_task_id'):
+            task_id = audit['dataforseo_task_id']
+            status = get_audit_status(task_id)
+            
+            if status.get('ready'):
+                # Audit finished! Fetch results and update
+                try:
+                    # 1. Get Summary
+                    summary = get_audit_summary(task_id)
+                    
+                    # 2. Get Page Issues
+                    pages_result = get_page_issues(task_id, limit=100)
+                    pages = pages_result.get('pages', [])
+                    
+                    # 3. Create Tasks
+                    # Use admin client for writes if available
+                    client = supabase_admin or supabase
+                    create_tasks_from_audit(pages, audit['campaign_id'], client)
+                    
+                    # 4. Update Audit Record
+                    update_data = {
+                        'status': 'completed',
+                        'results': {
+                            'summary': summary.get('summary', {}),
+                            'pages': pages
+                        },
+                        'summary': summary.get('summary', {})
+                    }
+                    
+                    update_res = client.table('audits').update(update_data).eq('id', audit_id).execute()
+                    audit = update_res.data[0] # Return updated audit
+                    
+                except Exception as e:
+                     print(f"Error finalizing audit: {e}")
+                     # Optionally set status to failed or keep crawling to retry
+        
+        return jsonify({'audit': audit})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

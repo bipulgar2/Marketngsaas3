@@ -1416,6 +1416,38 @@
             }
         }
 
+        async function generateSlides(auditId) {
+            const btn = document.getElementById(`btn-slides-${auditId}`);
+            if (btn) {
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating...`;
+                btn.disabled = true;
+                lucide.createIcons();
+            }
+
+            try {
+                const response = await fetch(`/api/audits/${auditId}/generate-slides`, { method: 'POST' });
+                const data = await response.json();
+
+                if (!response.ok) throw new Error(data.error || 'Failed to generate slides');
+
+                // Update local model
+                activeAudit.slides_url = data.slides_url;
+
+                // Re-render header to show specific view button
+                renderAuditDetail();
+
+                window.open(data.slides_url, '_blank');
+
+            } catch (error) {
+                alert('Error: ' + error.message);
+                if (btn) {
+                    btn.innerHTML = `<i data-lucide="presentation" class="w-4 h-4"></i> Generate Slides`;
+                    btn.disabled = false;
+                    lucide.createIcons();
+                }
+            }
+        }
+
         function renderAuditDetail() {
             const contentArea = document.getElementById('contentArea');
             const summary = activeAudit.results?.summary || activeAudit.summary || {};
@@ -1430,6 +1462,15 @@
                     </button>
                     <div class="h-4 w-px bg-gray-700"></div>
                     <span class="text-sm text-gray-400">Viewing Audit: ${new Date(activeAudit.created_at).toLocaleDateString()}</span>
+                    
+                    ${activeAudit.slides_url ?
+                    `<a href="${activeAudit.slides_url}" target="_blank" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ml-2">
+                            <i data-lucide="presentation" class="w-4 h-4"></i> View Slides
+                        </a>` :
+                    `<button id="btn-slides-${activeAudit.id}" onclick="generateSlides('${activeAudit.id}')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ml-2 border border-gray-700">
+                             <i data-lucide="presentation" class="w-4 h-4"></i> Generate Slides
+                         </button>`
+                }
                 </div>`;
 
             if (currentSideTab === 'on-page') {

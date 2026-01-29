@@ -628,6 +628,59 @@ def list_audits():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/audits/<audit_id>/generate-slides', methods=['POST'])
+@login_required
+@permission_required('view_all_audits')
+def generate_audit_slides(audit_id):
+    """Generate Google Slides for an audit."""
+    user = session['user']
+    
+    try:
+        # Get audit data
+        audit = supabase.table('audits').select('*').eq('id', audit_id).execute()
+        if not audit.data:
+            return jsonify({'error': 'Audit not found'}), 404
+            
+        audit_data = audit.data[0]
+        
+        # Check permissions (basic organization check)
+        if user['role'] != 'admin' and audit_data.get('organization_id') != user.get('organization_id'):
+             return jsonify({'error': 'Unauthorized'}), 403
+
+        # Check if already has slides? (Optional: allow regeneration)
+        
+        # Import generator here to avoid circular imports or early failures if dependencies missing
+        try:
+            from api.deep_audit_slides import create_deep_audit_slides
+        except ImportError as e:
+            return jsonify({'error': f'Slides generator module error: {str(e)}'}), 500
+
+        # Run generation
+        # Note: This can take time. Ideally should be a background task (Celery/RQ).
+        # For now, running synchronously but it might timeout on Vercel/Railway if > 30s.
+        # We'll assume it's fast enough or user accepts wait.
+        
+        full_data = audit_data.get('data', {})
+        domain = audit_data.get('settings', {}).get('domain') or 'Website'
+        
+        try:
+            result = create_deep_audit_slides(full_data, domain)
+            slides_url = result.get('presentation_url')
+            
+            # Update audit record
+            supabase.table('audits').update({'slides_url': slides_url}).eq('id', audit_id).execute()
+            
+            return jsonify({'slides_url': slides_url})
+            
+        except FileNotFoundError as e:
+            # Likely missing credentials
+            return jsonify({'error': 'Google credentials not configured. Please add GOOGLE_SERVICE_ACCOUNT or setup OAuth.'}), 503
+        except Exception as e:
+            return jsonify({'error': f'Failed to generate slides: {str(e)}'}), 500
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/audits', methods=['POST'])
 @login_required
 @permission_required('view_all_campaigns')

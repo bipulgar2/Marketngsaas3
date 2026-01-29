@@ -622,17 +622,7 @@
             pageActions.innerHTML = '';
 
             if (currentTopTab === 'tech-audit') {
-                pageActions.innerHTML = `
-                    <button onclick="runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
-                        <i data-lucide="play" class="w-4 h-4"></i> Run Audit
-                    </button>`;
-                contentArea.innerHTML = `
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-                        <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
-                        <h3 class="text-lg font-semibold text-white mb-2">${currentClient?.name || 'Client'} — ${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
-                        <p class="text-gray-400">This section will show ${currentSideTab} data for ${currentClient?.domain || 'selected client'}.</p>
-                        <p class="text-xs text-gray-500 mt-4">Implementation coming in Phase 2</p>
-                    </div>`;
+                await loadAuditContent();
             } else if (currentTopTab === 'client-settings') {
                 await loadClientSettingsContent();
             } else {
@@ -1086,6 +1076,142 @@
         document.getElementById('modalOverlay').addEventListener('click', (e) => {
             if (e.target.id === 'modalOverlay') hideModal();
         });
+
+        // =========================================================================
+        // AUDIT FUNCTIONS
+        // =========================================================================
+        async function loadAuditContent() {
+            const contentArea = document.getElementById('contentArea');
+            const pageActions = document.getElementById('pageActions');
+
+            pageActions.innerHTML = `
+                <button onclick="runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
+                    <i data-lucide="play" class="w-4 h-4"></i> Run Audit
+                </button>`;
+
+            if (currentSideTab !== 'url-inspection') {
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                        <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
+                        <p class="text-gray-400">This specific report is coming soon.</p>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/audits?campaign_id=${currentClient.id}`);
+                const data = await response.json();
+                const audits = data.audits || [];
+
+                if (audits.length === 0) {
+                    contentArea.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-64 text-center">
+                            <i data-lucide="search-check" class="w-12 h-12 text-gray-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">No audits yet</h3>
+                            <p class="text-gray-400 mb-4">Run your first technical audit for ${currentClient.domain}</p>
+                            <button onclick="runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                Run Audit
+                            </button>
+                        </div>`;
+                } else {
+                    contentArea.innerHTML = `
+                        <div class="grid gap-4">
+                            ${audits.map(audit => {
+                        const isCrawling = audit.status === 'crawling' || audit.status === 'running';
+                        const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
+                        const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
+
+                        return `
+                                <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+                                    <div class="flex items-center gap-4">
+                                        <div class="p-2 bg-gray-800 rounded-lg">
+                                            <i data-lucide="${statusIcon}" class="w-6 h-6 ${statusColor} ${isCrawling ? 'animate-spin' : ''}"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-medium text-white">Full Site Audit</h4>
+                                            <div class="flex items-center gap-3 text-sm text-gray-400 mt-1">
+                                                <span>${new Date(audit.created_at).toLocaleString()}</span>
+                                                <span>•</span>
+                                                <span class="${statusColor} capitalize">${audit.status}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        ${isCrawling ? `
+                                            <button onclick="checkAuditStatus('${audit.id}')" class="text-gray-400 hover:text-white flex items-center gap-1 text-sm bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700">
+                                                <i data-lucide="refresh-cw" class="w-3 h-3"></i> Check Status
+                                            </button>
+                                        ` : `
+                                            <button onclick="viewAuditResults('${audit.id}')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-700">
+                                                View Results
+                                            </button>
+                                        `}
+                                    </div>
+                                </div>`;
+                    }).join('')}
+                        </div>`;
+                }
+            } catch (error) {
+                contentArea.innerHTML = `<div class="text-red-400">Error loading audits: ${error.message}</div>`;
+            }
+            lucide.createIcons();
+        }
+
+        async function runAudit() {
+            if (!confirm('Start a new comprehensive technical audit? This usually takes 2-5 minutes.')) return;
+
+            const btn = document.querySelector('button[onclick="runAudit()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Starting...`;
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/audits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaign_id: currentClient.id,
+                        type: 'technical'
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to start audit');
+
+                await loadAuditContent(); // Refresh list
+            } catch (error) {
+                alert('Error: ' + error.message);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        async function checkAuditStatus(auditId) {
+            try {
+                const response = await fetch(`/api/audits/${auditId}`);
+                const data = await response.json();
+
+                if (data.audit && data.audit.status === 'completed') {
+                    // It finished! Reload list to show "View Results"
+                    await loadAuditContent();
+                } else {
+                    // Still running, maybe show a toast
+                    const btn = document.querySelector(`button[onclick="checkAuditStatus('${auditId}')"]`);
+                    if (btn) {
+                        const original = btn.innerHTML;
+                        btn.innerHTML = `<i data-lucide="check" class="w-3 h-3 text-emerald-400"></i> Still running...`;
+                        setTimeout(() => btn.innerHTML = original, 2000);
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function viewAuditResults(auditId) {
+            alert('Audit results view integration coming in next step!');
+        }
 
         // Start
         init();

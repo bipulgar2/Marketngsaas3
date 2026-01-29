@@ -1106,7 +1106,7 @@
             }
 
             // If we have an active audit and are on a relevant tab, show details
-            if (activeAudit && ['on-page', 'technical-issues', 'core-vitals'].includes(currentSideTab)) {
+            if (activeAudit && ['on-page', 'technical-issues', 'core-web-vitals', 'schema-markup', 'page-speed'].includes(currentSideTab)) {
                 renderAuditDetail();
                 return;
             }

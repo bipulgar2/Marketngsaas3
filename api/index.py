@@ -637,7 +637,7 @@ def generate_audit_slides(audit_id):
     
     try:
         # Get audit data
-        audit = supabase.table('audits').select('*').eq('id', audit_id).execute()
+        audit = supabase_admin.table('audits').select('*').eq('id', audit_id).execute()
         if not audit.data:
             return jsonify({'error': 'Audit not found'}), 404
             

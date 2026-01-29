@@ -291,6 +291,9 @@
                 const data = await response.json();
                 currentUser = data.user;
 
+                // Reset active audit on full reload
+                activeAudit = null;
+
                 // Update user info
                 document.getElementById('userName').textContent = currentUser.full_name || currentUser.email.split('@')[0];
                 document.getElementById('userRole').textContent = data.role_info?.name || currentUser.role;
@@ -1091,6 +1094,22 @@
                     <i data-lucide="play" class="w-4 h-4"></i> Run Audit
                 </button>`;
 
+            if (currentSideTab === 'url-inspection') {
+                // Determine if we show list or "Back to list"
+                if (activeAudit) {
+                    // If user clicks "URL Inspection" while viewing an audit, reset view? 
+                    // Or keep showing list? Let's show list but maybe indicate active one.
+                    // For now, simple: viewing URL Inspection clears active audit
+                    activeAudit = null;
+                }
+            }
+
+            // If we have an active audit and are on a relevant tab, show details
+            if (activeAudit && ['on-page', 'technical-issues', 'core-vitals'].includes(currentSideTab)) {
+                renderAuditDetail();
+                return;
+            }
+
             if (currentSideTab !== 'url-inspection') {
                 contentArea.innerHTML = `
                     <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
@@ -1211,8 +1230,24 @@
             }
         }
 
-        function viewAuditResults(auditId) {
-            alert('Audit results view integration coming in next step!');
+        async function viewAuditResults(auditId) {
+            try {
+                // Show loading state
+                const btn = document.querySelector(`button[onclick="viewAuditResults('${auditId}')"]`);
+                if (btn) btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Loading...`;
+
+                const response = await fetch(`/api/audits/${auditId}`);
+                const data = await response.json();
+
+                if (data.audit) {
+                    activeAudit = data.audit;
+                    // Switch to On-Page Report tab
+                    switchSideTab('on-page');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Failed to load audit results');
+            }
         }
 
         // =========================================================================
@@ -1373,6 +1408,110 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             }
+        }
+
+        function renderAuditDetail() {
+            const contentArea = document.getElementById('contentArea');
+            const summary = activeAudit.results?.summary || activeAudit.summary || {};
+            const pages = activeAudit.results?.pages || [];
+
+            // Back button
+            const pageActions = document.getElementById('pageActions');
+            pageActions.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <button onclick="activeAudit=null; switchSideTab('url-inspection')" class="text-gray-400 hover:text-white text-sm flex items-center gap-1">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Audits
+                    </button>
+                    <div class="h-4 w-px bg-gray-700"></div>
+                    <span class="text-sm text-gray-400">Viewing Audit: ${new Date(activeAudit.created_at).toLocaleDateString()}</span>
+                </div>`;
+
+            if (currentSideTab === 'on-page') {
+                contentArea.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                        <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl">
+                            <h4 class="text-gray-400 text-xs uppercase font-semibold mb-2">On-Page Score</h4>
+                            <div class="text-3xl font-bold text-white">${summary.onpage_score ? summary.onpage_score.toFixed(0) : '-'}</div>
+                        </div>
+                         <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl">
+                            <h4 class="text-gray-400 text-xs uppercase font-semibold mb-2">Pages Crawled</h4>
+                            <div class="text-3xl font-bold text-white">${summary.pages_crawled || 0}</div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl">
+                            <h4 class="text-gray-400 text-xs uppercase font-semibold mb-2">Critical Errors</h4>
+                            <div class="text-3xl font-bold text-red-500">${summary.critical_issues_count || 0}</div>
+                        </div>
+                         <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl">
+                            <h4 class="text-gray-400 text-xs uppercase font-semibold mb-2">Warnings</h4>
+                            <div class="text-3xl font-bold text-yellow-500">${summary.warnings_count || 0}</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                        <div class="p-4 border-b border-gray-800">
+                             <h3 class="font-medium text-white">Crawled Pages</h3>
+                        </div>
+                         <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-gray-400">
+                                <thead class="bg-gray-900/50 text-gray-500 font-medium border-b border-gray-800">
+                                    <tr>
+                                        <th class="p-3">URL</th>
+                                        <th class="p-3">Status</th>
+                                        <th class="p-3 text-right">Score</th>
+                                        <th class="p-3 text-right">Load Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-800">
+                                    ${pages.slice(0, 50).map(p => `
+                                    <tr>
+                                        <td class="p-3 max-w-md truncate text-white" title="${p.url}">${p.url}</td>
+                                        <td class="p-3"><span class="px-2 py-0.5 rounded text-xs ${p.status_code >= 400 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}">${p.status_code}</span></td>
+                                        <td class="p-3 text-right">${p.onpage_score || '-'}</td>
+                                        <td class="p-3 text-right">${p.time_to_interactive ? p.time_to_interactive + 'ms' : '-'}</td>
+                                    </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            } else if (currentSideTab === 'technical-issues') {
+                // Group issues
+                const issueMap = new Map();
+                pages.forEach(p => {
+                    const issues = p.issues || {};
+                    Object.keys(issues).forEach(k => {
+                        if (issues[k]) {
+                            if (!issueMap.has(k)) issueMap.set(k, []);
+                            issueMap.get(k).push(p.url);
+                        }
+                    });
+                });
+
+                contentArea.innerHTML = `
+                     <div class="grid gap-4">
+                        ${Array.from(issueMap.entries()).map(([issue, urls]) => `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-medium text-white capitalize">${issue.replace(/_/g, ' ')}</h4>
+                                <span class="px-2 py-0.5 rounded text-xs bg-red-500/20 text-red-400 font-mono">${urls.length} pages</span>
+                            </div>
+                            <div class="bg-black/30 rounded-lg p-3 text-xs font-mono text-gray-500 max-h-32 overflow-y-auto">
+                                ${urls.map(u => `<div class="truncate">${u}</div>`).join('')}
+                            </div>
+                        </div>
+                        `).join('')}
+                        ${issueMap.size === 0 ? '<div class="text-center py-12 text-gray-500">No issues found! Great job.</div>' : ''}
+                     </div>
+                `;
+            } else {
+                contentArea.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-64 text-center text-gray-500">
+                        <i data-lucide="bar-chart" class="w-12 h-12 text-gray-600 mb-4"></i>
+                        <p>Detailed view for this section is coming soon.</p>
+                    </div>`;
+            }
+            lucide.createIcons();
         }
 
         // Start

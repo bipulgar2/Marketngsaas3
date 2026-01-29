@@ -607,6 +607,8 @@ def list_audits():
     try:
         # Use admin client to bypass RLS or ensure context
         client = supabase_admin or supabase
+        user = session['user']
+        
         # Join campaigns to filter by Org
         query = client.table('audits').select('*, campaigns!inner(name, domain, organization_id)')
         

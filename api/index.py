@@ -5,6 +5,7 @@ Flask application with role-based authentication and multi-tenant support.
 """
 import os
 import logging
+from datetime import datetime
 from flask import Flask, jsonify, request, render_template, redirect, url_for, session
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -13,7 +14,10 @@ from api.dataforseo_client import (
     start_onpage_audit,
     get_audit_status,
     get_audit_summary,
-    get_page_issues
+    get_audit_status,
+    get_audit_summary,
+    get_page_issues,
+    get_domain_rank_overview
 )
 from api.utils import create_tasks_from_audit
 
@@ -625,6 +629,64 @@ def get_audit(audit_id):
         return jsonify({'audit': audit})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# COMPETITOR ROUTES
+# =============================================================================
+
+@app.route('/api/competitors/analyze', methods=['POST'])
+@login_required
+@permission_required('view_all_campaigns')
+def analyze_competitors():
+    """Analyze competitors against campaign domain."""
+    data = request.json
+    campaign_id = data.get('campaign_id')
+    competitors = data.get('competitors', []) # List of domains
+    
+    if not campaign_id:
+        return jsonify({'error': 'Campaign ID required'}), 400
+        
+    client = supabase_admin or supabase
+    
+    try:
+        # Get campaign
+        campaign_res = client.table('campaigns').select('*').eq('id', campaign_id).single().execute()
+        campaign = campaign_res.data
+        if not campaign:
+            return jsonify({'error': 'Campaign not found'}), 404
+            
+        target_domain = campaign['domain']
+        
+        # 1. Fetch data for target domain
+        target_stats = get_domain_rank_overview(target_domain)
+        
+        # 2. Fetch data for each competitor
+        competitor_stats = []
+        for comp_domain in competitors:
+            if not comp_domain: continue
+            stats = get_domain_rank_overview(comp_domain)
+            competitor_stats.append(stats)
+            
+        # 3. Update campaign settings with this list (cache it)
+        current_settings = campaign.get('settings') or {}
+        current_settings['competitors'] = competitors
+        current_settings['last_competitor_analysis'] = {
+            'target': target_stats,
+            'competitors': competitor_stats,
+            'analyzed_at': datetime.now().isoformat()
+        }
+        
+        client.table('campaigns').update({'settings': current_settings}).eq('id', campaign_id).execute()
+        
+        return jsonify({
+            'success': True,
+            'target': target_stats,
+            'competitors': competitor_stats
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 # =============================================================================
 # MAIN

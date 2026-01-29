@@ -623,6 +623,8 @@
 
             if (currentTopTab === 'tech-audit') {
                 await loadAuditContent();
+            } else if (currentTopTab === 'competitors') {
+                await loadCompetitorContent();
             } else if (currentTopTab === 'client-settings') {
                 await loadClientSettingsContent();
             } else {
@@ -1211,6 +1213,166 @@
 
         function viewAuditResults(auditId) {
             alert('Audit results view integration coming in next step!');
+        }
+
+        // =========================================================================
+        // COMPETITOR FUNCTIONS
+        // =========================================================================
+        async function loadCompetitorContent() {
+            const contentArea = document.getElementById('contentArea');
+            const pageActions = document.getElementById('pageActions');
+
+            pageActions.innerHTML = ''; // Clear actions
+
+            if (currentSideTab !== 'overview') {
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                        <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
+                        <p class="text-gray-400">Deep gap analysis and content library features coming in Phase 3.</p>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            // Get cached data if available
+            const comps = currentClient.settings?.competitors || [];
+            const lastAnalysis = currentClient.settings?.last_competitor_analysis || null;
+
+            let tableHtml = '';
+
+            if (lastAnalysis) {
+                const target = lastAnalysis.target;
+                const compStats = lastAnalysis.competitors;
+
+                tableHtml = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-8">
+                        <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                            <h3 class="font-medium text-white">Share of Voice & Traffic Estimation</h3>
+                            <span class="text-xs text-gray-500">Last updated: ${new Date(lastAnalysis.analyzed_at).toLocaleString()}</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-gray-400">
+                                <thead class="bg-gray-900/50 text-gray-500 font-medium border-b border-gray-800">
+                                    <tr>
+                                        <th class="p-4">Domain</th>
+                                        <th class="p-4 text-right">Organic Keywords</th>
+                                        <th class="p-4 text-right">Est. Monthly Traffic</th>
+                                        <th class="p-4 text-right">Market Share</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-800">
+                                    <!-- Target -->
+                                    <tr class="bg-violet-500/5 hover:bg-violet-500/10 transition-colors">
+                                        <td class="p-4 font-medium text-white flex items-center gap-2">
+                                            <div class="w-2 h-2 rounded-full bg-violet-500"></div>
+                                            ${target.domain}
+                                            <span class="text-xs bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded ml-2">You</span>
+                                        </td>
+                                        <td class="p-4 text-right font-mono text-white">${target.organic_keywords.toLocaleString()}</td>
+                                        <td class="p-4 text-right font-mono text-white">${target.estimated_traffic.toLocaleString()}</td>
+                                        <td class="p-4 text-right text-gray-300">-</td>
+                                    </tr>
+                                    <!-- Competitors -->
+                                    ${compStats.map(c => `
+                                    <tr class="hover:bg-gray-800/50 transition-colors">
+                                        <td class="p-4 font-medium text-gray-300">${c.domain}</td>
+                                        <td class="p-4 text-right font-mono">${c.organic_keywords.toLocaleString()}</td>
+                                        <td class="p-4 text-right font-mono">${c.estimated_traffic.toLocaleString()}</td>
+                                        <td class="p-4 text-right text-gray-500">
+                                            ${target.estimated_traffic > 0 ? ((c.estimated_traffic / target.estimated_traffic) * 100).toFixed(1) + '%' : 'N/A'} 
+                                            <span class="text-xs">vs you</span>
+                                        </td>
+                                    </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            contentArea.innerHTML = `
+                <div class="max-w-4xl mx-auto">
+                    <div class="flex items-center justify-between mb-8">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white mb-2">Competitor Analysis</h2>
+                            <p class="text-gray-400">Compare ${currentClient.domain} against top market rivals.</p>
+                        </div>
+                        <button onclick="runCompetitorAnalysis()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                            <i data-lucide="zap" class="w-4 h-4"></i> Run Analysis
+                        </button>
+                    </div>
+
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8">
+                        <label class="block text-sm font-medium text-gray-300 mb-3">Competitor Domains</label>
+                        <div class="space-y-3" id="competitorInputs">
+                            ${[0, 1, 2].map(i => `
+                                <div class="flex items-center gap-3">
+                                    <div class="bg-gray-800 h-10 w-10 rounded-lg flex items-center justify-center text-gray-500 text-sm font-medium">${i + 1}</div>
+                                    <input type="text" 
+                                           class="competitor-input bg-black border border-gray-800 text-white text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 block w-full p-2.5" 
+                                           placeholder="competitor${i + 1}.com"
+                                           value="${comps[i] || ''}">
+                                </div>
+                            `).join('')}
+                        </div>
+                        <p class="text-xs text-gray-500 mt-3">Enter up to 3 main competitors (e.g., 'moz.com').</p>
+                    </div>
+
+                    ${tableHtml}
+                    
+                    ${!lastAnalysis ? `
+                        <div class="text-center py-12 border border-dashed border-gray-800 rounded-xl">
+                            <i data-lucide="bar-chart-2" class="w-12 h-12 text-gray-700 mx-auto mb-3"></i>
+                            <p class="text-gray-500">No analysis run yet. Add competitors and hit "Run Analysis".</p>
+                        </div>` : ''}
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function runCompetitorAnalysis() {
+            const inputs = document.querySelectorAll('.competitor-input');
+            const competitors = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
+
+            if (competitors.length === 0) {
+                alert('Please enter at least one competitor domain.');
+                return;
+            }
+
+            const btn = document.querySelector('button[onclick="runCompetitorAnalysis()"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Analyzing...`;
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/competitors/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaign_id: currentClient.id,
+                        competitors: competitors
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) throw new Error(data.error || 'Analysis failed');
+
+                // Reload client data to get updated settings
+                const clientRes = await fetch(`/api/campaigns/${currentClient.id}`);
+                const clientData = await clientRes.json();
+                currentClient = clientData.campaign;
+
+                // Refresh content
+                await loadCompetitorContent();
+
+            } catch (error) {
+                alert('Error: ' + error.message);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         }
 
         // Start

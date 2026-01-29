@@ -23,11 +23,77 @@ def get_auth_header() -> Dict[str, str]:
     password = os.getenv('DATAFORSEO_PASSWORD')
     
     if not login or not password:
+        # Fallback for dev - remove in prod
+        if os.getenv('FLASK_ENV') == 'development':
+            print("WARNING: DataForSEO credentials missing in dev mode")
+            return {"Authorization": "Basic xxx"}
         raise ValueError("DataForSEO credentials not configured. Set DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD.")
     
     credentials = f"{login}:{password}"
     encoded = base64.b64encode(credentials.encode()).decode()
     return {"Authorization": f"Basic {encoded}"}
+
+
+def get_domain_rank_overview(domain: str, location_code: int = 2840, language_code: str = "en") -> Dict[str, Any]:
+    """
+    Get organic traffic estimate and keyword counts for a domain.
+    Uses DataForSEO SERP / Rank Overview API (simulated via SERP API for now or using Traffic Analytics).
+    Note: DataForSEO Traffic Analytics is separate. We'll use a simple SERP check or available endpoint.
+    For this MVP, we will use 'serp/google/organic/live/advanced' to fetch ranking for brand name 
+    OR just return mock data if the specific API requires separate add-on.
+    
+    ACTUALLY: We will use 'dataforseo_labs/google/ranked_keywords/live' to get total keywords count
+    and estimating traffic from that is better.
+    """
+    endpoint = f"{DATAFORSEO_API_URL}/dataforseo_labs/google/ranked_keywords/live"
+    
+    payload = [{
+        "target": domain,
+        "location_code": location_code,
+        "language_code": language_code,
+        "limit": 1, 
+        "include_serp_info": False
+    }]
+    
+    try:
+        response = requests.post(
+            endpoint,
+            headers={**get_auth_header(), "Content-Type": "application/json"},
+            json=payload,
+            timeout=30
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('status_code') == 20000 and data.get('tasks'):
+            result = (data['tasks'][0].get('result') or [{}])[0]
+            total_count = result.get('total_count', 0)
+            
+            # Estimate traffic (very rough heuristic without full traffic API)
+            # In real app, buy Traffic Analytics add-on
+            estimated_traffic = int(total_count * 3.5) 
+            
+            return {
+                "success": True,
+                "domain": domain,
+                "organic_keywords": total_count,
+                "estimated_traffic": estimated_traffic,
+                "metrics": result.get('metrics', {})
+            }
+        else:
+            # Fallback for demo if API fails/quota exceeded
+            print(f"DataForSEO Labs API Error: {data.get('status_message')}")
+            return {
+                "success": False, 
+                "error": data.get('status_message'),
+                # Fallback mock data for demo smoothness if quota fails
+                "organic_keywords": 0,
+                "estimated_traffic": 0
+            }
+            
+    except Exception as e:
+        print(f"Error fetching competitor stats: {e}")
+        return {"success": False, "error": str(e)}
 
 
 def start_onpage_audit(domain: str, max_pages: int = 200) -> Dict[str, Any]:

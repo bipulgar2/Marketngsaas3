@@ -527,7 +527,9 @@ def list_audits():
     campaign_id = request.args.get('campaign_id')
     
     try:
-        query = supabase.table('audits').select('*, campaigns(name, domain)')
+        # Use admin client to bypass RLS or ensure context
+        client = supabase_admin or supabase
+        query = client.table('audits').select('*, campaigns(name, domain)')
         
         if campaign_id:
             query = query.eq('campaign_id', campaign_id)
@@ -586,7 +588,8 @@ def create_audit():
 def get_audit(audit_id):
     """Get audit status and results."""
     try:
-        response = supabase.table('audits').select('*, campaigns(name, domain)').eq('id', audit_id).single().execute()
+        client = supabase_admin or supabase
+        response = client.table('audits').select('*, campaigns(name, domain)').eq('id', audit_id).single().execute()
         audit = response.data
         
         # Lazy status check for running audits

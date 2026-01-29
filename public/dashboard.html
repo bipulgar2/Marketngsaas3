@@ -391,6 +391,8 @@
                 if (clientId) {
                     selector.value = clientId;
                     currentClient = clients.find(c => c.id === clientId);
+                    // Rebuild tabs to show client-only tabs (like Settings)
+                    buildTopTabs();
                 }
             } catch (error) {
                 console.error('Error loading clients:', error);

@@ -410,13 +410,12 @@ def list_campaigns():
     try:
         query = client.table('campaigns').select('*')
         
-        # Filter by organization for non-admins
-        if user['role'] != 'admin':
-            if user.get('organization_id'):
-                query = query.eq('organization_id', user['organization_id'])
-            else:
-                # CRITICAL: If no org ID, return nothing (prevent leak)
-                return jsonify({'campaigns': []})
+        # Filter by organization for EVERYONE (Admin means Org Admin, not Superuser)
+        if user.get('organization_id'):
+            query = query.eq('organization_id', user['organization_id'])
+        else:
+            # CRITICAL: If no org ID, return nothing (prevent leak)
+            return jsonify({'campaigns': []})
         
         response = query.order('created_at', desc=True).execute()
         return jsonify({'campaigns': response.data})
@@ -506,9 +505,15 @@ def list_tasks():
     client = supabase_admin or supabase
     
     try:
-        query = client.table('tasks').select('*, campaigns(name, domain)')
+        query = client.table('tasks').select('*, campaigns!inner(name, domain, organization_id)')
         
-        # Filter based on role
+        # KEY FIX: Filter by Organization (via joined campaign)
+        if user.get('organization_id'):
+             query = query.eq('campaigns.organization_id', user['organization_id'])
+        else:
+             return jsonify({'tasks': []})
+
+        # Filter based on role (Permissions within Org)
         if user['role'] not in ['admin', 'campaign_manager']:
             # Regular users see only their assigned tasks
             query = query.eq('assigned_to', user['id'])
@@ -602,8 +607,15 @@ def list_audits():
     try:
         # Use admin client to bypass RLS or ensure context
         client = supabase_admin or supabase
-        query = client.table('audits').select('*, campaigns(name, domain)')
+        # Join campaigns to filter by Org
+        query = client.table('audits').select('*, campaigns!inner(name, domain, organization_id)')
         
+        # KEY FIX: Filter by Organization
+        if user.get('organization_id'):
+             query = query.eq('campaigns.organization_id', user['organization_id'])
+        else:
+             return jsonify({'audits': []})
+
         if campaign_id:
             query = query.eq('campaign_id', campaign_id)
         

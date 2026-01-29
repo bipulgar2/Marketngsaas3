@@ -397,7 +397,7 @@
             }
         }
 
-        function selectClient(clientId) {
+        function selectClient(clientId, skipReload = false) {
             currentClient = clients.find(c => c.id === clientId) || null;
 
             // Update URL
@@ -409,7 +409,10 @@
             }
             window.history.pushState({}, '', url);
 
-            loadContent();
+            // Only reload if not being chained with another navigation action
+            if (!skipReload) {
+                loadContent();
+            }
         }
 
         // =========================================================================
@@ -575,7 +578,7 @@
                                     </thead>
                                     <tbody class="divide-y divide-gray-800 text-sm">
                                         ${campaigns.map(c => `
-                                            <tr class="hover:bg-gray-800/30 cursor-pointer" onclick="selectClient('${c.id}'); switchTopTab('tech-audit');">
+                                            <tr class="hover:bg-gray-800/30 cursor-pointer" onclick="selectClient('${c.id}', true); switchTopTab('tech-audit');">
                                                 <td class="px-4 py-3 font-medium text-white">${c.name}</td>
                                                 <td class="px-4 py-3 text-gray-400">${c.domain}</td>
                                                 <td class="px-4 py-3">

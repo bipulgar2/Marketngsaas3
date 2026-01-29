@@ -1505,7 +1505,7 @@
                         ${issueMap.size === 0 ? '<div class="text-center py-12 text-gray-500">No issues found! Great job.</div>' : ''}
                      </div>
                 `;
-            } else if (currentSideTab === 'core-web-vitals') {
+            } else if (currentSideTab === 'core-vitals') {
                 // Calculate basic metrics from pages
                 let fast = 0, moderate = 0, slow = 0;
                 let totalLoad = 0;
@@ -1617,7 +1617,7 @@
                         </div>
                     </div>
                 `;
-            } else if (currentSideTab === 'schema-markup') {
+            } else if (currentSideTab === 'schema') {
                 // Placeholder for now as we don't have deep schema data in basic page objects yet
                 contentArea.innerHTML = `
                     <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">

@@ -204,6 +204,36 @@ def login():
         # Get user profile with role
         profile = supabase.table('profiles').select('*').eq('id', user.id).single().execute()
         
+        # BACKFILL: If user has no organization, create one now
+        if profile.data and not profile.data.get('organization_id'):
+            try:
+                # Reuse creation logic
+                full_name = profile.data.get('full_name') or user.email.split('@')[0]
+                org_name = f"{full_name}'s Org"
+                slug = org_name.lower().replace(' ', '-').replace("'", "") + f"-{int(datetime.now().timestamp())}"
+                
+                admin = supabase_admin or supabase
+                org_res = admin.table('organizations').insert({
+                    'name': org_name,
+                    'slug': slug,
+                    'owner_id': user.id
+                }).execute()
+                
+                if org_res.data:
+                    org_id = org_res.data[0]['id']
+                    # Update profile
+                    updated_profile = admin.table('profiles').update({
+                        'organization_id': org_id,
+                        'role': 'admin'
+                    }).eq('id', user.id).execute()
+                    
+                    # Use updated profile data
+                    if updated_profile.data:
+                        profile = updated_profile
+                        logger.info(f"Backfilled organization {org_id} for user {user.id}")
+            except Exception as e:
+                logger.error(f"Failed to backfill org for {user.email}: {e}")
+        
         # Store in session
         session['user'] = {
             'id': user.id,
@@ -254,7 +284,37 @@ def signup():
             return jsonify({'error': 'Signup failed. Please try again.'}), 400
         
         # Profile is created automatically by trigger
-        # Just return success
+        # NOW: Create Organization and assign it (Critical for data isolation)
+        try:
+            # Generate basic slug
+            org_name = f"{full_name}'s Org" if full_name else "My Organization"
+            slug = org_name.lower().replace(' ', '-').replace("'", "") + f"-{int(datetime.now().timestamp())}"
+            
+            # Use admin client to ensure we can create orgs and update profiles
+            admin = supabase_admin or supabase
+            
+            # 1. Create Org
+            org_res = admin.table('organizations').insert({
+                'name': org_name,
+                'slug': slug,
+                'owner_id': user.id
+            }).execute()
+            
+            if org_res.data:
+                org_id = org_res.data[0]['id']
+                
+                # 2. Update Profile with Org ID
+                admin.table('profiles').update({
+                    'organization_id': org_id,
+                    'role': 'admin' # First user is admin of their org
+                }).eq('id', user.id).execute()
+                
+                logger.info(f"Created organization {org_id} for new user {user.id}")
+                
+        except Exception as e:
+            logger.error(f"Failed to auto-create org for {email}: {e}")
+            # Don't fail the whole signup, but log it. User will be caught by Login backfill.
+
         return jsonify({
             'success': True,
             'message': 'Account created! You can now sign in.'
@@ -342,8 +402,12 @@ def list_campaigns():
         query = client.table('campaigns').select('*')
         
         # Filter by organization for non-admins
-        if user['role'] != 'admin' and user.get('organization_id'):
-            query = query.eq('organization_id', user['organization_id'])
+        if user['role'] != 'admin':
+            if user.get('organization_id'):
+                query = query.eq('organization_id', user['organization_id'])
+            else:
+                # CRITICAL: If no org ID, return nothing (prevent leak)
+                return jsonify({'campaigns': []})
         
         response = query.order('created_at', desc=True).execute()
         return jsonify({'campaigns': response.data})

@@ -673,8 +673,8 @@ def generate_audit_slides(audit_id):
             return jsonify({'slides_url': slides_url})
             
         except FileNotFoundError as e:
-            # Likely missing credentials
-            return jsonify({'error': 'Google credentials not configured. Please add GOOGLE_SERVICE_ACCOUNT or setup OAuth.'}), 503
+            # Likely missing credentials or asset
+            return jsonify({'error': f'File not found error: {str(e)}'}), 503
         except Exception as e:
             return jsonify({'error': f'Failed to generate slides: {str(e)}'}), 500
 

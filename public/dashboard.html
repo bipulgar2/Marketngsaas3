@@ -852,7 +852,7 @@
             if (domain) updateData.domain = domain.value;
 
             try {
-                const res = await fetch(`/ api / campaigns / ${currentClient.id} `, {
+                const res = await fetch(`/api/campaigns/${currentClient.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(updateData)
@@ -1094,7 +1094,7 @@
 
                 if (res.ok) {
                     showModal(`
-                        showModal(`
+
                         <div class="p-6 text-center" >
                             <div class="w-12 h-12 mx-auto mb-4 bg-violet-500/20 rounded-full flex items-center justify-center">
                                 <i data-lucide="loader-2" class="w-6 h-6 text-violet-400 animate-spin"></i>
@@ -1182,7 +1182,7 @@
             }
 
             try {
-                const response = await fetch(`/ api / audits ? campaign_id = ${ currentClient.id } `);
+                const response = await fetch(`/api/audits?campaign_id=${currentClient.id}`);
                 const data = await response.json();
                 const audits = data.audits || [];
 
@@ -1199,13 +1199,12 @@
                 } else {
                     contentArea.innerHTML = `
                         <div class="grid gap-4" >
-                        ${
-                        audits.map(audit => {
-                            const isCrawling = audit.status === 'crawling' || audit.status === 'running';
-                            const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
-                            const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
+                        ${audits.map(audit => {
+                        const isCrawling = audit.status === 'crawling' || audit.status === 'running';
+                        const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
+                        const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
 
-                            return `
+                        return `
                                 <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
                                     <div class="flex items-center gap-4">
                                         <div class="p-2 bg-gray-800 rounded-lg">
@@ -1232,12 +1231,12 @@
                                         `}
                                     </div>
                                 </div>`;
-                        }).join('')
-                    }
+                    }).join('')
+                        }
                         </div> `;
                 }
             } catch (error) {
-                contentArea.innerHTML = `<div class="text-red-400" > Error loading audits: ${ error.message }</div> `;
+                contentArea.innerHTML = `<div class="text-red-400" > Error loading audits: ${error.message}</div> `;
             }
             lucide.createIcons();
         }
@@ -1272,7 +1271,7 @@
 
         async function checkAuditStatus(auditId) {
             try {
-                const response = await fetch(`/ api / audits / ${ auditId } `);
+                const response = await fetch(`/api/audits/${auditId}`);
                 const data = await response.json();
 
                 if (data.audit && data.audit.status === 'completed') {
@@ -1298,7 +1297,7 @@
                 const btn = document.querySelector(`button[onclick = "viewAuditResults('${auditId}')"]`);
                 if (btn) btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin" ></i> Loading...`;
 
-                const response = await fetch(`/ api / audits / ${ auditId } `);
+                const response = await fetch(`/api/audits/${auditId}`);
                 const data = await response.json();
 
                 if (data.audit) {
@@ -1417,7 +1416,7 @@
                         <p class="text-xs text-gray-500 mt-3">Enter up to 3 main competitors (e.g., 'moz.com').</p>
                     </div>
 
-                    ${ tableHtml }
+                    ${tableHtml}
                     
                     ${!lastAnalysis ? `
                         <div class="text-center py-12 border border-dashed border-gray-800 rounded-xl">
@@ -1459,7 +1458,7 @@
                 if (!response.ok) throw new Error(data.error || 'Analysis failed');
 
                 // Reload client data to get updated settings
-                const clientRes = await fetch(`/ api / campaigns / ${ currentClient.id } `);
+                const clientRes = await fetch(`/api/campaigns/${currentClient.id}`);
                 const clientData = await clientRes.json();
                 currentClient = clientData.campaign;
 
@@ -1474,7 +1473,7 @@
         }
 
         async function generateSlides(auditId) {
-            const btn = document.getElementById(`btn - slides - ${ auditId } `);
+            const btn = document.getElementById(`btn - slides - ${auditId} `);
             if (btn) {
                 btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin" ></i> Generating...`;
                 btn.disabled = true;
@@ -1482,7 +1481,7 @@
             }
 
             try {
-                const response = await fetch(`/ api / audits / ${ auditId }/generate-slides`, { method: 'POST' });
+                const response = await fetch(`/api/audits/${auditId}/generate-slides`, { method: 'POST' });
                 const data = await response.json();
 
                 if (!response.ok) throw new Error(data.error || 'Failed to generate slides');

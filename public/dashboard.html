@@ -153,10 +153,16 @@
                         <p class="text-xs text-gray-400 truncate" id="userRole">--</p>
                     </div>
                 </div>
-                <button onclick="logout()"
-                    class="w-full flex items-center justify-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
-                    <i data-lucide="log-out" class="w-3 h-3"></i> Logout
-                </button>
+                <div class="px-2 pb-3 pt-1 space-y-1">
+                    <button onclick="showUserSettingsModal()"
+                        class="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors">
+                        <i data-lucide="settings" class="w-3 h-3"></i> Settings
+                    </button>
+                    <button onclick="logout()"
+                        class="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded transition-colors">
+                        <i data-lucide="log-out" class="w-3 h-3"></i> Logout
+                    </button>
+                </div>
             </div>
         </aside>
 
@@ -273,8 +279,7 @@
                 { id: 'general', label: 'General' },
                 { id: 'google', label: 'Google (GSC, GA4)' },
                 { id: 'cms', label: 'CMS Access' },
-                { id: 'analytics', label: 'Analytics Tools' },
-                { id: 'competitors', label: 'Competitors' }
+                { id: 'analytics', label: 'Analytics Tools' }
             ]
         };
 
@@ -790,362 +795,410 @@
                                     class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
                             </div>
                         </div>
-                    </div>`;
-            } else if (currentSideTab === 'competitors') {
-                const competitors = settings.competitors || [];
-                contentArea.innerHTML = `
-                    <div class="max-w-2xl">
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-lg font-semibold text-white">Competitor Domains</h3>
-                                <button onclick="addCompetitorField()" class="text-sm text-violet-400 hover:text-violet-300">+ Add</button>
-                            </div>
-                            <div id="competitorsList" class="space-y-3">
-                                ${competitors.length ? competitors.map((c, i) => `
-                                    <div class="flex gap-2">
-                                        <input type="text" class="competitor-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" value="${c}" placeholder="competitor.com">
-                                        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-red-400 px-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                                    </div>
-                                `).join('') : `
-                                    <div class="flex gap-2">
-                                        <input type="text" class="competitor-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="competitor.com">
-                                        <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-red-400 px-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                                    </div>
-                                `}
-                            </div>
-                        </div>
-                    </div>`;
             }
 
             lucide.createIcons();
         }
 
-        function addCompetitorField() {
-            const list = document.getElementById('competitorsList');
-            const div = document.createElement('div');
-            div.className = 'flex gap-2';
-            div.innerHTML = `
-                <input type="text" class="competitor-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="competitor.com">
-                <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-red-400 px-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-            `;
-            list.appendChild(div);
-            lucide.createIcons();
-        }
+            async function saveClientSettings() {
+                if (!currentClient) return;
 
-        async function saveClientSettings() {
-            if (!currentClient) return;
+                // Collect all settings from current page
+                const settings = { ...currentClient.settings };
 
-            // Collect all settings from current page
-            const settings = { ...currentClient.settings };
+                // General
+                const name = document.getElementById('setting_name');
+                const domain = document.getElementById('setting_domain');
+                const language = document.getElementById('setting_language');
+                const location = document.getElementById('setting_location');
 
-            // General
-            const name = document.getElementById('setting_name');
-            const domain = document.getElementById('setting_domain');
-            const language = document.getElementById('setting_language');
-            const location = document.getElementById('setting_location');
+                if (language) settings.language = language.value;
+                if (location) settings.location = location.value;
 
-            if (language) settings.language = language.value;
-            if (location) settings.location = location.value;
+                // Google
+                const gscProperty = document.getElementById('setting_gsc_property');
+                const ga4Property = document.getElementById('setting_ga4_property');
+                if (gscProperty) settings.gsc_property = gscProperty.value;
+                if (ga4Property) settings.ga4_property = ga4Property.value;
 
-            // Google
-            const gscProperty = document.getElementById('setting_gsc_property');
-            const ga4Property = document.getElementById('setting_ga4_property');
-            if (gscProperty) settings.gsc_property = gscProperty.value;
-            if (ga4Property) settings.ga4_property = ga4Property.value;
+                // CMS
+                const wpUrl = document.getElementById('setting_wp_url');
+                const wpUser = document.getElementById('setting_wp_user');
+                const wpAppPassword = document.getElementById('setting_wp_app_password');
+                const shopifyStore = document.getElementById('setting_shopify_store');
+                const shopifyToken = document.getElementById('setting_shopify_token');
+                if (wpUrl) settings.wp_url = wpUrl.value;
+                if (wpUser) settings.wp_user = wpUser.value;
+                if (wpAppPassword) settings.wp_app_password = wpAppPassword.value;
+                if (shopifyStore) settings.shopify_store = shopifyStore.value;
+                if (shopifyToken) settings.shopify_token = shopifyToken.value;
 
-            // CMS
-            const wpUrl = document.getElementById('setting_wp_url');
-            const wpUser = document.getElementById('setting_wp_user');
-            const wpAppPassword = document.getElementById('setting_wp_app_password');
-            const shopifyStore = document.getElementById('setting_shopify_store');
-            const shopifyToken = document.getElementById('setting_shopify_token');
-            if (wpUrl) settings.wp_url = wpUrl.value;
-            if (wpUser) settings.wp_user = wpUser.value;
-            if (wpAppPassword) settings.wp_app_password = wpAppPassword.value;
-            if (shopifyStore) settings.shopify_store = shopifyStore.value;
-            if (shopifyToken) settings.shopify_token = shopifyToken.value;
+                // Analytics
+                const clarityId = document.getElementById('setting_clarity_id');
+                const ahrefsToken = document.getElementById('setting_ahrefs_token');
+                if (clarityId) settings.clarity_id = clarityId.value;
+                if (ahrefsToken) settings.ahrefs_token = ahrefsToken.value;
 
-            // Analytics
-            const clarityId = document.getElementById('setting_clarity_id');
-            const ahrefsToken = document.getElementById('setting_ahrefs_token');
-            if (clarityId) settings.clarity_id = clarityId.value;
-            if (ahrefsToken) settings.ahrefs_token = ahrefsToken.value;
+                // Competitors
+                const competitorInputs = document.querySelectorAll('.competitor-input');
+                if (competitorInputs.length) {
+                    settings.competitors = Array.from(competitorInputs).map(i => i.value).filter(v => v.trim());
+                }
 
-            // Competitors
-            const competitorInputs = document.querySelectorAll('.competitor-input');
-            if (competitorInputs.length) {
-                settings.competitors = Array.from(competitorInputs).map(i => i.value).filter(v => v.trim());
-            }
+                // Prepare update data
+                const updateData = { settings };
+                if (name) updateData.name = name.value;
+                if (domain) updateData.domain = domain.value;
 
-            // Prepare update data
-            const updateData = { settings };
-            if (name) updateData.name = name.value;
-            if (domain) updateData.domain = domain.value;
+                try {
+                    const res = await fetch(`/ api / campaigns / ${ currentClient.id } `, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updateData)
+                    });
 
-            try {
-                const res = await fetch(`/api/campaigns/${currentClient.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updateData)
-                });
+                    if (res.ok) {
+                        const { campaign } = await res.json();
+                        // Update local state
+                        currentClient = campaign;
+                        const idx = clients.findIndex(c => c.id === campaign.id);
+                        if (idx >= 0) clients[idx] = campaign;
 
-                if (res.ok) {
-                    const { campaign } = await res.json();
-                    // Update local state
-                    currentClient = campaign;
-                    const idx = clients.findIndex(c => c.id === campaign.id);
-                    if (idx >= 0) clients[idx] = campaign;
-
-                    showModal(`
-                        <div class="p-6 text-center">
+                        showModal(`
+                    < div class="p-6 text-center" >
                             <div class="w-12 h-12 mx-auto mb-4 bg-emerald-500/20 rounded-full flex items-center justify-center">
                                 <i data-lucide="check" class="w-6 h-6 text-emerald-400"></i>
                             </div>
                             <h3 class="text-lg font-semibold text-white mb-2">Settings Saved</h3>
                             <p class="text-gray-400 text-sm mb-4">Client settings have been updated.</p>
                             <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                        </div>
+                        </div >
                     `);
-                    lucide.createIcons();
-                } else {
-                    const err = await res.json();
-                    alert(err.error || 'Failed to save settings');
+                        lucide.createIcons();
+                    } else {
+                        const err = await res.json();
+                        alert(err.error || 'Failed to save settings');
+                    }
+                } catch (error) {
+                    alert('Error: ' + error.message);
                 }
-            } catch (error) {
-                alert('Error: ' + error.message);
             }
-        }
 
-        // =========================================================================
-        // HELPERS
-        // =========================================================================
-        function getStatusColor(status) {
-            const colors = { pending: 'bg-yellow-400', in_progress: 'bg-blue-400', review: 'bg-violet-400', done: 'bg-emerald-400' };
-            return colors[status] || 'bg-gray-400';
-        }
+            // =========================================================================
+            // HELPERS
+            // =========================================================================
+            function getStatusColor(status) {
+                const colors = { pending: 'bg-yellow-400', in_progress: 'bg-blue-400', review: 'bg-violet-400', done: 'bg-emerald-400' };
+                return colors[status] || 'bg-gray-400';
+            }
 
-        // =========================================================================
-        // MODALS
-        // =========================================================================
-        function showModal(content) {
-            document.getElementById('modalContent').innerHTML = content;
-            document.getElementById('modalOverlay').classList.remove('hidden');
-            document.getElementById('modalOverlay').classList.add('flex');
-            lucide.createIcons();
-        }
+            // =========================================================================
+            // MODALS
+            // =========================================================================
+            function showModal(content) {
+                document.getElementById('modalContent').innerHTML = content;
+                document.getElementById('modalOverlay').classList.remove('hidden');
+                document.getElementById('modalOverlay').classList.add('flex');
+                lucide.createIcons();
+            }
 
-        function hideModal() {
-            document.getElementById('modalOverlay').classList.add('hidden');
-            document.getElementById('modalOverlay').classList.remove('flex');
-        }
+            function hideModal() {
+                document.getElementById('modalOverlay').classList.add('hidden');
+                document.getElementById('modalOverlay').classList.remove('flex');
+            }
 
-        function showNewClientModal() {
-            showModal(`
-                <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+            function showNewClientModal() {
+                showModal(`
+                    < div class="p-4 border-b border-gray-800 flex items-center justify-between" >
                     <h3 class="text-lg font-semibold text-white">New Client</h3>
                     <button onclick="hideModal()" class="text-gray-400 hover:text-white">
                         <i data-lucide="x" class="w-5 h-5"></i>
                     </button>
-                </div>
-                <form onsubmit="createClient(event)" class="p-4 space-y-4">
-                    <div>
-                        <label class="block text-sm text-gray-400 mb-1">Domain</label>
-                        <input type="text" name="domain" required placeholder="example.com" 
-                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
+                </div >
+                    <form onsubmit="createClient(event)" class="p-4 space-y-4">
                         <div>
-                            <label class="block text-sm text-gray-400 mb-1">Language</label>
-                            <select name="language" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
-                                <option value="English">English</option>
-                                <option value="Spanish">Spanish</option>
-                                <option value="French">French</option>
-                                <option value="German">German</option>
-                            </select>
+                            <label class="block text-sm text-gray-400 mb-1">Domain</label>
+                            <input type="text" name="domain" required placeholder="example.com"
+                                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">Language</label>
+                                <select name="language" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                    <option value="English">English</option>
+                                    <option value="Spanish">Spanish</option>
+                                    <option value="French">French</option>
+                                    <option value="German">German</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">Location</label>
+                                <select name="location" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                    <option value="US">United States</option>
+                                    <option value="UK">United Kingdom</option>
+                                    <option value="IN">India</option>
+                                    <option value="AU">Australia</option>
+                                </select>
+                            </div>
                         </div>
                         <div>
-                            <label class="block text-sm text-gray-400 mb-1">Location</label>
-                            <select name="location" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
-                                <option value="US">United States</option>
-                                <option value="UK">United Kingdom</option>
-                                <option value="IN">India</option>
-                                <option value="AU">Australia</option>
+                            <label class="block text-sm text-gray-400 mb-1">Focus</label>
+                            <select name="focus" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                <option value="Product">Product (E-commerce)</option>
+                                <option value="Service">Service</option>
+                                <option value="Local">Local Business</option>
+                                <option value="SaaS">SaaS</option>
                             </select>
                         </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm text-gray-400 mb-1">Focus</label>
-                        <select name="focus" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
-                            <option value="Product">Product (E-commerce)</option>
-                            <option value="Service">Service</option>
-                            <option value="Local">Local Business</option>
-                            <option value="SaaS">SaaS</option>
-                        </select>
-                    </div>
-                    <div class="flex gap-3 pt-2">
-                        <button type="button" onclick="hideModal()" class="flex-1 bg-gray-800 text-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-700">Cancel</button>
-                        <button type="submit" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">Create</button>
-                    </div>
-                </form>
-            `);
-        }
-
-        async function createClient(e) {
-            e.preventDefault();
-            const form = e.target;
-            const data = {
-                name: form.domain.value,
-                domain: form.domain.value,
-                settings: {
-                    language: form.language.value,
-                    location: form.location.value,
-                    focus: form.focus.value
-                }
-            };
-
-            try {
-                const res = await fetch('/api/campaigns', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-
-                if (res.ok) {
-                    hideModal();
-                    await loadClients();
-                    loadContent();
-                } else {
-                    const err = await res.json();
-                    alert(err.error || 'Failed to create client');
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        async function runAudit() {
-            if (!currentClient) {
-                alert('Please select a client first');
-                return;
+                        <div class="flex gap-3 pt-2">
+                            <button type="button" onclick="hideModal()" class="flex-1 bg-gray-800 text-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-700">Cancel</button>
+                            <button type="submit" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">Create</button>
+                        </div>
+                    </form>
+                `);
             }
 
-            try {
-                const res = await fetch('/api/audits', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        campaign_id: currentClient.id,
-                        type: 'technical'
-                    })
-                });
+            function showUserSettingsModal() {
+                showModal(`
+                    < div class="p-4 border-b border-gray-800 flex items-center justify-between" >
+                        <h3 class="text-lg font-semibold text-white">User Settings</h3>
+                        <button onclick="hideModal()" class="text-gray-400 hover:text-white">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div >
+                    <div class="p-6">
+                        <h4 class="text-sm font-medium text-gray-300 mb-4">Change Password</h4>
+                        <form onsubmit="changePassword(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">Current Password</label>
+                                <input type="password" name="current_password" required
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">New Password</label>
+                                <input type="password" name="new_password" required minlength="6"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-1">Confirm New Password</label>
+                                <input type="password" name="confirm_password" required minlength="6"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                            </div>
+                            <div class="flex justify-end pt-4">
+                                <button type="submit" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">Update Password</button>
+                            </div>
+                        </form>
+                    </div>
+                `);
+            }
 
-                if (res.ok) {
-                    showModal(`
-                        <div class="p-6 text-center">
+            async function changePassword(e) {
+                e.preventDefault();
+                const form = e.target;
+                const current_password = form.current_password.value;
+                const new_password = form.new_password.value;
+                const confirm_password = form.confirm_password.value;
+
+                if (new_password !== confirm_password) {
+                    alert("New passwords do not match");
+                    return;
+                }
+
+                const btn = form.querySelector('button');
+                const originalText = btn.innerText;
+                btn.innerText = 'Updating...';
+                btn.disabled = true;
+
+                try {
+                    const res = await fetch('/api/auth/change-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ current_password, new_password })
+                    });
+
+                    const data = await res.json();
+                    
+                    if (res.ok) {
+                        showModal(`
+                    < div class="p-6 text-center" >
+                                <div class="w-12 h-12 mx-auto mb-4 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                                    <i data-lucide="check" class="w-6 h-6 text-emerald-400"></i>
+                                </div>
+                                <h3 class="text-lg font-semibold text-white mb-2">Password Updated</h3>
+                                <p class="text-gray-400 text-sm mb-4">Your password has been changed successfully.</p>
+                                <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
+                            </div >
+                    `);
+                        lucide.createIcons();
+                    } else {
+                        alert('Error: ' + data.error);
+                        btn.innerText = originalText;
+                        btn.disabled = false;
+                    }
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            }
+
+            async function createClient(e) {
+                e.preventDefault();
+                const form = e.target;
+                const data = {
+                    name: form.domain.value,
+                    domain: form.domain.value,
+                    settings: {
+                        language: form.language.value,
+                        location: form.location.value,
+                        focus: form.focus.value
+                    }
+                };
+
+                try {
+                    const res = await fetch('/api/campaigns', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (res.ok) {
+                        hideModal();
+                        await loadClients();
+                        loadContent();
+                    } else {
+                        const err = await res.json();
+                        alert(err.error || 'Failed to create client');
+                    }
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
+            }
+
+            async function runAudit() {
+                if (!currentClient) {
+                    alert('Please select a client first');
+                    return;
+                }
+
+                try {
+                    const res = await fetch('/api/audits', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            campaign_id: currentClient.id,
+                            type: 'technical'
+                        })
+                    });
+
+                    if (res.ok) {
+                        showModal(`
+                    < div class="p-6 text-center" >
                             <div class="w-12 h-12 mx-auto mb-4 bg-violet-500/20 rounded-full flex items-center justify-center">
                                 <i data-lucide="loader-2" class="w-6 h-6 text-violet-400 animate-spin"></i>
                             </div>
                             <h3 class="text-lg font-semibold text-white mb-2">Audit Started</h3>
                             <p class="text-gray-400 text-sm mb-4">Running technical audit for ${currentClient.domain}...</p>
                             <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                        </div>
+                        </div >
                     `);
-                    lucide.createIcons();
-                } else {
-                    const err = await res.json();
-                    alert(err.error || 'Failed to start audit');
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        function showInviteModal() {
-            showModal(`
-                <div class="p-4 border-b border-gray-800">
-                    <h3 class="text-lg font-semibold text-white">Invite Team Member</h3>
-                </div>
-                <div class="p-4 text-center text-gray-400">
-                    <p>Team invites coming soon</p>
-                </div>
-            `);
-        }
-
-        // =========================================================================
-        // AUTH
-        // =========================================================================
-        async function logout() {
-            try {
-                await fetch('/api/auth/logout', { method: 'POST' });
-                window.location.href = '/login.html';
-            } catch (error) {
-                console.error('Logout error:', error);
-            }
-        }
-
-        // Click outside modal to close
-        document.getElementById('modalOverlay').addEventListener('click', (e) => {
-            if (e.target.id === 'modalOverlay') hideModal();
-        });
-
-        // =========================================================================
-        // AUDIT FUNCTIONS
-        // =========================================================================
-        async function loadAuditContent() {
-            const contentArea = document.getElementById('contentArea');
-            const pageActions = document.getElementById('pageActions');
-
-            pageActions.innerHTML = `
-                <button onclick="runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
-                    <i data-lucide="play" class="w-4 h-4"></i> Run Audit
-                </button>`;
-
-            if (currentSideTab === 'url-inspection') {
-                // Determine if we show list or "Back to list"
-                if (activeAudit) {
-                    // If user clicks "URL Inspection" while viewing an audit, reset view? 
-                    // Or keep showing list? Let's show list but maybe indicate active one.
-                    // For now, simple: viewing URL Inspection clears active audit
-                    activeAudit = null;
+                        lucide.createIcons();
+                    } else {
+                        const err = await res.json();
+                        alert(err.error || 'Failed to start audit');
+                    }
+                } catch (error) {
+                    alert('Error: ' + error.message);
                 }
             }
 
-            // If we have an active audit and are on a relevant tab, show details
-            if (activeAudit && ['on-page', 'technical-issues', 'core-vitals', 'schema', 'page-speed'].includes(currentSideTab)) {
-                renderAuditDetail();
-                return;
+            function showInviteModal() {
+                showModal(`
+                    < div class="p-4 border-b border-gray-800" >
+                        <h3 class="text-lg font-semibold text-white">Invite Team Member</h3>
+                </div >
+                    <div class="p-4 text-center text-gray-400">
+                        <p>Team invites coming soon</p>
+                    </div>
+                `);
             }
 
-            if (currentSideTab !== 'url-inspection') {
-                contentArea.innerHTML = `
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+            // =========================================================================
+            // AUTH
+            // =========================================================================
+            async function logout() {
+                try {
+                    await fetch('/api/auth/logout', { method: 'POST' });
+                    window.location.href = '/login.html';
+                } catch (error) {
+                    console.error('Logout error:', error);
+                }
+            }
+
+            // Click outside modal to close
+            document.getElementById('modalOverlay').addEventListener('click', (e) => {
+                if (e.target.id === 'modalOverlay') hideModal();
+            });
+
+            // =========================================================================
+            // AUDIT FUNCTIONS
+            // =========================================================================
+            async function loadAuditContent() {
+                const contentArea = document.getElementById('contentArea');
+                const pageActions = document.getElementById('pageActions');
+
+                pageActions.innerHTML = `
+                    < button onclick = "runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
+                        <i data-lucide="play" class="w-4 h-4"></i> Run Audit
+                </button > `;
+
+                if (currentSideTab === 'url-inspection') {
+                    // Determine if we show list or "Back to list"
+                    if (activeAudit) {
+                        // If user clicks "URL Inspection" while viewing an audit, reset view? 
+                        // Or keep showing list? Let's show list but maybe indicate active one.
+                        // For now, simple: viewing URL Inspection clears active audit
+                        activeAudit = null;
+                    }
+                }
+
+                // If we have an active audit and are on a relevant tab, show details
+                if (activeAudit && ['on-page', 'technical-issues', 'core-vitals', 'schema', 'page-speed'].includes(currentSideTab)) {
+                    renderAuditDetail();
+                    return;
+                }
+
+                if (currentSideTab !== 'url-inspection') {
+                    contentArea.innerHTML = `
+                    < div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center" >
                         <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
                         <h3 class="text-lg font-semibold text-white mb-2">${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
                         <p class="text-gray-400">This specific report is coming soon.</p>
-                    </div>`;
-                lucide.createIcons();
-                return;
-            }
+                    </div > `;
+                    lucide.createIcons();
+                    return;
+                }
 
-            try {
-                const response = await fetch(`/api/audits?campaign_id=${currentClient.id}`);
-                const data = await response.json();
-                const audits = data.audits || [];
+                try {
+                    const response = await fetch(`/ api / audits ? campaign_id = ${ currentClient.id } `);
+                    const data = await response.json();
+                    const audits = data.audits || [];
 
-                if (audits.length === 0) {
-                    contentArea.innerHTML = `
-                        <div class="flex flex-col items-center justify-center h-64 text-center">
+                    if (audits.length === 0) {
+                        contentArea.innerHTML = `
+                    < div class="flex flex-col items-center justify-center h-64 text-center" >
                             <i data-lucide="search-check" class="w-12 h-12 text-gray-600 mb-4"></i>
                             <h3 class="text-lg font-semibold text-white mb-2">No audits yet</h3>
                             <p class="text-gray-400 mb-4">Run your first technical audit for ${currentClient.domain}</p>
                             <button onclick="runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
                                 Run Audit
                             </button>
-                        </div>`;
-                } else {
-                    contentArea.innerHTML = `
-                        <div class="grid gap-4">
-                            ${audits.map(audit => {
+                        </div > `;
+                    } else {
+                        contentArea.innerHTML = `
+                    < div class="grid gap-4" >
+                        ${
+                    audits.map(audit => {
                         const isCrawling = audit.status === 'crawling' || audit.status === 'running';
                         const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
                         const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
@@ -1177,117 +1230,118 @@
                                         `}
                                     </div>
                                 </div>`;
-                    }).join('')}
-                        </div>`;
+                    }).join('')
                 }
-            } catch (error) {
-                contentArea.innerHTML = `<div class="text-red-400">Error loading audits: ${error.message}</div>`;
-            }
-            lucide.createIcons();
-        }
-
-        async function runAudit() {
-            if (!confirm('Start a new comprehensive technical audit? This usually takes 2-5 minutes.')) return;
-
-            const btn = document.querySelector('button[onclick="runAudit()"]');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Starting...`;
-            btn.disabled = true;
-
-            try {
-                const response = await fetch('/api/audits', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        campaign_id: currentClient.id,
-                        type: 'technical'
-                    })
-                });
-
-                if (!response.ok) throw new Error('Failed to start audit');
-
-                await loadAuditContent(); // Refresh list
-            } catch (error) {
-                alert('Error: ' + error.message);
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        }
-
-        async function checkAuditStatus(auditId) {
-            try {
-                const response = await fetch(`/api/audits/${auditId}`);
-                const data = await response.json();
-
-                if (data.audit && data.audit.status === 'completed') {
-                    // It finished! Reload list to show "View Results"
-                    await loadAuditContent();
-                } else {
-                    // Still running, maybe show a toast
-                    const btn = document.querySelector(`button[onclick="checkAuditStatus('${auditId}')"]`);
-                    if (btn) {
-                        const original = btn.innerHTML;
-                        btn.innerHTML = `<i data-lucide="check" class="w-3 h-3 text-emerald-400"></i> Still running...`;
-                        setTimeout(() => btn.innerHTML = original, 2000);
+                        </div > `;
                     }
+                } catch (error) {
+                    contentArea.innerHTML = `< div class="text-red-400" > Error loading audits: ${ error.message }</div > `;
                 }
-            } catch (e) {
-                console.error(e);
+                lucide.createIcons();
             }
-        }
 
-        async function viewAuditResults(auditId) {
-            try {
-                // Show loading state
-                const btn = document.querySelector(`button[onclick="viewAuditResults('${auditId}')"]`);
-                if (btn) btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Loading...`;
+            async function runAudit() {
+                if (!confirm('Start a new comprehensive technical audit? This usually takes 2-5 minutes.')) return;
 
-                const response = await fetch(`/api/audits/${auditId}`);
-                const data = await response.json();
+                const btn = document.querySelector('button[onclick="runAudit()"]');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = `< i data - lucide="loader-2" class="w-4 h-4 animate-spin" ></i > Starting...`;
+                btn.disabled = true;
 
-                if (data.audit) {
-                    activeAudit = data.audit;
-                    // Switch to On-Page Report tab
-                    switchSideTab('on-page');
+                try {
+                    const response = await fetch('/api/audits', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            campaign_id: currentClient.id,
+                            type: 'technical'
+                        })
+                    });
+
+                    if (!response.ok) throw new Error('Failed to start audit');
+
+                    await loadAuditContent(); // Refresh list
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
                 }
-            } catch (e) {
-                console.error(e);
-                alert('Failed to load audit results');
             }
-        }
 
-        // =========================================================================
-        // COMPETITOR FUNCTIONS
-        // =========================================================================
-        async function loadCompetitorContent() {
-            const contentArea = document.getElementById('contentArea');
-            const pageActions = document.getElementById('pageActions');
+            async function checkAuditStatus(auditId) {
+                try {
+                    const response = await fetch(`/ api / audits / ${ auditId } `);
+                    const data = await response.json();
 
-            pageActions.innerHTML = ''; // Clear actions
+                    if (data.audit && data.audit.status === 'completed') {
+                        // It finished! Reload list to show "View Results"
+                        await loadAuditContent();
+                    } else {
+                        // Still running, maybe show a toast
+                        const btn = document.querySelector(`button[onclick = "checkAuditStatus('${auditId}')"]`);
+                        if (btn) {
+                            const original = btn.innerHTML;
+                            btn.innerHTML = `< i data - lucide="check" class="w-3 h-3 text-emerald-400" ></i > Still running...`;
+                            setTimeout(() => btn.innerHTML = original, 2000);
+                        }
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }
 
-            if (currentSideTab !== 'overview') {
-                contentArea.innerHTML = `
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+            async function viewAuditResults(auditId) {
+                try {
+                    // Show loading state
+                    const btn = document.querySelector(`button[onclick = "viewAuditResults('${auditId}')"]`);
+                    if (btn) btn.innerHTML = `< i data - lucide="loader-2" class="w-3 h-3 animate-spin" ></i > Loading...`;
+
+                    const response = await fetch(`/ api / audits / ${ auditId } `);
+                    const data = await response.json();
+
+                    if (data.audit) {
+                        activeAudit = data.audit;
+                        // Switch to On-Page Report tab
+                        switchSideTab('on-page');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert('Failed to load audit results');
+                }
+            }
+
+            // =========================================================================
+            // COMPETITOR FUNCTIONS
+            // =========================================================================
+            async function loadCompetitorContent() {
+                const contentArea = document.getElementById('contentArea');
+                const pageActions = document.getElementById('pageActions');
+
+                pageActions.innerHTML = ''; // Clear actions
+
+                if (currentSideTab !== 'overview') {
+                    contentArea.innerHTML = `
+                    < div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center" >
                         <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
                         <h3 class="text-lg font-semibold text-white mb-2">${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
                         <p class="text-gray-400">Deep gap analysis and content library features coming in Phase 3.</p>
-                    </div>`;
-                lucide.createIcons();
-                return;
-            }
+                    </div > `;
+                    lucide.createIcons();
+                    return;
+                }
 
-            // Get cached data if available
-            const comps = currentClient.settings?.competitors || [];
-            const lastAnalysis = currentClient.settings?.last_competitor_analysis || null;
+                // Get cached data if available
+                const comps = currentClient.settings?.competitors || [];
+                const lastAnalysis = currentClient.settings?.last_competitor_analysis || null;
 
-            let tableHtml = '';
+                let tableHtml = '';
 
-            if (lastAnalysis) {
-                const target = lastAnalysis.target;
-                const compStats = lastAnalysis.competitors;
+                if (lastAnalysis) {
+                    const target = lastAnalysis.target;
+                    const compStats = lastAnalysis.competitors;
 
-                tableHtml = `
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-8">
+                    tableHtml = `
+                    < div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-8" >
                         <div class="p-4 border-b border-gray-800 flex justify-between items-center">
                             <h3 class="font-medium text-white">Share of Voice & Traffic Estimation</h3>
                             <span class="text-xs text-gray-500">Last updated: ${new Date(lastAnalysis.analyzed_at).toLocaleString()}</span>
@@ -1329,12 +1383,12 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                `;
-            }
+                    </div >
+                    `;
+                }
 
-            contentArea.innerHTML = `
-                <div class="max-w-4xl mx-auto">
+                contentArea.innerHTML = `
+                    < div class="max-w-4xl mx-auto" >
                     <div class="flex items-center justify-between mb-8">
                         <div>
                             <h2 class="text-2xl font-bold text-white mb-2">Competitor Analysis</h2>
@@ -1361,71 +1415,73 @@
                         <p class="text-xs text-gray-500 mt-3">Enter up to 3 main competitors (e.g., 'moz.com').</p>
                     </div>
 
-                    ${tableHtml}
+                    ${ tableHtml }
                     
-                    ${!lastAnalysis ? `
+                    ${
+                    !lastAnalysis ? `
                         <div class="text-center py-12 border border-dashed border-gray-800 rounded-xl">
                             <i data-lucide="bar-chart-2" class="w-12 h-12 text-gray-700 mx-auto mb-3"></i>
                             <p class="text-gray-500">No analysis run yet. Add competitors and hit "Run Analysis".</p>
-                        </div>` : ''}
-                </div>
-            `;
-            lucide.createIcons();
-        }
-
-        async function runCompetitorAnalysis() {
-            const inputs = document.querySelectorAll('.competitor-input');
-            const competitors = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
-
-            if (competitors.length === 0) {
-                alert('Please enter at least one competitor domain.');
-                return;
-            }
-
-            const btn = document.querySelector('button[onclick="runCompetitorAnalysis()"]');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Analyzing...`;
-            btn.disabled = true;
-
-            try {
-                const response = await fetch('/api/competitors/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        campaign_id: currentClient.id,
-                        competitors: competitors
-                    })
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) throw new Error(data.error || 'Analysis failed');
-
-                // Reload client data to get updated settings
-                const clientRes = await fetch(`/api/campaigns/${currentClient.id}`);
-                const clientData = await clientRes.json();
-                currentClient = clientData.campaign;
-
-                // Refresh content
-                await loadCompetitorContent();
-
-            } catch (error) {
-                alert('Error: ' + error.message);
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        }
-
-        async function generateSlides(auditId) {
-            const btn = document.getElementById(`btn-slides-${auditId}`);
-            if (btn) {
-                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating...`;
-                btn.disabled = true;
+                        </div>` : ''
+                }
+                </div >
+                    `;
                 lucide.createIcons();
             }
 
-            try {
-                const response = await fetch(`/api/audits/${auditId}/generate-slides`, { method: 'POST' });
+            async function runCompetitorAnalysis() {
+                const inputs = document.querySelectorAll('.competitor-input');
+                const competitors = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
+
+                if (competitors.length === 0) {
+                    alert('Please enter at least one competitor domain.');
+                    return;
+                }
+
+                const btn = document.querySelector('button[onclick="runCompetitorAnalysis()"]');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = `< i data - lucide="loader-2" class="w-4 h-4 animate-spin" ></i > Analyzing...`;
+                btn.disabled = true;
+
+                try {
+                    const response = await fetch('/api/competitors/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            campaign_id: currentClient.id,
+                            competitors: competitors
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) throw new Error(data.error || 'Analysis failed');
+
+                    // Reload client data to get updated settings
+                    const clientRes = await fetch(`/ api / campaigns / ${ currentClient.id } `);
+                    const clientData = await clientRes.json();
+                    currentClient = clientData.campaign;
+
+                    // Refresh content
+                    await loadCompetitorContent();
+
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            }
+
+            async function generateSlides(auditId) {
+                const btn = document.getElementById(`btn - slides - ${ auditId } `);
+                if (btn) {
+                    btn.innerHTML = `< i data - lucide="loader-2" class="w-4 h-4 animate-spin" ></i > Generating...`;
+                    btn.disabled = true;
+                    lucide.createIcons();
+                }
+
+                try {
+                    const response = await fetch(`/ api / audits / ${ auditId }/generate-slides`, { method: 'POST' });
                 const data = await response.json();
 
                 if (!response.ok) throw new Error(data.error || 'Failed to generate slides');

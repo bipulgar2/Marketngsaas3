@@ -263,6 +263,53 @@ def login():
         logger.error(f"Login error: {e}")
         return jsonify({'error': str(e)}), 401
 
+        return jsonify({'error': str(e)}), 401
+
+
+@app.route('/api/auth/change-password', methods=['POST'])
+@login_required
+def change_password():
+    """Change user password."""
+    data = request.json
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    
+    if not current_password or not new_password:
+        return jsonify({'error': 'Current and new password required'}), 400
+
+    try:
+        # 1. Verify current password
+        user_email = session['user']['email']
+        
+        # We try to sign in. If it fails, current password is wrong.
+        # Note: This might create a new session on Supabase side, but that's fine.
+        auth_res = supabase.auth.sign_in_with_password({
+            'email': user_email,
+            'password': current_password
+        })
+        
+        if not auth_res.user:
+            return jsonify({'error': 'Incorrect current password'}), 401
+
+        # 2. Update password
+        # users.update() updates the user.
+        update_res = supabase.auth.update_user({
+            'password': new_password
+        })
+        
+        if update_res:
+             return jsonify({'success': True, 'message': 'Password updated successfully'})
+        else:
+             return jsonify({'error': 'Failed to update password'}), 500
+
+    except Exception as e:
+        logger.error(f"Password change error: {e}")
+        # HACK: Supabase/GoTrue specific error messages often come in e.message or str(e)
+        msg = str(e)
+        if "Invalid login credentials" in msg:
+             return jsonify({'error': 'Incorrect current password'}), 401
+        return jsonify({'error': f"Failed to change password: {msg}"}), 500
+
 
 @app.route('/api/auth/signup', methods=['POST'])
 def signup():

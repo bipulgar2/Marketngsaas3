@@ -208,9 +208,27 @@ def create_deep_audit_slides(data, domain, creds=None, screenshots=None, annotat
     summary = raw_summary.get('summary', {}) if isinstance(raw_summary, dict) else {}
 
     # Create presentation
-    presentation = {'title': f"SEO Strategy Deck - {domain}"}
-    presentation = slides_service.presentations().create(body=presentation).execute()
-    pid = presentation.get('presentationId')
+    presentation_title = f"SEO Strategy Deck - {domain}"
+    folder_id = os.getenv('GOOGLE_DRIVE_FOLDER_ID')
+
+    if folder_id:
+        # Create blank presentation in the specific folder via Drive API
+        print(f"Creating presentation in folder: {folder_id}")
+        file_metadata = {
+            'name': presentation_title,
+            'mimeType': 'application/vnd.google-apps.presentation',
+            'parents': [folder_id]
+        }
+        file = drive_service.files().create(body=file_metadata, fields='id').execute()
+        pid = file.get('id')
+        
+        # Get the presentation object via Slides API to continue working with it
+        presentation = slides_service.presentations().get(presentationId=pid).execute()
+    else:
+        # Fallback to default behavior (might fail if SA has no quota)
+        presentation = {'title': presentation_title}
+        presentation = slides_service.presentations().create(body=presentation).execute()
+        pid = presentation.get('presentationId')
     
     requests = []
     

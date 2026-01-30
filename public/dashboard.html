@@ -866,14 +866,14 @@
                     if (idx >= 0) clients[idx] = campaign;
 
                     showModal(`
-                    < div class="p-6 text-center" >
+                        <div class="p-6 text-center">
                             <div class="w-12 h-12 mx-auto mb-4 bg-emerald-500/20 rounded-full flex items-center justify-center">
                                 <i data-lucide="check" class="w-6 h-6 text-emerald-400"></i>
                             </div>
                             <h3 class="text-lg font-semibold text-white mb-2">Settings Saved</h3>
                             <p class="text-gray-400 text-sm mb-4">Client settings have been updated.</p>
                             <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                        </div >
+                        </div>
                     `);
                     lucide.createIcons();
                 } else {
@@ -910,12 +910,12 @@
 
         function showNewClientModal() {
             showModal(`
-                    < div class="p-4 border-b border-gray-800 flex items-center justify-between" >
+                    <div class="p-4 border-b border-gray-800 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-white">New Client</h3>
                     <button onclick="hideModal()" class="text-gray-400 hover:text-white">
                         <i data-lucide="x" class="w-5 h-5"></i>
                     </button>
-                </div >
+                </div>
                     <form onsubmit="createClient(event)" class="p-4 space-y-4">
                         <div>
                             <label class="block text-sm text-gray-400 mb-1">Domain</label>
@@ -961,12 +961,12 @@
 
         function showUserSettingsModal() {
             showModal(`
-                    < div class="p-4 border-b border-gray-800 flex items-center justify-between" >
+                    <div class="p-4 border-b border-gray-800 flex items-center justify-between">
                         <h3 class="text-lg font-semibold text-white">User Settings</h3>
                         <button onclick="hideModal()" class="text-gray-400 hover:text-white">
                             <i data-lucide="x" class="w-5 h-5"></i>
                         </button>
-                    </div >
+                    </div>
                     <div class="p-6">
                         <h4 class="text-sm font-medium text-gray-300 mb-4">Change Password</h4>
                         <form onsubmit="changePassword(event)" class="space-y-4">
@@ -1021,14 +1021,14 @@
 
                 if (res.ok) {
                     showModal(`
-                    < div class="p-6 text-center" >
+                        <div class="p-6 text-center">
                                 <div class="w-12 h-12 mx-auto mb-4 bg-emerald-500/20 rounded-full flex items-center justify-center">
                                     <i data-lucide="check" class="w-6 h-6 text-emerald-400"></i>
                                 </div>
                                 <h3 class="text-lg font-semibold text-white mb-2">Password Updated</h3>
                                 <p class="text-gray-400 text-sm mb-4">Your password has been changed successfully.</p>
                                 <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                            </div >
+                            </div>
                     `);
                     lucide.createIcons();
                 } else {
@@ -1094,15 +1094,16 @@
 
                 if (res.ok) {
                     showModal(`
-                    < div class="p-6 text-center" >
+                        showModal(`
+                        <div class="p-6 text-center" >
                             <div class="w-12 h-12 mx-auto mb-4 bg-violet-500/20 rounded-full flex items-center justify-center">
                                 <i data-lucide="loader-2" class="w-6 h-6 text-violet-400 animate-spin"></i>
                             </div>
                             <h3 class="text-lg font-semibold text-white mb-2">Audit Started</h3>
                             <p class="text-gray-400 text-sm mb-4">Running technical audit for ${currentClient.domain}...</p>
                             <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                        </div >
-                    `);
+                        </div>
+                        `);
                     lucide.createIcons();
                 } else {
                     const err = await res.json();
@@ -1115,12 +1116,12 @@
 
         function showInviteModal() {
             showModal(`
-                    < div class="p-4 border-b border-gray-800" >
+                        <div class="p-4 border-b border-gray-800" >
                         <h3 class="text-lg font-semibold text-white">Invite Team Member</h3>
-                </div >
-                    <div class="p-4 text-center text-gray-400">
-                        <p>Team invites coming soon</p>
-                    </div>
+                </div>
+                        <div class="p-4 text-center text-gray-400">
+                            <p>Team invites coming soon</p>
+                        </div>
                 `);
         }
 
@@ -1149,9 +1150,9 @@
             const pageActions = document.getElementById('pageActions');
 
             pageActions.innerHTML = `
-                    < button onclick = "runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
+                        <button onclick = "runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
                         <i data-lucide="play" class="w-4 h-4"></i> Run Audit
-                </button > `;
+                </button> `;
 
             if (currentSideTab === 'url-inspection') {
                 // Determine if we show list or "Back to list"
@@ -1171,39 +1172,40 @@
 
             if (currentSideTab !== 'url-inspection') {
                 contentArea.innerHTML = `
-                    < div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center" >
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center" >
                         <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
                         <h3 class="text-lg font-semibold text-white mb-2">${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
                         <p class="text-gray-400">This specific report is coming soon.</p>
-                    </div > `;
+                    </div> `;
                 lucide.createIcons();
                 return;
             }
 
             try {
-                const response = await fetch(`/ api / audits ? campaign_id = ${currentClient.id} `);
+                const response = await fetch(`/ api / audits ? campaign_id = ${ currentClient.id } `);
                 const data = await response.json();
                 const audits = data.audits || [];
 
                 if (audits.length === 0) {
                     contentArea.innerHTML = `
-                    < div class="flex flex-col items-center justify-center h-64 text-center" >
+                    <div class="flex flex-col items-center justify-center h-64 text-center" >
                             <i data-lucide="search-check" class="w-12 h-12 text-gray-600 mb-4"></i>
                             <h3 class="text-lg font-semibold text-white mb-2">No audits yet</h3>
                             <p class="text-gray-400 mb-4">Run your first technical audit for ${currentClient.domain}</p>
                             <button onclick="runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
                                 Run Audit
                             </button>
-                        </div > `;
+                        </div> `;
                 } else {
                     contentArea.innerHTML = `
-                    < div class="grid gap-4" >
-                        ${audits.map(audit => {
-                        const isCrawling = audit.status === 'crawling' || audit.status === 'running';
-                        const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
-                        const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
+                        <div class="grid gap-4" >
+                        ${
+                        audits.map(audit => {
+                            const isCrawling = audit.status === 'crawling' || audit.status === 'running';
+                            const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
+                            const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
 
-                        return `
+                            return `
                                 <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
                                     <div class="flex items-center gap-4">
                                         <div class="p-2 bg-gray-800 rounded-lg">
@@ -1230,12 +1232,12 @@
                                         `}
                                     </div>
                                 </div>`;
-                    }).join('')
-                        }
-                        </div > `;
+                        }).join('')
+                    }
+                        </div> `;
                 }
             } catch (error) {
-                contentArea.innerHTML = `< div class="text-red-400" > Error loading audits: ${error.message}</div > `;
+                contentArea.innerHTML = `<div class="text-red-400" > Error loading audits: ${ error.message }</div> `;
             }
             lucide.createIcons();
         }
@@ -1245,7 +1247,7 @@
 
             const btn = document.querySelector('button[onclick="runAudit()"]');
             const originalText = btn.innerHTML;
-            btn.innerHTML = `< i data - lucide="loader-2" class="w-4 h-4 animate-spin" ></i > Starting...`;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin" ></i> Starting...`;
             btn.disabled = true;
 
             try {
@@ -1270,7 +1272,7 @@
 
         async function checkAuditStatus(auditId) {
             try {
-                const response = await fetch(`/ api / audits / ${auditId} `);
+                const response = await fetch(`/ api / audits / ${ auditId } `);
                 const data = await response.json();
 
                 if (data.audit && data.audit.status === 'completed') {
@@ -1281,7 +1283,7 @@
                     const btn = document.querySelector(`button[onclick = "checkAuditStatus('${auditId}')"]`);
                     if (btn) {
                         const original = btn.innerHTML;
-                        btn.innerHTML = `< i data - lucide="check" class="w-3 h-3 text-emerald-400" ></i > Still running...`;
+                        btn.innerHTML = `<i data-lucide="check" class="w-3 h-3 text-emerald-400" ></i> Still running...`;
                         setTimeout(() => btn.innerHTML = original, 2000);
                     }
                 }
@@ -1294,9 +1296,9 @@
             try {
                 // Show loading state
                 const btn = document.querySelector(`button[onclick = "viewAuditResults('${auditId}')"]`);
-                if (btn) btn.innerHTML = `< i data - lucide="loader-2" class="w-3 h-3 animate-spin" ></i > Loading...`;
+                if (btn) btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin" ></i> Loading...`;
 
-                const response = await fetch(`/ api / audits / ${auditId} `);
+                const response = await fetch(`/ api / audits / ${ auditId } `);
                 const data = await response.json();
 
                 if (data.audit) {
@@ -1321,11 +1323,11 @@
 
             if (currentSideTab !== 'overview') {
                 contentArea.innerHTML = `
-                    < div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center" >
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center" >
                         <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
                         <h3 class="text-lg font-semibold text-white mb-2">${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
                         <p class="text-gray-400">Deep gap analysis and content library features coming in Phase 3.</p>
-                    </div > `;
+                    </div> `;
                 lucide.createIcons();
                 return;
             }
@@ -1341,7 +1343,7 @@
                 const compStats = lastAnalysis.competitors;
 
                 tableHtml = `
-                    < div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-8" >
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-8" >
                         <div class="p-4 border-b border-gray-800 flex justify-between items-center">
                             <h3 class="font-medium text-white">Share of Voice & Traffic Estimation</h3>
                             <span class="text-xs text-gray-500">Last updated: ${new Date(lastAnalysis.analyzed_at).toLocaleString()}</span>
@@ -1383,12 +1385,12 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div >
-                    `;
+                    </div>
+                        `;
             }
 
             contentArea.innerHTML = `
-                    < div class="max-w-4xl mx-auto" >
+                        <div class="max-w-4xl mx-auto" >
                     <div class="flex items-center justify-between mb-8">
                         <div>
                             <h2 class="text-2xl font-bold text-white mb-2">Competitor Analysis</h2>
@@ -1415,7 +1417,7 @@
                         <p class="text-xs text-gray-500 mt-3">Enter up to 3 main competitors (e.g., 'moz.com').</p>
                     </div>
 
-                    ${tableHtml}
+                    ${ tableHtml }
                     
                     ${!lastAnalysis ? `
                         <div class="text-center py-12 border border-dashed border-gray-800 rounded-xl">
@@ -1423,7 +1425,7 @@
                             <p class="text-gray-500">No analysis run yet. Add competitors and hit "Run Analysis".</p>
                         </div>` : ''
                 }
-                </div >
+                </div>
                     `;
             lucide.createIcons();
         }
@@ -1439,7 +1441,7 @@
 
             const btn = document.querySelector('button[onclick="runCompetitorAnalysis()"]');
             const originalText = btn.innerHTML;
-            btn.innerHTML = `< i data - lucide="loader-2" class="w-4 h-4 animate-spin" ></i > Analyzing...`;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin" ></i> Analyzing...`;
             btn.disabled = true;
 
             try {
@@ -1457,7 +1459,7 @@
                 if (!response.ok) throw new Error(data.error || 'Analysis failed');
 
                 // Reload client data to get updated settings
-                const clientRes = await fetch(`/ api / campaigns / ${currentClient.id} `);
+                const clientRes = await fetch(`/ api / campaigns / ${ currentClient.id } `);
                 const clientData = await clientRes.json();
                 currentClient = clientData.campaign;
 
@@ -1472,15 +1474,15 @@
         }
 
         async function generateSlides(auditId) {
-            const btn = document.getElementById(`btn - slides - ${auditId} `);
+            const btn = document.getElementById(`btn - slides - ${ auditId } `);
             if (btn) {
-                btn.innerHTML = `< i data - lucide="loader-2" class="w-4 h-4 animate-spin" ></i > Generating...`;
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin" ></i> Generating...`;
                 btn.disabled = true;
                 lucide.createIcons();
             }
 
             try {
-                const response = await fetch(`/ api / audits / ${auditId}/generate-slides`, { method: 'POST' });
+                const response = await fetch(`/ api / audits / ${ auditId }/generate-slides`, { method: 'POST' });
                 const data = await response.json();
 
                 if (!response.ok) throw new Error(data.error || 'Failed to generate slides');

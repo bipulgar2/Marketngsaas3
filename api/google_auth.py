@@ -35,8 +35,32 @@ def get_service_account_credentials():
     2. service_account.json file in project root
     
     Returns google.oauth2.service_account.Credentials or None
+    # returns google.oauth2.service_account.Credentials, google.oauth2.credentials.Credentials, or None
     """
-    # Check environment variable first
+    # 1. Check for OAuth Refresh Token (Highest Priority for Personal Gmail Workaround)
+    refresh_token = os.getenv('GOOGLE_REFRESH_TOKEN')
+    client_id = os.getenv('GOOGLE_CLIENT_ID')
+    client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
+
+    if refresh_token and client_id and client_secret:
+        try:
+            print("Using OAuth Refresh Token (Headless/Admin mode)")
+            creds = Credentials.from_authorized_user_info(
+                info={
+                    'refresh_token': refresh_token,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'scopes': SCOPES
+                }
+            )
+            return creds
+        except Exception as e:
+            print(f"Error loading Refresh Token credentials: {e}")
+            # If env vars exist but fail, we should probably tell the user why
+            # instead of falling back silently.
+            raise ValueError(f"OAuth Configured but Failed: {str(e)}")
+
+    # 2. Check environment variable for Service Account
     env_sa = os.getenv('GOOGLE_SERVICE_ACCOUNT')
     if env_sa:
         try:
@@ -46,12 +70,10 @@ def get_service_account_credentials():
             return creds
         except json.JSONDecodeError as e:
             print(f"Error parsing GOOGLE_SERVICE_ACCOUNT: {e}")
-            return None
         except Exception as e:
             print(f"Error loading Service Account: {e}")
-            return None
     
-    # Fall back to file
+    # 3. Fall back to file
     file_path = os.path.join(PROJECT_ROOT, "service_account.json")
     if os.path.exists(file_path):
         try:

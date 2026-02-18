@@ -226,12 +226,7 @@
                 { id: 'settings', label: 'Settings' }
             ],
             'tech-audit': [
-                { id: 'url-inspection', label: 'URL Inspection' },
-                { id: 'on-page', label: 'On-Page Report' },
-                { id: 'technical-issues', label: 'Technical Issues' },
-                { id: 'core-vitals', label: 'Core Web Vitals' },
-                { id: 'schema', label: 'Schema Markup' },
-                { id: 'page-speed', label: 'Page Speed' }
+                { id: 'overview', label: 'Audit Overview' }
             ],
             'content': [
                 { id: 'briefs', label: 'Briefs' },
@@ -467,12 +462,17 @@
                 pageActions.innerHTML = '';
 
                 try {
+                    let tasksUrl = '/api/tasks';
+                    if (currentClient && currentClient.id) {
+                        tasksUrl += `?campaign_id=${currentClient.id}`;
+                    }
+
                     const [campaignsRes, tasksRes] = await Promise.all([
                         fetch('/api/campaigns'),
-                        fetch('/api/tasks')
+                        fetch(tasksUrl)
                     ]);
-                    const campaigns = (await campaignsRes.json()).campaigns || [];
-                    const tasks = (await tasksRes.json()).tasks || [];
+                    const campaigns = await campaignsRes.json().then(data => data.campaigns || []);
+                    const tasks = await tasksRes.json().then(data => data.tasks || []);
 
                     const stats = {
                         clients: campaigns.length,
@@ -639,6 +639,8 @@
                 await loadAuditContent();
             } else if (currentTopTab === 'competitors') {
                 await loadCompetitorContent();
+            } else if (currentTopTab === 'tasks') {
+                await loadTasksContent();
             } else if (currentTopTab === 'client-settings') {
                 await loadClientSettingsContent();
             } else {
@@ -1154,30 +1156,9 @@
                         <i data-lucide="play" class="w-4 h-4"></i> Run Audit
                 </button> `;
 
-            if (currentSideTab === 'url-inspection') {
-                // Determine if we show list or "Back to list"
-                if (activeAudit) {
-                    // If user clicks "URL Inspection" while viewing an audit, reset view? 
-                    // Or keep showing list? Let's show list but maybe indicate active one.
-                    // For now, simple: viewing URL Inspection clears active audit
-                    activeAudit = null;
-                }
-            }
-
-            // If we have an active audit and are on a relevant tab, show details
-            if (activeAudit && ['on-page', 'technical-issues', 'core-vitals', 'schema', 'page-speed'].includes(currentSideTab)) {
+            // If we have an active audit, show details
+            if (activeAudit) {
                 renderAuditDetail();
-                return;
-            }
-
-            if (currentSideTab !== 'url-inspection') {
-                contentArea.innerHTML = `
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center" >
-                        <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
-                        <h3 class="text-lg font-semibold text-white mb-2">${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
-                        <p class="text-gray-400">This specific report is coming soon.</p>
-                    </div> `;
-                lucide.createIcons();
                 return;
             }
 
@@ -1302,8 +1283,7 @@
 
                 if (data.audit) {
                     activeAudit = data.audit;
-                    // Switch to On-Page Report tab
-                    switchSideTab('on-page');
+                    loadContent();
                 }
             } catch (e) {
                 console.error(e);
@@ -1472,10 +1452,197 @@
             }
         }
 
+        async function loadTasksContent() {
+            const contentArea = document.getElementById('contentArea');
+            contentArea.innerHTML = `
+                <div class="flex items-center justify-center h-full text-gray-500">
+                    <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading tasks...
+                </div>`;
+            lucide.createIcons();
+
+            try {
+                let url = '/api/tasks';
+                if (currentClient && currentClient.id) {
+                    url += `?campaign_id=${currentClient.id}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+                const tasks = data.tasks || [];
+
+                if (tasks.length === 0) {
+                    contentArea.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-64 text-center">
+                            <i data-lucide="check-square" class="w-12 h-12 text-gray-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">No tasks found</h3>
+                            <p class="text-gray-400 mb-4">Run an audit to generate tasks automatically.</p>
+                        </div>`;
+                } else {
+                    contentArea.innerHTML = `
+                        <div class="space-y-6">
+                            <div class="flex items-center justify-between">
+                                <h2 class="text-xl font-semibold text-white">Tasks</h2>
+                                <div class="flex gap-2">
+                                     <span class="bg-gray-800 text-gray-300 px-3 py-1 rounded-lg text-sm">${tasks.length} Total</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                                <table class="w-full">
+                                    <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
+                                        <tr>
+                                            <th class="px-6 py-4 text-left font-medium">Task</th>
+                                            <th class="px-6 py-4 text-left font-medium">Type</th>
+                                            <th class="px-6 py-4 text-left font-medium">Role</th>
+                                            <th class="px-6 py-4 text-left font-medium">Priority</th>
+                                            <th class="px-6 py-4 text-left font-medium">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-800 text-sm">
+                                        ${tasks.map(t => `
+                                            <tr class="hover:bg-gray-800/30 transition-colors">
+                                                <td class="px-6 py-4">
+                                                    <div class="font-medium text-white">${t.title}</div>
+                                                    <div class="text-gray-500 text-xs mt-1">${t.description}</div>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <span class="px-2 py-1 rounded text-xs bg-gray-800 text-gray-300 border border-gray-700">
+                                                        ${t.type}
+                                                    </span>
+                                                </td>
+                                                <td class="px-6 py-4 text-gray-400 capitalize">${t.assigned_role?.replace('_', ' ') || '-'}</td>
+                                                 <td class="px-6 py-4">
+                                                    <span class="px-2 py-1 rounded text-xs ${t.priority === 'high' || t.priority === 'critical' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                            t.priority === 'medium' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                                'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                        }">
+                                                        ${t.priority}
+                                                    </span>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500">
+                                                        <option value="pending" ${t.status === 'pending' ? 'selected' : ''}>Pending</option>
+                                                        <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                                                        <option value="done" ${t.status === 'done' ? 'selected' : ''}>Done</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>`;
+                }
+            } catch (error) {
+                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center">Error loading tasks: ${error.message}</div>`;
+            }
+            lucide.createIcons();
+        }
+
+        async function loadTasksContent() {
+            const contentArea = document.getElementById('contentArea');
+            contentArea.innerHTML = `
+                <div class="flex items-center justify-center h-full text-gray-500">
+                    <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading tasks...
+                </div>`;
+            lucide.createIcons();
+
+            try {
+                let url = '/api/tasks';
+                if (currentClient && currentClient.id) {
+                    url += `?campaign_id=${currentClient.id}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+                const tasks = data.tasks || [];
+
+                if (tasks.length === 0) {
+                    contentArea.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-64 text-center">
+                            <i data-lucide="check-square" class="w-12 h-12 text-gray-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">No tasks found</h3>
+                            <p class="text-gray-400 mb-4">Run an audit to generate tasks automatically.</p>
+                        </div>`;
+                } else {
+                    contentArea.innerHTML = `
+                        <div class="space-y-6">
+                            <div class="flex items-center justify-between">
+                                <h2 class="text-xl font-semibold text-white">Tasks</h2>
+                                <div class="flex gap-2">
+                                     <span class="bg-gray-800 text-gray-300 px-3 py-1 rounded-lg text-sm">${tasks.length} Total</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                                <table class="w-full">
+                                    <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
+                                        <tr>
+                                            <th class="px-6 py-4 text-left font-medium">Task</th>
+                                            <th class="px-6 py-4 text-left font-medium">Type</th>
+                                            <th class="px-6 py-4 text-left font-medium">Role</th>
+                                            <th class="px-6 py-4 text-left font-medium">Priority</th>
+                                            <th class="px-6 py-4 text-left font-medium">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-800 text-sm">
+                                        ${tasks.map(t => `
+                                            <tr class="hover:bg-gray-800/30 transition-colors">
+                                                <td class="px-6 py-4">
+                                                    <div class="font-medium text-white">${t.title}</div>
+                                                    <div class="text-gray-500 text-xs mt-1">${t.description}</div>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <span class="px-2 py-1 rounded text-xs bg-gray-800 text-gray-300 border border-gray-700">
+                                                        ${t.type}
+                                                    </span>
+                                                </td>
+                                                <td class="px-6 py-4 text-gray-400 capitalize">${t.assigned_role?.replace('_', ' ') || '-'}</td>
+                                                 <td class="px-6 py-4">
+                                                    <span class="px-2 py-1 rounded text-xs ${t.priority === 'high' || t.priority === 'critical' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                            t.priority === 'medium' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                                'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                        }">
+                                                        ${t.priority}
+                                                    </span>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500">
+                                                        <option value="pending" ${t.status === 'pending' ? 'selected' : ''}>Pending</option>
+                                                        <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                                                        <option value="done" ${t.status === 'done' ? 'selected' : ''}>Done</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>`;
+                }
+            } catch (error) {
+                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center">Error loading tasks: ${error.message}</div>`;
+            }
+            lucide.createIcons();
+        }
+
+        async function updateTaskStatus(taskId, newStatus) {
+            try {
+                await fetch(`/api/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+            } catch (e) {
+                console.error(e);
+                alert('Failed to update status');
+            }
+        }
+
         async function generateSlides(auditId) {
-            const btn = document.getElementById(`btn - slides - ${auditId} `);
+            const btn = document.getElementById(`btn-slides-${auditId}`);
             if (btn) {
-                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin" ></i> Generating...`;
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating...`;
                 btn.disabled = true;
                 lucide.createIcons();
             }
@@ -1504,16 +1671,50 @@
             }
         }
 
+        function showAuditItemDetails(category, key) {
+            const data = activeAudit.results.categorized[category][key];
+            const title = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const items = data.items || [];
+
+            showModal(`
+                <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-white">${title}</h3>
+                    <button onclick="hideModal()" class="text-gray-400 hover:text-white">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    ${items.length > 0 ? `
+                        <div class="space-y-2">
+                            ${items.map(item => `
+                                <a href="${item.startsWith('http') ? item : 'https://' + currentClient.domain + item}" target="_blank" class="block p-3 bg-gray-800 rounded hover:bg-gray-700 text-sm text-gray-300 hover:text-white break-all transition-colors flex items-start gap-2 group">
+                                    <i data-lucide="external-link" class="w-4 h-4 mt-0.5 shrink-0 text-violet-500 opacity-50 group-hover:opacity-100 transition-opacity"></i>
+                                    <span>${item}</span>
+                                </a>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <p class="text-gray-500 text-center py-8">No items found for this check.</p>
+                    `}
+                </div>
+                <div class="p-4 border-t border-gray-800 bg-gray-900 rounded-b-xl flex justify-between items-center text-xs text-gray-500">
+                    <span>${items.length} items total</span>
+                    <button onclick="hideModal()" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Close</button>
+                </div>
+            `);
+        }
+
         function renderAuditDetail() {
             const contentArea = document.getElementById('contentArea');
-            const summary = activeAudit.results?.summary || activeAudit.summary || {};
-            const pages = activeAudit.results?.pages || [];
+            const results = activeAudit.results || {};
+            const summary = results.summary || activeAudit.summary || {};
+            const categorized = results.categorized || null; // New structure
 
-            // Back button
+            // Back button and header
             const pageActions = document.getElementById('pageActions');
             pageActions.innerHTML = `
                 <div class="flex items-center gap-3">
-                    <button onclick="activeAudit=null; switchSideTab('url-inspection')" class="text-gray-400 hover:text-white text-sm flex items-center gap-1">
+                    <button onclick="activeAudit=null; loadContent()" class="text-gray-400 hover:text-white text-sm flex items-center gap-1">
                         <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Audits
                     </button>
                     <div class="h-4 w-px bg-gray-700"></div>
@@ -1529,224 +1730,77 @@
                 }
                 </div>`;
 
-            if (currentSideTab === 'on-page') {
+            if (!categorized) {
+                // Fallback for old audits or incomplete data
                 contentArea.innerHTML = `
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                        <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl">
-                            <h4 class="text-gray-400 text-xs uppercase font-semibold mb-2">On-Page Score</h4>
-                            <div class="text-3xl font-bold text-white">${summary.onpage_score ? summary.onpage_score.toFixed(0) : '-'}</div>
-                        </div>
-                         <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl">
-                            <h4 class="text-gray-400 text-xs uppercase font-semibold mb-2">Pages Crawled</h4>
-                            <div class="text-3xl font-bold text-white">${summary.pages_crawled || 0}</div>
-                        </div>
-                        <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl">
-                            <h4 class="text-gray-400 text-xs uppercase font-semibold mb-2">Critical Errors</h4>
-                            <div class="text-3xl font-bold text-red-500">${summary.critical_issues_count || 0}</div>
-                        </div>
-                         <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl">
-                            <h4 class="text-gray-400 text-xs uppercase font-semibold mb-2">Warnings</h4>
-                            <div class="text-3xl font-bold text-yellow-500">${summary.warnings_count || 0}</div>
-                        </div>
-                    </div>
-
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                        <div class="p-4 border-b border-gray-800">
-                             <h3 class="font-medium text-white">Crawled Pages</h3>
-                        </div>
-                         <div class="overflow-x-auto">
-                            <table class="w-full text-left text-sm text-gray-400">
-                                <thead class="bg-gray-900/50 text-gray-500 font-medium border-b border-gray-800">
-                                    <tr>
-                                        <th class="p-3">URL</th>
-                                        <th class="p-3">Status</th>
-                                        <th class="p-3 text-right">Score</th>
-                                        <th class="p-3 text-right">Load Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-800">
-                                    ${pages.slice(0, 50).map(p => `
-                                    <tr>
-                                        <td class="p-3 max-w-md truncate text-white" title="${p.url}">${p.url}</td>
-                                        <td class="p-3"><span class="px-2 py-0.5 rounded text-xs ${p.status_code >= 400 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}">${p.status_code}</span></td>
-                                        <td class="p-3 text-right">${p.onpage_score || '-'}</td>
-                                        <td class="p-3 text-right">${p.time_to_interactive ? p.time_to_interactive + 'ms' : '-'}</td>
-                                    </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-            } else if (currentSideTab === 'technical-issues') {
-                // Group issues
-                const issueMap = new Map();
-                pages.forEach(p => {
-                    const issues = p.issues || {};
-                    Object.keys(issues).forEach(k => {
-                        if (issues[k]) {
-                            if (!issueMap.has(k)) issueMap.set(k, []);
-                            issueMap.get(k).push(p.url);
-                        }
-                    });
-                });
-
-                contentArea.innerHTML = `
-                     <div class="grid gap-4">
-                        ${Array.from(issueMap.entries()).map(([issue, urls]) => `
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="font-medium text-white capitalize">${issue.replace(/_/g, ' ')}</h4>
-                                <span class="px-2 py-0.5 rounded text-xs bg-red-500/20 text-red-400 font-mono">${urls.length} pages</span>
-                            </div>
-                            <div class="bg-black/30 rounded-lg p-3 text-xs font-mono text-gray-500 max-h-32 overflow-y-auto">
-                                ${urls.map(u => `<div class="truncate">${u}</div>`).join('')}
-                            </div>
-                        </div>
-                        `).join('')}
-                        ${issueMap.size === 0 ? '<div class="text-center py-12 text-gray-500">No issues found! Great job.</div>' : ''}
-                     </div>
-                `;
-            } else if (currentSideTab === 'core-vitals') {
-                // Calculate basic metrics from pages
-                let fast = 0, moderate = 0, slow = 0;
-                let totalLoad = 0;
-                let count = 0;
-
-                pages.forEach(p => {
-                    const t = p.time_to_interactive || 0;
-                    if (t > 0) {
-                        totalLoad += t;
-                        count++;
-                        if (t < 2500) fast++;
-                        else if (t < 4000) moderate++;
-                        else slow++;
-                    }
-                });
-
-                const avgLoad = count > 0 ? (totalLoad / count).toFixed(0) : 0;
-
-                contentArea.innerHTML = `
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                        <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl text-center">
-                            <div class="w-12 h-12 mx-auto bg-green-500/10 rounded-full flex items-center justify-center mb-4">
-                                <i data-lucide="zap" class="w-6 h-6 text-green-500"></i>
-                            </div>
-                            <h4 class="text-gray-400 text-sm font-medium mb-1">Avg Load Time</h4>
-                            <div class="text-3xl font-bold text-white">${avgLoad}ms</div>
-                            <p class="text-xs text-gray-500 mt-2">Time to Interactive</p>
-                        </div>
-                        <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl text-center">
-                            <div class="w-12 h-12 mx-auto bg-blue-500/10 rounded-full flex items-center justify-center mb-4">
-                                <i data-lucide="activity" class="w-6 h-6 text-blue-500"></i>
-                            </div>
-                            <h4 class="text-gray-400 text-sm font-medium mb-1">Performance Score</h4>
-                            <div class="text-3xl font-bold text-white">${summary.onpage_score ? summary.onpage_score.toFixed(0) : '-'}</div>
-                            <p class="text-xs text-gray-500 mt-2">On-Page Score</p>
-                        </div>
-                         <div class="bg-gray-900 border border-gray-800 p-6 rounded-xl text-center">
-                            <div class="w-12 h-12 mx-auto bg-purple-500/10 rounded-full flex items-center justify-center mb-4">
-                                <i data-lucide="layers" class="w-6 h-6 text-purple-500"></i>
-                            </div>
-                            <h4 class="text-gray-400 text-sm font-medium mb-1">Total Pages</h4>
-                            <div class="text-3xl font-bold text-white">${pages.length}</div>
-                            <p class="text-xs text-gray-500 mt-2">Analyzed</p>
-                        </div>
-                    </div>
-
-                    <h3 class="font-medium text-white mb-4">Performance Distribution</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                         <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                                <span class="text-gray-300">Fast (< 2.5s)</span>
-                            </div>
-                            <span class="text-xl font-bold text-white">${fast}</span>
-                        </div>
-                         <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-                                <span class="text-gray-300">Moderate (2.5s - 4s)</span>
-                            </div>
-                            <span class="text-xl font-bold text-white">${moderate}</span>
-                        </div>
-                         <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <div class="w-3 h-3 rounded-full bg-red-500"></div>
-                                <span class="text-gray-300">Slow (> 4s)</span>
-                            </div>
-                            <span class="text-xl font-bold text-white">${slow}</span>
-                        </div>
-                    </div>
-                `;
-
-            } else if (currentSideTab === 'page-speed') {
-                // Similar to CWV but focus on resources/size if available, else just load time table
-                contentArea.innerHTML = `
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                        <div class="p-4 border-b border-gray-800 flex justify-between items-center">
-                             <h3 class="font-medium text-white">Page Speed Analysis</h3>
-                             <span class="text-xs text-gray-500">Sorted by Slowest</span>
-                        </div>
-                         <div class="overflow-x-auto">
-                            <table class="w-full text-left text-sm text-gray-400">
-                                <thead class="bg-gray-900/50 text-gray-500 font-medium border-b border-gray-800">
-                                    <tr>
-                                        <th class="p-3">URL</th>
-                                        <th class="p-3 text-right">Time to Interactive</th>
-                                        <th class="p-3 text-right">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-800">
-                                    ${pages
-                        .sort((a, b) => (b.time_to_interactive || 0) - (a.time_to_interactive || 0))
-                        .slice(0, 50).map(p => {
-                            const t = p.time_to_interactive || 0;
-                            const color = t < 2500 ? 'text-green-400' : (t < 4000 ? 'text-yellow-400' : 'text-red-400');
-                            return `
-                                    <tr>
-                                        <td class="p-3 max-w-md truncate text-white" title="${p.url}">${p.url}</td>
-                                        <td class="p-3 text-right font-mono ${color}">${t} ms</td>
-                                        <td class="p-3 text-right">
-                                            <span class="px-2 py-0.5 rounded text-xs ${t < 2500 ? 'bg-green-500/20 text-green-400' : (t < 4000 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400')}">
-                                                ${t < 2500 ? 'Good' : (t < 4000 ? 'Needs Improvement' : 'Poor')}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    `}).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-            } else if (currentSideTab === 'schema') {
-                // Placeholder for now as we don't have deep schema data in basic page objects yet
-                contentArea.innerHTML = `
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-                        <i data-lucide="code-2" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
-                        <h3 class="text-lg font-semibold text-white mb-2">Schema Analysis</h3>
-                        <p class="text-gray-400 max-w-md mx-auto mb-6">Detailed Schema.org validation requires the advanced extraction pipeline. Currently verifying basic metadata presence.</p>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left max-w-2xl mx-auto">
-                            ${pages.slice(0, 6).map(p => `
-                                <div class="bg-black/30 p-3 rounded-lg border border-gray-800">
-                                    <div class="text-white truncate text-sm mb-1">${p.url}</div>
-                                    <div class="flex items-center gap-2">
-                                        <i data-lucide="check-circle" class="w-3 h-3 text-green-500"></i>
-                                        <span class="text-xs text-gray-500">Basic Meta Tags found</span>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
+                    <div class="text-center py-12">
+                        <i data-lucide="alert-circle" class="w-12 h-12 text-yellow-500 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">Legacy Audit Format</h3>
+                        <p class="text-gray-400 mb-6">This audit uses an older data format. Please run a new audit to see the detailed 3-column breakdown.</p>
+                        <button onclick="activeAudit=null; runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                            Run New Audit
+                        </button>
                     </div>`;
-
-            } else {
-                contentArea.innerHTML = `
-                    <div class="flex flex-col items-center justify-center h-64 text-center text-gray-500">
-                        <i data-lucide="bar-chart" class="w-12 h-12 text-gray-600 mb-4"></i>
-                        <p>Detailed view for this section is coming soon.</p>
-                    </div>`;
+                lucide.createIcons();
+                return;
             }
+
+            // Helper to render a category column
+            const renderCategoryColumn = (title, icon, itemsKey) => {
+                const categoryData = categorized[itemsKey] || {};
+                const checks = Object.entries(categoryData);
+
+                return `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col h-full">
+                        <div class="p-4 border-b border-gray-800 flex items-center gap-3 bg-gray-800/50">
+                            <div class="p-2 bg-gray-800 rounded-lg">
+                                <i data-lucide="${icon}" class="w-5 h-5 text-gray-400"></i>
+                            </div>
+                            <h3 class="font-semibold text-white">${title}</h3>
+                        </div>
+                        <div class="p-4 space-y-3 flex-1">
+                            ${checks.length > 0 ? checks.map(([key, data]) => {
+                    const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    const isPass = data.status === 'pass' || data.issues === 0;
+                    const hasIssues = data.issues > 0;
+                    const statusColor = hasIssues ? 'text-red-400' : 'text-emerald-400';
+                    const iconName = hasIssues ? 'alert-circle' : 'check-circle';
+
+                    return `
+                                    <div onclick="showAuditItemDetails('${itemsKey}', '${key}')" class="bg-black/20 rounded-lg p-3 border border-gray-800 hover:border-gray-700 transition-colors cursor-pointer">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="text-sm font-medium text-gray-300">${label}</span>
+                                            <i data-lucide="${iconName}" class="w-4 h-4 ${statusColor}"></i>
+                                        </div>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-xs text-gray-500">${data.items?.length || 0} items</span>
+                                            ${data.score !== undefined ? `<span class="text-xs font-mono text-gray-400">Score: ${data.score}</span>` : ''}
+                                            ${hasIssues ? `<span class="text-xs bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded">${data.issues} issues</span>` : ''}
+                                        </div>
+                                        ${data.items && data.items.length > 0 ? `
+                                            <div class="mt-2 pt-2 border-t border-gray-800/50">
+                                                <div class="text-xs text-gray-500 font-mono truncate cursor-pointer hover:text-gray-300" title="${data.items[0]}">
+                                                    ${data.items[0]}
+                                                </div>
+                                                ${data.items.length > 1 ? `<div class="text-[10px] text-gray-600 mt-0.5">+${data.items.length - 1} more</div>` : ''}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `;
+                }).join('') : '<div class="text-gray-500 text-sm text-center py-4">No data available</div>'}
+                        </div>
+                    </div>
+                    `;
+            };
+
+            contentArea.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pb-8">
+                    ${renderCategoryColumn('Architecture', 'server', 'architecture')}
+                    ${renderCategoryColumn('Accessibility', 'accessibility', 'accessibility')}
+                    ${renderCategoryColumn('Usability', 'mouse-pointer-click', 'usability')}
+                </div>
+            `;
+
             lucide.createIcons();
         }
 

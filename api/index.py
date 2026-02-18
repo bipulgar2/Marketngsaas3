@@ -19,10 +19,7 @@ from api.dataforseo_client import (
     get_page_issues,
     get_domain_rank_overview
 )
-from api.utils import create_tasks_from_audit
-
-# Load environment variables
-load_dotenv()
+from api.utils import create_tasks_from_audit, categorize_audit_issues
 
 # Setup logging
 logging.basicConfig(
@@ -31,12 +28,61 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# import check
+from pathlib import Path
+
 # Initialize Flask
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Use pathlib for better handling of spaces in paths
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables
+try:
+    env_path = BASE_DIR / '.env'
+    logger.info(f"DEBUG: Checking env_path via pathlib: {env_path}")
+    logger.info(f"DEBUG: Exists? {env_path.exists()}")
+    
+    if env_path.exists():
+        # Try to load .env file, but don't crash if permissions fail (we can use exported vars)
+        try:
+            load_dotenv(env_path)
+        except PermissionError:
+            print(f"Warning: Could not read .env file due to permissions. Reliance on exported environment variables.")
+        except Exception as e:
+            print(f"Warning: Error loading .env: {e}")
+        logger.info("Loaded .env via pathlib")
+    else:
+        logger.warning(f".env not found at {env_path}")
+        
+    # Double check if load_dotenv actually worked
+    if not os.getenv('SUPABASE_URL'):
+        # Fallback: Manual parse
+        logger.info("Attempting manual parse of .env...")
+        try:
+             with open(env_path, 'r') as f:
+                 for line in f:
+                     line = line.strip()
+                     if not line or line.startswith('#'): continue
+                     if '=' in line:
+                         key, val = line.split('=', 1)
+                         if not os.getenv(key): # Don't overwrite
+                             os.environ[key] = val.strip().strip("'").strip('"')
+             logger.info("Manual parse completed.")
+        except Exception as e:
+             logger.error(f"Manual parse failed: {e}")
+
+except Exception as e:
+    logger.error(f"Error loading environment: {e}")
+
+# Verify critical vars
+if not os.getenv('SUPABASE_URL'):
+    logger.warning("CRITICAL: SUPABASE_URL not found in environment!")
+else:
+    logger.info("Supabase URL configured.")
+
 app = Flask(
     __name__,
-    template_folder=os.path.join(BASE_DIR, 'public'),
-    static_folder=os.path.join(BASE_DIR, 'public'),
+    template_folder=str(BASE_DIR / 'public'),
+    static_folder=str(BASE_DIR / 'public'),
     static_url_path=''
 )
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
@@ -794,19 +840,22 @@ def get_audit(audit_id):
                     pages_result = get_page_issues(task_id, limit=100)
                     pages = pages_result.get('pages', [])
                     
-                    # 3. Create Tasks
+                    # 3. Categorize Results for UI (First, so we can use for tasks)
+                    categorized = categorize_audit_issues(pages, summary.get('summary'))
+                    
+                    # 4. Create Tasks
                     # Use admin client for writes if available
                     client = supabase_admin or supabase
-                    create_tasks_from_audit(pages, audit['campaign_id'], client)
+                    create_tasks_from_audit(categorized, audit['campaign_id'], client)
                     
-                    # 4. Update Audit Record
+                    # 5. Update Audit Record
                     update_data = {
                         'status': 'completed',
                         'results': {
                             'summary': summary.get('summary', {}),
+                            'categorized': categorized,
                             'pages': pages
-                        },
-                        'summary': summary.get('summary', {})
+                        }
                     }
                     
                     update_res = client.table('audits').update(update_data).eq('id', audit_id).execute()
@@ -814,11 +863,33 @@ def get_audit(audit_id):
                     
                 except Exception as e:
                      print(f"Error finalizing audit: {e}")
-                     # Optionally set status to failed or keep crawling to retry
-        
-        return jsonify({'audit': audit})
+                     # Optional: fail status
+    
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+    # ---------------------------------------------------------
+    # LEGACY DATA SUPPORT: On-the-fly migration
+    # ---------------------------------------------------------
+    if audit.get('status') == 'completed' and audit.get('results'):
+        results = audit['results']
+        # If we have pages but no categorized data, render it now
+        if 'categorized' not in results and 'pages' in results:
+            try:
+                print(f"Migrating legacy audit {audit['id']} on the fly...")
+                categorized = categorize_audit_issues(results['pages'], results.get('summary'))
+                audit['results']['categorized'] = categorized
+                
+                # Optional: Persist the migration to speed up next load
+                # Use admin client if available (safe fall back to standard)
+                (supabase_admin or supabase).table('audits').update({
+                    'results': audit['results']
+                }).eq('id', audit['id']).execute()
+                print("Migration persisted.")
+            except Exception as e:
+                print(f"Failed to migrate legacy audit: {e}")
+
+    return jsonify({'audit': audit})
 
 # =============================================================================
 # COMPETITOR ROUTES
@@ -918,5 +989,7 @@ def claim_orphans():
 # =============================================================================
 
 if __name__ == '__main__':
+    print("Starting server...")
     port = int(os.getenv('PORT', 3000))
+    print(f"Running on port {port}")
     app.run(host='0.0.0.0', port=port, debug=True)

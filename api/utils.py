@@ -1,119 +1,456 @@
 from supabase import create_client
 import os
 
-def create_tasks_from_audit(pages: list, campaign_id: str, supabase_client) -> list:
+def create_tasks_from_audit(categorized_data: dict, campaign_id: str, supabase_client) -> list:
     """
-    Create task records from audit findings.
-    Groups issues by type and creates one task per type.
+    Create task records from categorized audit findings.
+    Iterates through the structured Accessibility, Usability, and Architecture data.
     """
-    if not pages:
+    if not categorized_data:
         return []
 
-    # Group pages by issue
-    issues = {
-        'missing_title': [],
-        'missing_description': [],
-        'missing_h1': [],
-        'slow_pages': [],
-        'low_content': [],
-        'broken_pages': [],
-        'no_canonical': []
-    }
-    
-    for page in pages:
-        page_issues = page.get('issues', {})
-        url = page.get('url', '')
-        
-        if page_issues.get('no_title'):
-            issues['missing_title'].append(url)
-        if page_issues.get('no_description'):
-            issues['missing_description'].append(url)
-        if page_issues.get('no_h1'):
-            issues['missing_h1'].append(url)
-        if page_issues.get('slow_load'):
-            issues['slow_pages'].append(url)
-        if page_issues.get('low_content'):
-            issues['low_content'].append(url)
-        if page_issues.get('is_broken') or page_issues.get('is_4xx') or page_issues.get('is_5xx'):
-            issues['broken_pages'].append(url)
-        if page_issues.get('no_canonical'):
-            issues['no_canonical'].append(url)
-    
-    # Task templates
-    templates = {
-        'missing_title': {
-            'title': 'Fix pages with missing title tags',
-            'description': 'These pages have no title tag, which hurts SEO and CTR.',
-            'type': 'technical',
-            'role': 'optimization_specialist',
-            'priority': 2
+    # Task Templates Mapping
+    # Maps internal issue keys to Task definitions
+    TASK_TEMPLATES = {
+        # --- Usability (Content & Meta) ---
+        'title_missing': {
+            'title': 'Fix Missing Page Titles',
+            'description': 'Page titles are critical for ranking and CTR. Create unique, keyword-rich titles for these pages.',
+            'type': 'onpage', 'role': 'content_writer', 'priority': 'high'
         },
-        'missing_description': {
-            'title': 'Add meta descriptions',
-            'description': 'These pages have no meta description.',
-            'type': 'technical',
-            'role': 'optimization_specialist',
-            'priority': 1
+        'title_duplicate': {
+            'title': 'Rewrite Duplicate Page Titles',
+            'description': 'Duplicate titles confuse search engines. Ensure every page has a unique title.',
+            'type': 'onpage', 'role': 'content_writer', 'priority': 'medium'
         },
-        'missing_h1': {
-            'title': 'Add H1 headings',
-            'description': 'These pages have no H1 tag.',
-            'type': 'technical',
-            'role': 'optimization_specialist',
-            'priority': 1
+        'title_over_65': {
+            'title': 'Shorten Page Titles (>65 chars)',
+            'description': 'Titles over 65 characters get truncated in SERPs. Rewrite them to be concise.',
+            'type': 'onpage', 'role': 'content_writer', 'priority': 'low'
         },
-        'slow_pages': {
-            'title': 'Improve slow loading pages',
-            'description': 'These pages take > 3 seconds to load.',
-            'type': 'technical',
-            'role': 'optimization_specialist',
-            'priority': 2
+        'desc_missing': {
+            'title': 'Add Meta Descriptions',
+            'description': 'Meta descriptions improve click-through rates. Write compelling descriptions for these pages.',
+            'type': 'onpage', 'role': 'content_writer', 'priority': 'high'
         },
-        'low_content': {
-            'title': 'Expand thin content pages',
-            'description': 'These pages have < 300 words.',
-            'type': 'content',
-            'role': 'content_creator',
-            'priority': 1
+        'desc_duplicate': {
+            'title': 'Rewrite Duplicate Meta Descriptions',
+            'description': 'Each page should have a unique description summary.',
+            'type': 'onpage', 'role': 'content_writer', 'priority': 'medium'
         },
-        'broken_pages': {
-            'title': 'Fix broken pages (4xx/5xx errors)',
-            'description': 'These pages return error status codes.',
-            'type': 'technical',
-            'role': 'optimization_specialist',
-            'priority': 3
+        'desc_over_155': {
+            'title': 'Shorten Meta Descriptions (>155 chars)',
+            'description': 'Descriptions over 155 characters are truncated. Keep them concise.',
+            'type': 'onpage', 'role': 'content_writer', 'priority': 'low'
+        },
+        'h1_missing': {
+            'title': 'Add H1 Tags',
+            'description': 'The H1 tag is the main headline of the page. Ensure every page has exactly one H1.',
+            'type': 'onpage', 'role': 'content_writer', 'priority': 'high'
+        },
+        'h1_multiple': {
+            'title': 'Fix Multiple H1 Tags',
+            'description': 'Pages should have only one H1 tag. Differentiate subheadings with H2-H6.',
+            'type': 'onpage', 'role': 'content_writer', 'priority': 'medium'
+        },
+        'h2_missing': {
+            'title': 'Add Subheadings (H2)',
+            'description': 'Content structure is important. Break up long content with H2 subheadings.',
+            'type': 'content', 'role': 'content_writer', 'priority': 'medium'
+        },
+        'low_word_count': {
+            'title': 'Expand Thin Content (<300 words)',
+            'description': 'These pages have very little content. Expand them to add value or consolidate/redirect them.',
+            'type': 'content', 'role': 'content_writer', 'priority': 'medium'
+        },
+        'misspelling': {
+            'title': 'Fix Grammar & Spelling Errors',
+            'description': 'Spelling errors hurt credibility. Review and fix typos on these pages.',
+            'type': 'content', 'role': 'content_writer', 'priority': 'low'
+        },
+        'links_broken': {
+            'title': 'Fix Broken Links (404s)',
+            'description': 'These pages contain links to URLs that return errors (4xx/5xx). Remove or update the links.',
+            'type': 'technical', 'role': 'technical_seo', 'priority': 'high'
+        },
+        'links_redirect_3xx': {
+            'title': 'Audit Internal Redirects (3xx)',
+            'description': 'Update internal links to point directly to the final destination, avoiding redirect chains.',
+            'type': 'technical', 'role': 'technical_seo', 'priority': 'low'
+        },
+        'orphan_urls': {
+            'title': 'Link Orphan Pages',
+            'description': 'These pages have no internal links pointing to them. Add links from other relevant pages.',
+            'type': 'architecture', 'role': 'technical_seo', 'priority': 'medium'
+        },
+
+        # --- Accessibility (Speed & Experience) ---
+        'mobile_friendly': {
+            'title': 'Fix Mobile Friendliness Issues',
+            'description': 'These pages failed the mobile-friendly check. Verify viewport settings and responsive design.',
+            'type': 'technical', 'role': 'developer', 'priority': 'high'
+        },
+        'image_alt_missing': {
+            'title': 'Add Alt Text to Images',
+            'description': 'Alt text helps accessibility and Image SEO. Describe the images.',
+            'type': 'onpage', 'role': 'content_writer', 'priority': 'medium'
+        },
+        'images_large': {
+            'title': 'Compress Large Images (>100KB)',
+            'description': 'These images are too large and slow down the page. Compress or resize them.',
+            'type': 'technical', 'role': 'developer', 'priority': 'medium'
+        },
+        'core_web_vitals': {
+            'title': 'Optimize Core Web Vitals (LCP/CLS)',
+            'description': 'These pages failed Core Web Vitals checks. Improve loading speed and visual stability.',
+            'type': 'technical', 'role': 'developer', 'priority': 'high'
+        },
+
+        # --- Architecture (Technical) ---
+        'permalink_issues': {
+            'title': 'Optimize URL Structure',
+            'description': 'URLs should be clean, readable, and keyword-rich (avoid special chars/IDs).',
+            'type': 'architecture', 'role': 'technical_seo', 'priority': 'medium'
+        },
+        'sitemap_issues': {
+            'title': 'Fix Sitemap Issues',
+            'description': 'Ensure sitemap.xml exists and contains valid URLs.',
+            'type': 'architecture', 'role': 'technical_seo', 'priority': 'high'
+        },
+        'robots_issues': {
+            'title': 'Review Robots.txt',
+            'description': 'Ensure robots.txt is not blocking important pages.',
+            'type': 'architecture', 'role': 'technical_seo', 'priority': 'high'
         },
         'no_canonical': {
-            'title': 'Add canonical tags',
-            'description': 'These pages have no canonical URL specified.',
-            'type': 'technical',
-            'role': 'optimization_specialist',
-            'priority': 1
+            'title': 'Add Canonical Tags',
+            'description': 'Canonical tags prevent duplicate content issues. Add self-referencing canonicals if unique.',
+            'type': 'architecture', 'role': 'technical_seo', 'priority': 'medium'
+        },
+        'duplicate_content': {
+            'title': 'Resolve Duplicate Content',
+            'description': 'These pages are very similar to others. Use canonicals or distinct content.',
+            'type': 'content', 'role': 'content_writer', 'priority': 'high'
+        },
+        'no_index': {
+            'title': 'Review No-Index Tags',
+            'description': 'These pages are marked as no-index. Confirm this is intentional.',
+            'type': 'architecture', 'role': 'technical_seo', 'priority': 'low'
+        },
+        'schema_missing': {
+            'title': 'Implement Structured Data (Schema)',
+            'description': 'Add relevant schema markup (Organization, Article, Product) to improve SERP features.',
+            'type': 'technical', 'role': 'technical_seo', 'priority': 'medium'
+        },
+        'server_errors_5xx': {
+            'title': 'Fix Server Errors (5xx)',
+            'description': 'These pages returned a 500-level error. Investigate server logs immediately.',
+            'type': 'technical', 'role': 'developer', 'priority': 'critical'
+        },
+        'client_errors_4xx': {
+            'title': 'Fix Broken Pages (404/4xx)',
+            'description': 'These URLs do not exist. Redirect them or restore the content.',
+            'type': 'technical', 'role': 'technical_seo', 'priority': 'high'
         }
     }
     
-    created = []
-    for issue_type, urls in issues.items():
-        if not urls:
+    created_tasks = []
+
+    # Flatten categories to iterate easily
+    # Dictionary structure: data[category][issue_key] = {'issues': N, 'items': [...]}
+    for category, issues_map in categorized_data.items():
+        if not isinstance(issues_map, dict):
             continue
-        
-        template = templates.get(issue_type, {})
-        task_data = {
-            'campaign_id': campaign_id,
-            'type': template.get('type', 'technical'),
-            'title': f"{template.get('title')} ({len(urls)} pages)",
-            'description': template.get('description', ''),
-            'checklist': [{'item': url, 'completed': False} for url in urls[:50]],  # Limit checklist
-            'assigned_role': template.get('role', 'optimization_specialist'),
-            'priority': template.get('priority', 0),
-            'status': 'pending'
+            
+        for issue_key, issue_data in issues_map.items():
+            # Skip if no issues found
+            if issue_data.get('issues', 0) == 0:
+                continue
+
+            # Skip generic score keys that don't have items (like 'page_speed' score)
+            items = issue_data.get('items', [])
+            if not items and issue_key != 'sitemap_issues': # Sitemap might default to logic
+                 continue
+
+            template = TASK_TEMPLATES.get(issue_key)
+            if not template:
+                continue
+
+            # Construct Task
+            task_data = {
+                'campaign_id': campaign_id,
+                'type': template['type'],
+                'title': f"{template['title']} ({len(items)} pages)",
+                'description': template['description'],
+                'checklist': [{'item': url, 'completed': False} for url in items[:50]],  # Limit to 50 items per task to avoid bloat
+                'assigned_role': template['role'],
+                'priority': template.get('priority', 'medium'),
+                'status': 'pending',
+                'created_at': 'now()'
+            }
+            
+            try:
+                # Insert implementation
+                # Note: We probably want to check for duplicates later, but consistent title helps ID them
+                result = supabase_client.table('tasks').insert(task_data).execute()
+                if result.data:
+                    created_tasks.append(result.data[0])
+            except Exception as e:
+                print(f"Error creating task for {issue_key}: {e}")
+
+    print(f"Created {len(created_tasks)} tasks from audit.")
+    return created_tasks
+
+def categorize_audit_issues(pages: list, summary: dict = None) -> dict:
+    """
+    Structure audit data into Accessibility, Usability, and Architecture categories.
+    Returns counts and sample URLs for each metric.
+    """
+    if not pages:
+        return {}
+
+    # Initialize structure - FLATTENED for easier UI rendering
+    data = {
+        "accessibility": {
+            "core_web_vitals": {"score": 0, "issues": 0, "label": "Pass"},
+            "page_speed": {"score": 0, "issues": 0, "label": "Good"}, # Desktop/Mobile avg
+            "mobile_friendly": {"issues": 0, "items": []},
+            "image_alt_missing": {"issues": 0, "items": []},
+            "images_large": {"issues": 0, "items": []}, # >100KB
+            "web_dev_score": {"score": 0, "label": "N/A"}
+        },
+        "usability": {
+            "title_missing": {"issues": 0, "items": []},
+            "title_duplicate": {"issues": 0, "items": []},
+            "title_over_65": {"issues": 0, "items": []},
+            "desc_missing": {"issues": 0, "items": []},
+            "desc_duplicate": {"issues": 0, "items": []},
+            "desc_over_155": {"issues": 0, "items": []},
+            "h1_missing": {"issues": 0, "items": []},
+            "h1_multiple": {"issues": 0, "items": []},
+            "h2_missing": {"issues": 0, "items": []},
+            "low_word_count": {"issues": 0, "items": []},
+            "misspelling": {"issues": 0, "items": []},
+            "links_broken": {"issues": 0, "items": []},
+            "links_redirect_3xx": {"issues": 0, "items": []},
+            "orphan_urls": {"issues": 0, "items": []},
+        },
+        "architecture": {
+            "permalink_issues": {"issues": 0, "items": []},
+            "sitemap_issues": {"issues": 0, "items": []},
+            "robots_issues": {"issues": 0, "items": []},
+            "no_canonical": {"issues": 0, "items": []},
+            "duplicate_content": {"issues": 0, "items": []},
+            "no_index": {"issues": 0, "items": []},
+            "schema_missing": {"issues": 0, "items": []},
+            "server_errors_5xx": {"issues": 0, "items": []},
+            "client_errors_4xx": {"issues": 0, "items": []},
         }
-        
-        try:
-            result = supabase_client.table('tasks').insert(task_data).execute()
-            if result.data:
-                created.append(result.data[0])
-        except Exception as e:
-            print(f"Error creating task for {issue_type}: {e}")
+    }
+
+    # Aggregate Data
+    total_speed_score = 0
+    pages_with_speed = 0
     
-    return created
+    # CWV Counters
+    cwv_issues = 0
+    
+    for page in pages:
+        url = page.get('url', '')
+        meta = page.get('meta', {})
+        
+        # Robust Check Extraction
+        checks = page.get('checks', {}) 
+        if not checks:
+             checks = page.get('dfs_checks', {})
+        if not checks:
+             checks = page.get('issues', {})
+
+        content = page.get('content', {})
+        
+        # --- Accessibility ---
+        
+        # Core Web Vitals (Simple Logic)
+        # Fail if LCP > 2.5s OR CLS > 0.1
+        lcp = page.get('largest_contentful_paint', 0) or 0
+        cls = page.get('cumulative_layout_shift', 0) or 0
+        if lcp > 2500 or cls > 0.1:
+            cwv_issues += 1
+            # Add to items so it's clickable
+            data['accessibility']['core_web_vitals'].setdefault('items', []).append(f"{url} (LCP: {lcp}ms, CLS: {cls})")
+
+        # Mobile Friendly
+        if checks.get('is_mobile_friendly') is False:
+             data['accessibility']['mobile_friendly']['issues'] += 1
+             data['accessibility']['mobile_friendly']['items'].append(url)
+
+        # Image Alt
+        if checks.get('no_image_alt'):
+             data['accessibility']['image_alt_missing']['issues'] += 1
+             data['accessibility']['image_alt_missing']['items'].append(url)
+
+        # Broken Images / Resources (New Check to capture missing assets)
+        if checks.get('broken_resources') or checks.get('has_broken_resources'):
+             data['accessibility']['images_large']['issues'] += 1 # Grouping with large images or create new? Using existing Large Images for "Asset Issues"
+             data['accessibility']['images_large']['items'].append(f"{url} (Broken Resource)")
+
+        # Large Images (>100KB avg)
+        if (page.get('images_size', 0) / (page.get('images_count', 1) or 1)) > 102400: 
+             data['accessibility']['images_large']['issues'] += 1
+             data['accessibility']['images_large']['items'].append(url)
+
+        # Speed (OnPage Score as proxy)
+        score = page.get('onpage_score', 0)
+        if score:
+            total_speed_score += score
+            pages_with_speed += 1
+            
+        # Flag poor speed pages
+        if score < 50:
+             data['accessibility']['page_speed']['issues'] += 1
+             data['accessibility']['page_speed'].setdefault('items', []).append(f"{url} (Score: {score})")
+
+        # --- Usability ---
+
+        # Titles
+        title = meta.get('title', '')
+        if not title:
+            data['usability']['title_missing']['issues'] += 1
+            data['usability']['title_missing']['items'].append(url)
+        elif len(title) > 65:
+            data['usability']['title_over_65']['issues'] += 1
+            data['usability']['title_over_65']['items'].append(url)
+        
+        if checks.get('duplicate_title') or checks.get('duplicate_title_tag'):
+             data['usability']['title_duplicate']['issues'] += 1
+             data['usability']['title_duplicate']['items'].append(url)
+
+        # Descriptions
+        desc = meta.get('description', '')
+        if not desc:
+            data['usability']['desc_missing']['issues'] += 1
+            data['usability']['desc_missing']['items'].append(url)
+        elif len(desc) > 155:
+            data['usability']['desc_over_155']['issues'] += 1
+            data['usability']['desc_over_155']['items'].append(url)
+            
+        if checks.get('duplicate_description'):
+             data['usability']['desc_duplicate']['issues'] += 1
+             data['usability']['desc_duplicate']['items'].append(url)
+
+        # Headings
+        if checks.get('no_h1') or checks.get('no_h1_tag'):
+             data['usability']['h1_missing']['issues'] += 1
+             data['usability']['h1_missing']['items'].append(url)
+        if checks.get('duplicate_h1') or checks.get('duplicate_h1_tag') or len(meta.get('h1', []) or []) > 1:
+             data['usability']['h1_multiple']['issues'] += 1
+             data['usability']['h1_multiple']['items'].append(url)
+             
+        if len(meta.get('h2', []) or []) == 0:
+             data['usability']['h2_missing']['issues'] += 1
+             data['usability']['h2_missing']['items'].append(url)
+
+        # Content
+        if checks.get('low_content') or checks.get('low_content_rate'):
+             data['usability']['low_word_count']['issues'] += 1
+             data['usability']['low_word_count']['items'].append(url)
+
+        # Misspelling
+        if checks.get('has_misspelling'):
+             data['usability']['misspelling']['issues'] += 1
+             data['usability']['misspelling']['items'].append(url)
+             
+        # Links
+        # Catch explicit 4xx/5xx pages AND pages with broken links on them
+        if checks.get('is_broken') or checks.get('broken_links') or checks.get('has_broken_links'):
+             data['usability']['links_broken']['issues'] += 1
+             data['usability']['links_broken']['items'].append(url)
+        if checks.get('is_redirect'):
+             data['usability']['links_redirect_3xx']['issues'] += 1
+             data['usability']['links_redirect_3xx']['items'].append(url)
+        if checks.get('is_orphan_page'):
+             data['usability']['orphan_urls']['issues'] += 1
+             data['usability']['orphan_urls']['items'].append(url)
+
+
+        # --- Architecture ---
+        
+        # Permalink Structure (SEO Friendly URL)
+        if checks.get('seo_friendly_url') is False:
+             data['architecture']['permalink_issues']['issues'] += 1
+             data['architecture']['permalink_issues']['items'].append(url)
+
+        # Indexing
+        if checks.get('no_canonical'):
+             data['architecture']['no_canonical']['issues'] += 1
+             data['architecture']['no_canonical']['items'].append(url)
+        if checks.get('duplicate_content'):
+             data['architecture']['duplicate_content']['issues'] += 1
+             data['architecture']['duplicate_content']['items'].append(url)
+        if checks.get('is_marked_as_noindex') or checks.get('no_index'): 
+             data['architecture']['no_index']['issues'] += 1
+             data['architecture']['no_index']['items'].append(url)
+             
+        # Server
+        if page.get('status_code', 200) >= 500:
+             data['architecture']['server_errors_5xx']['issues'] += 1
+             data['architecture']['server_errors_5xx']['items'].append(url)
+        elif page.get('status_code', 200) >= 400:
+             data['architecture']['client_errors_4xx']['issues'] += 1
+             data['architecture']['client_errors_4xx']['items'].append(url)
+
+        # Schema (Basic check)
+        if not page.get('meta', {}).get('schema') and not checks.get('has_schema'):
+             data['architecture']['schema_missing']['issues'] += 1
+             data['architecture']['schema_missing']['items'].append(url)
+
+
+    # Summary Level Data overrides/calculations
+    if summary:
+        data['accessibility']['page_speed']['score'] = int(summary.get('onpage_score', 0))
+        data['accessibility']['web_dev_score']['score'] = int(summary.get('onpage_score', 0)) # Proxy
+        
+        # Sitemap Check from Summary
+        if not summary.get('has_sitemap'):
+            data['architecture']['sitemap_issues']['issues'] = 1
+            data['architecture']['sitemap_issues']['items'].append("Sitemap missing")
+
+        # Robots.txt Check (Proxy: if we crawled, it's likely accessible, but check summary logic if available)
+        # For now, we leave 0 unless specific error
+            
+    elif pages_with_speed > 0:
+        avg_score = int(total_speed_score / pages_with_speed)
+        data['accessibility']['page_speed']['score'] = avg_score
+        data['accessibility']['web_dev_score']['score'] = avg_score
+
+    # CWV Score Calculation
+    data['accessibility']['core_web_vitals']['issues'] = cwv_issues
+    if cwv_issues == 0 and len(pages) > 0:
+        data['accessibility']['core_web_vitals']['label'] = "Pass"
+        data['accessibility']['core_web_vitals']['score'] = 100
+    else:
+        data['accessibility']['core_web_vitals']['label'] = "Fail"
+        data['accessibility']['core_web_vitals']['score'] = max(0, 100 - (cwv_issues * 5))
+
+    # Logic for Labels
+    score = data['accessibility']['page_speed']['score']
+    if score >= 90:
+        data['accessibility']['page_speed']['label'] = "Excellent"
+    elif score >= 50:
+        data['accessibility']['page_speed']['label'] = "Fair"
+    else:
+        data['accessibility']['page_speed']['label'] = "Poor"
+
+    # Set status labels for all items
+    for cat in data:
+        for key in data[cat]:
+            item = data[cat][key]
+            # Use get() safely
+            if item.get('issues', 0) > 0:
+                item['status'] = 'fail'
+            elif item.get('score') is not None and item.get('score') < 50:
+                item['status'] = 'fail'
+            else:
+                item['status'] = 'pass'
+
+    return data

@@ -873,19 +873,31 @@ def get_audit(audit_id):
     # ---------------------------------------------------------
     if audit.get('status') == 'completed' and audit.get('results'):
         results = audit['results']
-        # If we have pages but no categorized data, render it now
-        if 'categorized' not in results and 'pages' in results:
+        categorized = results.get('categorized')
+        
+        # Check if migration is needed:
+        # 1. No categorized data at all (very old)
+        # 2. Old categorization (Architecture contains items that should be in Usability)
+        needs_migration = False
+        
+        if not categorized and 'pages' in results:
+            needs_migration = True
+        elif categorized and 'architecture' in categorized:
+            # Check for a key that Moved, e.g., 'server_errors_5xx'
+            if 'server_errors_5xx' in categorized['architecture']:
+                needs_migration = True
+        
+        if needs_migration and 'pages' in results:
             try:
-                print(f"Migrating legacy audit {audit['id']} on the fly...")
-                categorized = categorize_audit_issues(results['pages'], results.get('summary'))
-                audit['results']['categorized'] = categorized
+                # print(f"Migrating legacy audit {audit['id']} on the fly...")
+                new_categorized = categorize_audit_issues(results['pages'], results.get('summary'))
+                audit['results']['categorized'] = new_categorized
                 
-                # Optional: Persist the migration to speed up next load
-                # Use admin client if available (safe fall back to standard)
+                # Persist the migration
                 (supabase_admin or supabase).table('audits').update({
                     'results': audit['results']
                 }).eq('id', audit['id']).execute()
-                print("Migration persisted.")
+                # print("Migration persisted.")
             except Exception as e:
                 print(f"Failed to migrate legacy audit: {e}")
 

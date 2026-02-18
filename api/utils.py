@@ -81,7 +81,7 @@ def create_tasks_from_audit(categorized_data: dict, campaign_id: str, supabase_c
         'orphan_urls': {
             'title': 'Link Orphan Pages',
             'description': 'These pages have no internal links pointing to them. Add links from other relevant pages.',
-            'type': 'architecture', 'role': 'technical_seo', 'priority': 'medium'
+            'type': 'usability', 'role': 'technical_seo', 'priority': 'medium'
         },
 
         # --- Accessibility (Speed & Experience) ---
@@ -106,26 +106,33 @@ def create_tasks_from_audit(categorized_data: dict, campaign_id: str, supabase_c
             'type': 'technical', 'role': 'developer', 'priority': 'high'
         },
 
-        # --- Architecture (Technical) ---
+        # --- Architecture (Site Structure) ---
+        'site_architecture': {
+            'title': 'Build Site Architecture',
+            'description': 'Define and visualize the site structure.',
+            'type': 'architecture', 'role': 'technical_seo', 'priority': 'high'
+        },
+
+        # --- Usability (Technical & Content) ---
         'permalink_issues': {
             'title': 'Optimize URL Structure',
             'description': 'URLs should be clean, readable, and keyword-rich (avoid special chars/IDs).',
-            'type': 'architecture', 'role': 'technical_seo', 'priority': 'medium'
+            'type': 'usability', 'role': 'technical_seo', 'priority': 'medium'
         },
         'sitemap_issues': {
             'title': 'Fix Sitemap Issues',
             'description': 'Ensure sitemap.xml exists and contains valid URLs.',
-            'type': 'architecture', 'role': 'technical_seo', 'priority': 'high'
+            'type': 'usability', 'role': 'technical_seo', 'priority': 'high'
         },
         'robots_issues': {
             'title': 'Review Robots.txt',
             'description': 'Ensure robots.txt is not blocking important pages.',
-            'type': 'architecture', 'role': 'technical_seo', 'priority': 'high'
+            'type': 'usability', 'role': 'technical_seo', 'priority': 'high'
         },
         'no_canonical': {
             'title': 'Add Canonical Tags',
             'description': 'Canonical tags prevent duplicate content issues. Add self-referencing canonicals if unique.',
-            'type': 'architecture', 'role': 'technical_seo', 'priority': 'medium'
+            'type': 'usability', 'role': 'technical_seo', 'priority': 'medium'
         },
         'duplicate_content': {
             'title': 'Resolve Duplicate Content',
@@ -135,7 +142,7 @@ def create_tasks_from_audit(categorized_data: dict, campaign_id: str, supabase_c
         'no_index': {
             'title': 'Review No-Index Tags',
             'description': 'These pages are marked as no-index. Confirm this is intentional.',
-            'type': 'architecture', 'role': 'technical_seo', 'priority': 'low'
+            'type': 'usability', 'role': 'technical_seo', 'priority': 'low'
         },
         'schema_missing': {
             'title': 'Implement Structured Data (Schema)',
@@ -234,8 +241,6 @@ def categorize_audit_issues(pages: list, summary: dict = None) -> dict:
             "links_broken": {"issues": 0, "items": []},
             "links_redirect_3xx": {"issues": 0, "items": []},
             "orphan_urls": {"issues": 0, "items": []},
-        },
-        "architecture": {
             "permalink_issues": {"issues": 0, "items": []},
             "sitemap_issues": {"issues": 0, "items": []},
             "robots_issues": {"issues": 0, "items": []},
@@ -245,6 +250,9 @@ def categorize_audit_issues(pages: list, summary: dict = None) -> dict:
             "schema_missing": {"issues": 0, "items": []},
             "server_errors_5xx": {"issues": 0, "items": []},
             "client_errors_4xx": {"issues": 0, "items": []},
+        },
+        "architecture": {
+            "site_architecture": {"issues": 0, "items": [], "label": "Coming Soon"},
         }
     }
 
@@ -373,36 +381,36 @@ def categorize_audit_issues(pages: list, summary: dict = None) -> dict:
              data['usability']['orphan_urls']['items'].append(url)
 
 
-        # --- Architecture ---
+        # --- Architecture (Moved to Usability per 3-pillar model) ---
         
         # Permalink Structure (SEO Friendly URL)
         if checks.get('seo_friendly_url') is False:
-             data['architecture']['permalink_issues']['issues'] += 1
-             data['architecture']['permalink_issues']['items'].append(url)
+             data['usability']['permalink_issues']['issues'] += 1
+             data['usability']['permalink_issues']['items'].append(url)
 
         # Indexing
         if checks.get('no_canonical'):
-             data['architecture']['no_canonical']['issues'] += 1
-             data['architecture']['no_canonical']['items'].append(url)
+             data['usability']['no_canonical']['issues'] += 1
+             data['usability']['no_canonical']['items'].append(url)
         if checks.get('duplicate_content'):
-             data['architecture']['duplicate_content']['issues'] += 1
-             data['architecture']['duplicate_content']['items'].append(url)
+             data['usability']['duplicate_content']['issues'] += 1
+             data['usability']['duplicate_content']['items'].append(url)
         if checks.get('is_marked_as_noindex') or checks.get('no_index'): 
-             data['architecture']['no_index']['issues'] += 1
-             data['architecture']['no_index']['items'].append(url)
+             data['usability']['no_index']['issues'] += 1
+             data['usability']['no_index']['items'].append(url)
              
         # Server
         if page.get('status_code', 200) >= 500:
-             data['architecture']['server_errors_5xx']['issues'] += 1
-             data['architecture']['server_errors_5xx']['items'].append(url)
+             data['usability']['server_errors_5xx']['issues'] += 1
+             data['usability']['server_errors_5xx']['items'].append(url)
         elif page.get('status_code', 200) >= 400:
-             data['architecture']['client_errors_4xx']['issues'] += 1
-             data['architecture']['client_errors_4xx']['items'].append(url)
+             data['usability']['client_errors_4xx']['issues'] += 1
+             data['usability']['client_errors_4xx']['items'].append(url)
 
         # Schema (Basic check)
         if not page.get('meta', {}).get('schema') and not checks.get('has_schema'):
-             data['architecture']['schema_missing']['issues'] += 1
-             data['architecture']['schema_missing']['items'].append(url)
+             data['usability']['schema_missing']['issues'] += 1
+             data['usability']['schema_missing']['items'].append(url)
 
 
     # Summary Level Data overrides/calculations
@@ -412,8 +420,8 @@ def categorize_audit_issues(pages: list, summary: dict = None) -> dict:
         
         # Sitemap Check from Summary
         if not summary.get('has_sitemap'):
-            data['architecture']['sitemap_issues']['issues'] = 1
-            data['architecture']['sitemap_issues']['items'].append("Sitemap missing")
+            data['usability']['sitemap_issues']['issues'] = 1
+            data['usability']['sitemap_issues']['items'].append("Sitemap missing")
 
         # Robots.txt Check (Proxy: if we crawled, it's likely accessible, but check summary logic if available)
         # For now, we leave 0 unless specific error

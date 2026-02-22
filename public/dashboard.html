@@ -1152,9 +1152,20 @@
             const pageActions = document.getElementById('pageActions');
 
             pageActions.innerHTML = `
-                        <button onclick = "runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
+                <div class="flex items-center gap-3">
+                    <select id="techAuditPageLimitTop" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 block p-2">
+                        <option value="10">10 pages</option>
+                        <option value="20">20 pages</option>
+                        <option value="50">50 pages</option>
+                        <option value="100">100 pages</option>
+                        <option value="200" selected>200 pages</option>
+                        <option value="10000">Full website</option>
+                    </select>
+                    <button onclick="runAudit(false, null, parseInt(document.getElementById('techAuditPageLimitTop').value))" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
                         <i data-lucide="play" class="w-4 h-4"></i> Run Audit
-                </button> `;
+                    </button>
+                </div>
+            `;
 
             // If we have an active audit, show details
             if (activeAudit) {
@@ -1163,7 +1174,8 @@
             }
 
             try {
-                const response = await fetch(`/api/audits?campaign_id=${currentClient.id}`);
+                // Fetch ONLY technical audits for this view
+                const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=technical`);
                 const data = await response.json();
                 const audits = data.audits || [];
 
@@ -1173,9 +1185,19 @@
                             <i data-lucide="search-check" class="w-12 h-12 text-gray-600 mb-4"></i>
                             <h3 class="text-lg font-semibold text-white mb-2">No audits yet</h3>
                             <p class="text-gray-400 mb-4">Run your first technical audit for ${currentClient.domain}</p>
-                            <button onclick="runAudit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                                Run Audit
-                            </button>
+                            <div class="flex items-center gap-3 mt-4">
+                                <select id="techAuditPageLimitEmpty" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 block p-2 whitespace-nowrap">
+                                    <option value="10">10 pages</option>
+                                    <option value="20">20 pages</option>
+                                    <option value="50">50 pages</option>
+                                    <option value="100">100 pages</option>
+                                    <option value="200" selected>200 pages</option>
+                                    <option value="10000">Full website</option>
+                                </select>
+                                <button onclick="runAudit(false, null, parseInt(document.getElementById('techAuditPageLimitEmpty').value))" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
+                                    Run Audit
+                                </button>
+                            </div>
                         </div> `;
                 } else {
                     contentArea.innerHTML = `
@@ -1192,7 +1214,7 @@
                                             <i data-lucide="${statusIcon}" class="w-6 h-6 ${statusColor} ${isCrawling ? 'animate-spin' : ''}"></i>
                                         </div>
                                         <div>
-                                            <h4 class="font-medium text-white">Full Site Audit</h4>
+                                            <h4 class="font-medium text-white">${audit.results?.competitor_domain ? audit.results.competitor_domain : 'Full Site Audit'}</h4>
                                             <div class="flex items-center gap-3 text-sm text-gray-400 mt-1">
                                                 <span>${new Date(audit.created_at).toLocaleString()}</span>
                                                 <span>•</span>
@@ -1209,6 +1231,9 @@
                                             <button onclick="viewAuditResults('${audit.id}')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-700">
                                                 View Results
                                             </button>
+                                            <button onclick="startSlideGeneration('${audit.id}')" class="bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 px-3 py-1.5 rounded-lg text-sm font-medium border border-indigo-500/20 flex items-center gap-2">
+                                                <i data-lucide="presentation" class="w-4 h-4"></i> Create Slides
+                                            </button>
                                         `}
                                     </div>
                                 </div>`;
@@ -1222,27 +1247,46 @@
             lucide.createIcons();
         }
 
-        async function runAudit() {
-            if (!confirm('Start a new comprehensive technical audit? This usually takes 2-5 minutes.')) return;
+        async function runAudit(isCompetitor = false, competitorDomain = null, maxPages = 200) {
+            if (!confirm(isCompetitor ? 'Start a comprehensive technical audit for this competitor?' : 'Start a new comprehensive technical audit? This usually takes a few minutes depending on page count.')) return;
 
-            const btn = document.querySelector('button[onclick="runAudit()"]');
+            const btn = event.currentTarget || document.querySelector('button[onclick*="runAudit"]');
             const originalText = btn.innerHTML;
             btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin" ></i> Starting...`;
             btn.disabled = true;
 
+            // Show loading state immediately based on view
+            if (!isCompetitor) {
+                loadAuditContent();
+            } else {
+                loadCompetitorsContent();
+            }
+
             try {
+                const payload = {
+                    campaign_id: currentClient.id,
+                    max_pages: maxPages
+                };
+                if (isCompetitor && competitorDomain) {
+                    payload.type = 'competitor';
+                    payload.competitor_domain = competitorDomain;
+                } else {
+                    payload.type = 'technical';
+                }
+
                 const response = await fetch('/api/audits', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        campaign_id: currentClient.id,
-                        type: 'technical'
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 if (!response.ok) throw new Error('Failed to start audit');
 
-                await loadAuditContent(); // Refresh list
+                if (!isCompetitor) {
+                    await loadAuditContent();
+                } else {
+                    await loadCompetitorsContent();
+                }
             } catch (error) {
                 alert('Error: ' + error.message);
                 btn.innerHTML = originalText;
@@ -1295,10 +1339,15 @@
         // COMPETITOR FUNCTIONS
         // =========================================================================
         async function loadCompetitorContent() {
+            if (!currentClient) return;
             const contentArea = document.getElementById('contentArea');
             const pageActions = document.getElementById('pageActions');
 
-            pageActions.innerHTML = ''; // Clear actions
+            pageActions.innerHTML = `
+                <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Add Competitor
+                </button>
+            `;
 
             if (currentSideTab !== 'overview') {
                 contentArea.innerHTML = `
@@ -1311,102 +1360,374 @@
                 return;
             }
 
-            // Get cached data if available
-            const comps = currentClient.settings?.competitors || [];
-            const lastAnalysis = currentClient.settings?.last_competitor_analysis || null;
-
-            let tableHtml = '';
-
-            if (lastAnalysis) {
-                const target = lastAnalysis.target;
-                const compStats = lastAnalysis.competitors;
-
-                tableHtml = `
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-8" >
-                        <div class="p-4 border-b border-gray-800 flex justify-between items-center">
-                            <h3 class="font-medium text-white">Share of Voice & Traffic Estimation</h3>
-                            <span class="text-xs text-gray-500">Last updated: ${new Date(lastAnalysis.analyzed_at).toLocaleString()}</span>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-sm text-gray-400">
-                                <thead class="bg-gray-900/50 text-gray-500 font-medium border-b border-gray-800">
-                                    <tr>
-                                        <th class="p-4">Domain</th>
-                                        <th class="p-4 text-right">Organic Keywords</th>
-                                        <th class="p-4 text-right">Est. Monthly Traffic</th>
-                                        <th class="p-4 text-right">Market Share</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-800">
-                                    <!-- Target -->
-                                    <tr class="bg-violet-500/5 hover:bg-violet-500/10 transition-colors">
-                                        <td class="p-4 font-medium text-white flex items-center gap-2">
-                                            <div class="w-2 h-2 rounded-full bg-violet-500"></div>
-                                            ${target.domain}
-                                            <span class="text-xs bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded ml-2">You</span>
-                                        </td>
-                                        <td class="p-4 text-right font-mono text-white">${target.organic_keywords.toLocaleString()}</td>
-                                        <td class="p-4 text-right font-mono text-white">${target.estimated_traffic.toLocaleString()}</td>
-                                        <td class="p-4 text-right text-gray-300">-</td>
-                                    </tr>
-                                    <!-- Competitors -->
-                                    ${compStats.map(c => `
-                                    <tr class="hover:bg-gray-800/50 transition-colors">
-                                        <td class="p-4 font-medium text-gray-300">${c.domain}</td>
-                                        <td class="p-4 text-right font-mono">${c.organic_keywords.toLocaleString()}</td>
-                                        <td class="p-4 text-right font-mono">${c.estimated_traffic.toLocaleString()}</td>
-                                        <td class="p-4 text-right text-gray-500">
-                                            ${target.estimated_traffic > 0 ? ((c.estimated_traffic / target.estimated_traffic) * 100).toFixed(1) + '%' : 'N/A'} 
-                                            <span class="text-xs">vs you</span>
-                                        </td>
-                                    </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                        `;
+            // If we have an active audit (clicked into details), show details
+            if (activeAudit) {
+                renderAuditDetail();
+                return;
             }
 
             contentArea.innerHTML = `
-                        <div class="max-w-4xl mx-auto" >
-                    <div class="flex items-center justify-between mb-8">
-                        <div>
-                            <h2 class="text-2xl font-bold text-white mb-2">Competitor Analysis</h2>
-                            <p class="text-gray-400">Compare ${currentClient.domain} against top market rivals.</p>
-                        </div>
-                        <button onclick="runCompetitorAnalysis()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-                            <i data-lucide="zap" class="w-4 h-4"></i> Run Analysis
-                        </button>
-                    </div>
-
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8">
-                        <label class="block text-sm font-medium text-gray-300 mb-3">Competitor Domains</label>
-                        <div class="space-y-3" id="competitorInputs">
-                            ${[0, 1, 2].map(i => `
-                                <div class="flex items-center gap-3">
-                                    <div class="bg-gray-800 h-10 w-10 rounded-lg flex items-center justify-center text-gray-500 text-sm font-medium">${i + 1}</div>
-                                    <input type="text" 
-                                           class="competitor-input bg-black border border-gray-800 text-white text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 block w-full p-2.5" 
-                                           placeholder="competitor${i + 1}.com"
-                                           value="${comps[i] || ''}">
-                                </div>
-                            `).join('')}
-                        </div>
-                        <p class="text-xs text-gray-500 mt-3">Enter up to 3 main competitors (e.g., 'moz.com').</p>
-                    </div>
-
-                    ${tableHtml}
-                    
-                    ${!lastAnalysis ? `
-                        <div class="text-center py-12 border border-dashed border-gray-800 rounded-xl">
-                            <i data-lucide="bar-chart-2" class="w-12 h-12 text-gray-700 mx-auto mb-3"></i>
-                            <p class="text-gray-500">No analysis run yet. Add competitors and hit "Run Analysis".</p>
-                        </div>` : ''
-                }
+                <div class="flex items-center justify-center h-full text-gray-500">
+                    <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading competitors...
                 </div>
-                    `;
+            `;
             lucide.createIcons();
+
+            try {
+                // Fetch ONLY competitor audits
+                const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=competitor`);
+                const data = await response.json();
+                const audits = data.audits || [];
+
+                if (audits.length === 0) {
+                    contentArea.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-64 text-center">
+                            <i data-lucide="swords" class="w-12 h-12 text-gray-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">No Competitor Audits</h3>
+                            <p class="text-gray-400 mb-4">Add a competitor domain to run a deep technical comparison.</p>
+                            <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                Add Competitor
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    contentArea.innerHTML = `
+                        <div class="grid gap-4">
+                            ${audits.map(audit => {
+                        const isCrawling = audit.status === 'crawling' || audit.status === 'running';
+                        const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
+                        const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
+                        const displayDomain = audit.results?.competitor_domain || 'Unknown Competitor';
+
+                        return `
+                                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+                                        <div class="flex items-center gap-4">
+                                            <div class="p-2 bg-gray-800 rounded-lg">
+                                                <i data-lucide="${statusIcon}" class="w-6 h-6 ${statusColor} ${isCrawling ? 'animate-spin' : ''}"></i>
+                                            </div>
+                                            <div>
+                                                <h4 class="font-medium text-white">${displayDomain}</h4>
+                                                <div class="flex items-center gap-3 text-sm text-gray-400 mt-1">
+                                                    <span>${new Date(audit.created_at).toLocaleString()}</span>
+                                                    <span>•</span>
+                                                    <span class="${statusColor} capitalize">${audit.status}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            ${isCrawling ? `
+                                                <button onclick="checkAuditStatus('${audit.id}')" class="text-gray-400 hover:text-white flex items-center gap-1 text-sm bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700">
+                                                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> Check Status
+                                                </button>
+                                            ` : `
+                                                <button onclick="viewAuditResults('${audit.id}')" class="bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 px-3 py-1.5 rounded-lg text-sm font-medium border border-violet-500/20">
+                                                    View Details
+                                                </button>
+                                                <button onclick="startSlideGeneration('${audit.id}')" class="bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 px-3 py-1.5 rounded-lg text-sm font-medium border border-indigo-500/20 flex items-center gap-2">
+                                                    <i data-lucide="presentation" class="w-4 h-4"></i> Create Slides
+                                                </button>
+                                            `}
+                                        </div>
+                                    </div>
+                                `;
+                    }).join('')}
+                        </div>
+                    `;
+                }
+
+                // Add the modal HTML to contentArea at the end so it's always ready
+                contentArea.innerHTML += `
+                    <div id="addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+                            <h3 class="text-lg font-bold text-white mb-2">Analyze Competitor</h3>
+                            <p class="text-sm text-gray-400 mb-4">Enter a competitor's domain. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
+                            
+                            <input type="text" id="competitorDomainInput" placeholder="competitor.com" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">
+                            
+                            <div class="flex justify-end gap-3">
+                                <button onclick="document.getElementById('addCompetitorModal').classList.add('hidden')" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
+                                <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl">Error loading competitors: ${error.message}</div>`;
+            }
+            lucide.createIcons();
+        }
+
+        async function loadCompetitorsContent() {
+            if (!currentClient) return;
+            const contentArea = document.getElementById('contentArea');
+            const pageActions = document.getElementById('pageActions');
+
+            pageActions.innerHTML = `
+                <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Add Competitor
+                </button>
+            `;
+
+            // If we have an active audit (clicked into details), show details
+            if (activeAudit) {
+                renderAuditDetail();
+                return;
+            }
+
+            contentArea.innerHTML = `
+                <div class="flex items-center justify-center h-full text-gray-500">
+                    <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading competitors...
+                </div>
+            `;
+            lucide.createIcons();
+
+            try {
+                // Fetch ONLY competitor audits
+                const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=competitor`);
+                const data = await response.json();
+                const audits = data.audits || [];
+
+                if (audits.length === 0) {
+                    contentArea.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-64 text-center">
+                            <i data-lucide="swords" class="w-12 h-12 text-gray-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">No Competitor Audits</h3>
+                            <p class="text-gray-400 mb-4">Add a competitor domain to run a deep technical comparison.</p>
+                            <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                Add Competitor
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    contentArea.innerHTML = `
+                        <div class="grid gap-4">
+                            ${audits.map(audit => {
+                        const isCrawling = audit.status === 'crawling' || audit.status === 'running';
+                        const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
+                        const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
+                        const displayDomain = audit.results?.competitor_domain || 'Unknown Competitor';
+
+                        return `
+                                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+                                        <div class="flex items-center gap-4">
+                                            <div class="p-2 bg-gray-800 rounded-lg">
+                                                <i data-lucide="${statusIcon}" class="w-6 h-6 ${statusColor} ${isCrawling ? 'animate-spin' : ''}"></i>
+                                            </div>
+                                            <div>
+                                                <h4 class="font-medium text-white">${displayDomain}</h4>
+                                                <div class="flex items-center gap-3 text-sm text-gray-400 mt-1">
+                                                    <span>${new Date(audit.created_at).toLocaleString()}</span>
+                                                    <span>•</span>
+                                                    <span class="${statusColor} capitalize">${audit.status}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            ${isCrawling ? `
+                                                <button onclick="checkAuditStatus('${audit.id}')" class="text-gray-400 hover:text-white flex items-center gap-1 text-sm bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700">
+                                                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> Check Status
+                                                </button>
+                                            ` : `
+                                                <button onclick="viewAuditResults('${audit.id}')" class="bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 px-3 py-1.5 rounded-lg text-sm font-medium border border-violet-500/20">
+                                                    View Detailed Setup
+                                                </button>
+                                            `}
+                                        </div>
+                                    </div>
+                                `;
+                    }).join('')}
+                        </div>
+                    `;
+                }
+
+                // Add the modal HTML to contentArea at the end so it's always ready
+                contentArea.innerHTML += `
+                    <div id="addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+                            <h3 class="text-lg font-bold text-white mb-2">Analyze Competitor</h3>
+                            <p class="text-sm text-gray-400 mb-4">Enter a competitor's domain. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
+                            
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Competitor Domain</label>
+                            <input type="text" id="competitorDomainInput" placeholder="competitor.com" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
+                            
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Pages to Crawl (Max Pages)</label>
+                            <select id="competitorPageLimitInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">
+                                <option value="10">10 pages</option>
+                                <option value="20">20 pages</option>
+                                <option value="50">50 pages</option>
+                                <option value="100">100 pages</option>
+                                <option value="200" selected>200 pages</option>
+                                <option value="10000">Full website</option>
+                            </select>
+                            
+                            <div class="flex justify-end gap-3">
+                                <button onclick="document.getElementById('addCompetitorModal').classList.add('hidden')" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
+                                <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl">Error loading competitors: ${error.message}</div>`;
+            }
+            lucide.createIcons();
+        }
+
+        // ==========================================================================
+        // SLIDE GENERATION (Hidden Iframe Flow)
+        // ==========================================================================
+        function startSlideGeneration(auditId) {
+            // Show loading modal
+            const modal = document.createElement('div');
+            modal.id = 'slideGenModal';
+            modal.className = 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm';
+            modal.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                    <div class="mb-6">
+                        <div class="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Generating Presentation</h3>
+                    <p id="slideGenStatus" class="text-gray-400 text-sm mb-4">Loading audit data & running analysis...</p>
+                    <div class="w-full bg-gray-800 rounded-full h-2 mb-4">
+                        <div id="slideGenProgress" class="bg-indigo-500 h-2 rounded-full transition-all duration-500" style="width: 10%"></div>
+                    </div>
+                    <p class="text-gray-500 text-xs">This may take 1-2 minutes. Do not close this window.</p>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            lucide.createIcons();
+
+            // Progress updates
+            const updateProgress = (pct, text) => {
+                const bar = document.getElementById('slideGenProgress');
+                const status = document.getElementById('slideGenStatus');
+                if (bar) bar.style.width = pct + '%';
+                if (status) status.textContent = text;
+            };
+
+            // Simulate progress stages
+            setTimeout(() => updateProgress(20, 'Running PageSpeed & readability analysis...'), 2000);
+            setTimeout(() => updateProgress(40, 'Rendering audit dashboard...'), 5000);
+            setTimeout(() => updateProgress(60, 'Capturing screenshots...'), 10000);
+            setTimeout(() => updateProgress(75, 'Building Google Slides presentation...'), 20000);
+
+            // Create hidden iframe
+            const iframe = document.createElement('iframe');
+            iframe.id = 'slideGenIframe';
+            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true`;
+            iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1400px;height:900px;opacity:0;pointer-events:none;';
+            document.body.appendChild(iframe);
+
+            // Listen for postMessage from iframe
+            const messageHandler = (event) => {
+                if (event.data?.type === 'slides-ready') {
+                    window.removeEventListener('message', messageHandler);
+
+                    updateProgress(100, 'Presentation ready!');
+
+                    // Save the slides_url to the audit record
+                    fetch(`/api/audits/${auditId}/slides-url`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ slides_url: event.data.presentation_url })
+                    }).catch(e => console.warn('Could not save slides URL:', e));
+
+                    setTimeout(() => {
+                        // Remove iframe and modal
+                        const iframeEl = document.getElementById('slideGenIframe');
+                        if (iframeEl) iframeEl.remove();
+
+                        // Replace modal content with success
+                        const modalEl = document.getElementById('slideGenModal');
+                        if (modalEl) {
+                            modalEl.innerHTML = `
+                                <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                                    <div class="text-5xl mb-4">✅</div>
+                                    <h3 class="text-xl font-bold text-white mb-2">Presentation Ready!</h3>
+                                    <p class="text-gray-400 text-sm mb-6">Your Google Slides presentation has been created.</p>
+                                    <div class="flex gap-3 justify-center">
+                                        <a href="${event.data.presentation_url}" target="_blank" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2">
+                                            <i data-lucide="external-link" class="w-4 h-4"></i> Open Presentation
+                                        </a>
+                                        <button onclick="document.getElementById('slideGenModal').remove()" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg font-medium border border-gray-700">
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                            lucide.createIcons();
+                        }
+                    }, 1000);
+
+                } else if (event.data?.type === 'slides-error') {
+                    window.removeEventListener('message', messageHandler);
+
+                    const iframeEl = document.getElementById('slideGenIframe');
+                    if (iframeEl) iframeEl.remove();
+
+                    const modalEl = document.getElementById('slideGenModal');
+                    if (modalEl) {
+                        modalEl.innerHTML = `
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                                <div class="text-5xl mb-4">❌</div>
+                                <h3 class="text-xl font-bold text-white mb-2">Generation Failed</h3>
+                                <p class="text-red-400 text-sm mb-6">${event.data.error || 'Unknown error occurred'}</p>
+                                <button onclick="document.getElementById('slideGenModal').remove()" class="bg-gray-800 hover:bg-gray-700 text-white px-6 py-2.5 rounded-lg font-medium border border-gray-700">
+                                    Close
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+            };
+            window.addEventListener('message', messageHandler);
+
+            // Timeout after 3 minutes
+            setTimeout(() => {
+                const iframeEl = document.getElementById('slideGenIframe');
+                if (iframeEl) {
+                    iframeEl.remove();
+                    window.removeEventListener('message', messageHandler);
+
+                    const modalEl = document.getElementById('slideGenModal');
+                    if (modalEl) {
+                        modalEl.innerHTML = `
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                                <div class="text-5xl mb-4">⏰</div>
+                                <h3 class="text-xl font-bold text-white mb-2">Generation Timed Out</h3>
+                                <p class="text-gray-400 text-sm mb-6">The process took too long. Please try again.</p>
+                                <button onclick="document.getElementById('slideGenModal').remove()" class="bg-gray-800 hover:bg-gray-700 text-white px-6 py-2.5 rounded-lg font-medium border border-gray-700">
+                                    Close
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+            }, 300000); // 5 min timeout (PageSpeed can take ~90s for heavy sites)
+        }
+
+        async function handleAddCompetitorSubmit() {
+            const input = document.getElementById('competitorDomainInput');
+            const limitInput = document.getElementById('competitorPageLimitInput');
+            let domain = input.value.trim();
+            if (!domain) {
+                alert("Please enter a domain.");
+                return;
+            }
+            // Strip http/https/www
+            domain = domain.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+
+            let maxPages = 200;
+            if (limitInput && limitInput.value) {
+                maxPages = parseInt(limitInput.value);
+            }
+
+            document.getElementById('addCompetitorModal').classList.add('hidden');
+
+            // Re-use runAudit logic and pass flags
+            await runAudit(true, domain, maxPages);
         }
 
         async function runCompetitorAnalysis() {

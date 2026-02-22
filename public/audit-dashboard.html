@@ -1,0 +1,3136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEO Audit Dashboard - Screenshot Views</title>
+    <!-- html2canvas for screenshot capture -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Plus Jakarta Sans & Inter Fonts (AgencyOS Style) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Error Notification Styles -->
+    <style>
+        .error-toast {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ef4444;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 9999;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            font-family: 'Inter', sans-serif;
+            align-items: center;
+            gap: 12px;
+            max-width: 90%;
+            width: auto;
+        }
+
+        .error-toast button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 18px;
+            opacity: 0.8;
+            padding: 4px;
+        }
+
+        .error-toast button:hover {
+            opacity: 1;
+        }
+    </style>
+
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f5f5f5;
+            color: #1a2b48;
+        }
+
+        /* Screenshot Container - White for legible screenshots */
+        .screenshot-view {
+            width: 960px;
+            background: white;
+            margin: 20px auto;
+            overflow: visible;
+            position: relative;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            padding-bottom: 20px;
+        }
+
+        /* Dark header bar for screenshot compatibility */
+        .blue-header {
+            background: #1a2b48;
+            color: white;
+            padding: 20px 30px;
+            text-align: center;
+        }
+
+        .blue-header h1 {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        /* Tables - Light theme for screenshots */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            color: #1a2b48;
+        }
+
+        .data-table th {
+            background: #f0f4f8;
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #ddd;
+            position: sticky;
+            top: 0;
+            color: #333;
+        }
+
+        .data-table td {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            color: #333;
+        }
+
+        .data-table tr:hover {
+            background: #f9f9f9;
+        }
+
+        /* Position highlighting */
+        .position-highlight {
+            background: rgba(204, 51, 51, 0.1);
+            border: 1px solid #cc3333;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+        .position-good {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid #28a745;
+            color: #28a745;
+        }
+
+        /* Issue highlighting */
+        .issue-cell {
+            color: #cc3333;
+            font-weight: 600;
+        }
+
+        .ok-cell {
+            color: #28a745;
+        }
+
+        /* Overview cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            padding: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 42px;
+            font-weight: 700;
+            color: #3366cc;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        /* Navigation tabs - AgencyOS style */
+        .view-tabs {
+            display: flex;
+            gap: 8px;
+            padding: 16px 20px;
+            background: #111827;
+            border-bottom: 1px solid #1f2937;
+            flex-wrap: wrap;
+        }
+
+        .view-tab {
+            padding: 10px 18px;
+            background: #1f2937;
+            color: #9ca3af;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .view-tab:hover {
+            background: #374151;
+            color: white;
+            border-color: #4b5563;
+        }
+
+        .view-tab.active {
+            background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+            color: white;
+            border-color: #8B5CF6;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        /* Hidden by default */
+        .view-section {
+            display: none;
+        }
+
+        .view-section.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Screenshot View Specifics */
+        .screenshot-view {
+            width: 960px;
+            background: white;
+            margin: 20px auto;
+            overflow: visible;
+            position: relative;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            padding-bottom: 20px;
+        }
+
+        /* Sidebar Item */
+        .side-nav-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .side-nav-item.active {
+            border-left-color: #3498db !important;
+        }
+
+        /* Badges */
+        .char-count {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .char-ok {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .char-warn {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .char-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .issue-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 13px;
+            font-weight: 600;
+            margin: 5px;
+        }
+
+        .issue-badge.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .issue-badge.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .issue-badge.ok {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        /* Scrollable Table */
+        .table-container {
+            padding: 15px;
+            overflow-y: auto;
+            max-height: 460px;
+        }
+
+        .url-cell {
+            max-width: 350px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+
+        /* Intents */
+        .intent-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .intent-i {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .intent-c {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .intent-t {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .intent-n {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        /* SERP */
+        .serp-feat {
+            display: inline-block;
+            padding: 1px 4px;
+            border-radius: 2px;
+            font-size: 9px;
+            font-weight: 600;
+            background: #f0f0f0;
+            color: #666;
+            margin-right: 2px;
+        }
+
+        .serp-feat.paa {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .serp-feat.vid {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .serp-feat.img {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .serp-feat.fs {
+            background: #fff8e1;
+            color: #f57f17;
+        }
+
+        /* PageSpeed Score Circles */
+        .score-circles {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+        }
+
+        .score-circle {
+            text-align: center;
+        }
+
+        .score-ring {
+            font-size: 24px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .score-ring.good {
+            color: #0cce6b;
+        }
+
+        .score-ring.average {
+            color: #ffa400;
+        }
+
+        .score-ring.poor {
+            color: #ff4e42;
+        }
+
+        .score-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* AgencyOS Button Classes */
+        .btn-primary {
+            background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #a78bfa, #8B5CF6);
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10B981, #059669);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-success:hover {
+            background: linear-gradient(135deg, #34d399, #10B981);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: #1f2937;
+            color: #e2e8f0;
+            border: 1px solid #374151;
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background: #374151;
+            border-color: #4b5563;
+        }
+
+        /* Custom scrollbar for dark theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0B0F19;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Global Header - AgencyOS Style -->
+    <div class="global-header"
+        style="background: #111827; padding: 14px 20px; border-bottom: 1px solid #1f2937; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;">
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <h2 style="margin: 0; color: white; font-size: 18px; font-weight: 600;">SEO Audit Dashboard</h2>
+            <div class="project-selector">
+                <select id="project-select" onchange="loadAuditFromHistory(this.value)"
+                    style="padding: 8px 12px; border-radius: 8px; border: 1px solid #374151; background: #1f2937; color: #e2e8f0; font-size: 13px; min-width: 250px;">
+                    <option value="" disabled selected>Select Audit...</option>
+                    <!-- Populated via JS -->
+                </select>
+            </div>
+            <span class="badge badge-domain" id="global-domain-badge"
+                style="display:none; background:#312e81; color:#a5b4fc; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:500;"></span>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <button onclick="toggleNewAuditModal()" class="btn-primary"
+                style="display: flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 5v14M5 12h14" />
+                </svg>
+                New Audit
+            </button>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="view-tabs">
+        <button class="view-tab" onclick="showView('all-audits')">All Audits</button>
+        <button class="view-tab active" onclick="showView('traffic')">Traffic Overview</button>
+        <button class="view-tab" onclick="showView('top-pages')">Top Pages</button>
+        <button class="view-tab" onclick="showView('keywords')">Keywords</button>
+        <button class="view-tab" onclick="showView('meta-issues')">Meta Issues</button>
+        <button class="view-tab" onclick="showView('heading-issues')">Heading Issues</button>
+        <button class="view-tab" onclick="showView('speed')">Website Speed</button>
+        <button class="view-tab" onclick="showView('backlinks')">Backlinks</button>
+        <button class="view-tab" onclick="showView('readability')">Content Readability</button>
+        <button id="generate-slides-btn" onclick="generateSlides()" class="btn-success"
+            style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+            📊 Generate Slides
+        </button>
+    </div>
+
+    <!-- VIEW 0: All Audits (NOT included in screenshots) -->
+    <div id="view-all-audits" class="view-section">
+        <div class="screenshot-view" style="padding: 20px;">
+            <div class="blue-header">
+                <h1>All Audits</h1>
+            </div>
+            <div style="background: white; border-radius: 8px; padding: 20px; margin-top: 15px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f1f5f9; border-bottom: 2px solid #e2e8f0;">
+                            <th style="text-align: left; padding: 12px 15px; font-weight: 600; color: #475569;">
+                                Website
+                            </th>
+                            <th style="text-align: left; padding: 12px 15px; font-weight: 600; color: #475569;">
+                                Date
+                            </th>
+                            <th style="text-align: center; padding: 12px 15px; font-weight: 600; color: #475569;">
+                                Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="all-audits-body">
+                        <tr>
+                            <td colspan="3" style="text-align: center; padding: 20px; color: #94a3b8;">Loading
+                                audits...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 1: Traffic Overview -->
+    <div id="view-traffic" class="view-section active">
+        <div class="screenshot-view">
+            <div class="blue-header">
+                <h1>Organic Traffic</h1>
+            </div>
+            <div class="stats-grid" style="display: flex; gap: 20px; padding: 0 30px; margin-bottom: 15px;">
+                <div class="stat-card" style="flex: 1;">
+                    <div class="stat-value" id="stat-traffic">0</div>
+                    <div class="stat-label">Organic Traffic</div>
+                </div>
+                <div class="stat-card" style="flex: 1;">
+                    <div class="stat-value" id="stat-keywords">0</div>
+                    <div class="stat-label">Organic Keywords</div>
+                </div>
+                <div class="stat-card" style="flex: 1; background: #fff3cd;">
+                    <div class="stat-value" style="color: #856404;" id="stat-needs-work">0</div>
+                    <div class="stat-label" style="color: #856404;">Ranking Opportunities</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 20px; padding: 0 30px;">
+                <div class="stat-card" style="flex: 1;">
+                    <div class="stat-value" id="stat-top3">0</div>
+                    <div class="stat-label">Top 3 Keywords</div>
+                </div>
+                <div class="stat-card" style="flex: 1;">
+                    <div class="stat-value" id="stat-top10">0</div>
+                    <div class="stat-label">Top 10 Keywords</div>
+                </div>
+                <div class="stat-card" style="flex: 1;">
+                    <div class="stat-value" id="stat-avg-position">0</div>
+                    <div class="stat-label">Avg Position</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 2: Top Pages -->
+    <div id="view-top-pages" class="view-section">
+        <div class="screenshot-view">
+            <div class="blue-header">
+                <h1>PAGES NEEDING IMPROVEMENT</h1>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>URL</th>
+                            <th>Traffic</th>
+                            <th>Keywords</th>
+                            <th>Top Keyword</th>
+                            <th>Volume</th>
+                            <th>Position</th>
+                        </tr>
+                    </thead>
+                    <tbody id="top-pages-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 3: Organic Keywords -->
+    <div id="view-keywords" class="view-section">
+        <div class="screenshot-view">
+            <div class="blue-header">
+                <h1>ORGANIC KW REPORT</h1>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Keyword</th>
+                            <th title="Search Intent: I=Informational, C=Commercial, T=Transactional, N=Navigational">
+                                Intent</th>
+                            <th title="SERP Features: PAA=People Also Ask, Vid=Video, Img=Images, FS=Featured Snippet">
+                                SF</th>
+                            <th>Volume</th>
+
+                            <th>CPC</th>
+                            <th>Traffic</th>
+                            <th>Position</th>
+                            <th>URL</th>
+                        </tr>
+                    </thead>
+                    <tbody id="keywords-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 4: Meta Issues (aggregated table) -->
+    <div id="view-meta-issues" class="view-section">
+        <div class="screenshot-view" style="display: flex; min-height: 500px;">
+            <!-- Side Navigation -->
+            <div class="side-nav" style="width: 200px; background: #1a1f2e; padding: 15px 0; flex-shrink: 0;">
+                <div class="side-nav-title"
+                    style="color: #8b95a5; font-size: 12px; padding: 10px 15px; text-transform: uppercase;">Meta
+                    Issues
+                </div>
+                <div class="side-nav-item active" data-meta-tab="title-long" id="meta-tab-title-long"
+                    style="color: white; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Title Too Long</span>
+                    <span class="side-nav-count" id="meta-count-title-long"
+                        style="background: #e74c3c; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" data-meta-tab="no-desc" id="meta-tab-no-desc"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Missing Description</span>
+                    <span class="side-nav-count" id="meta-count-no-desc"
+                        style="background: #e74c3c; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" data-meta-tab="desc-long" id="meta-tab-desc-long"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Description Too Long</span>
+                    <span class="side-nav-count" id="meta-count-desc-long"
+                        style="background: #f39c12; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area" style="flex: 1; background: white;">
+                <div class="blue-header">
+                    <h1 id="meta-content-title">Title Too Long</h1>
+                </div>
+
+                <!-- Title Too Long Table -->
+                <div id="meta-content-title-long" class="meta-content-panel" style="display: block;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>Title</th>
+                                    <th>Chars</th>
+                                </tr>
+                            </thead>
+                            <tbody id="title-long-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Missing Description Table -->
+                <div id="meta-content-no-desc" class="meta-content-panel" style="display: none;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>Description</th>
+                                    <th>Chars</th>
+                                </tr>
+                            </thead>
+                            <tbody id="no-desc-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Description Too Long Table -->
+                <div id="meta-content-desc-long" class="meta-content-panel" style="display: none;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>Description</th>
+                                    <th>Chars</th>
+                                </tr>
+                            </thead>
+                            <tbody id="desc-long-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 5: Heading Issues (aggregated table) -->
+    <div id="view-heading-issues" class="view-section">
+        <div class="screenshot-view" style="display: flex; min-height: 500px;">
+            <!-- Side Navigation -->
+            <div class="side-nav" style="width: 200px; background: #1a1f2e; padding: 15px 0; flex-shrink: 0;">
+                <div class="side-nav-title"
+                    style="color: #8b95a5; font-size: 12px; padding: 10px 15px; text-transform: uppercase;">
+                    Heading
+                    Issues</div>
+                <div class="side-nav-item active" data-heading-tab="no-h1" id="heading-tab-no-h1"
+                    style="color: white; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Missing H1</span>
+                    <span class="side-nav-count" id="heading-count-no-h1"
+                        style="background: #e74c3c; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" data-heading-tab="multi-h1" id="heading-tab-multi-h1"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Multiple H1</span>
+                    <span class="side-nav-count" id="heading-count-multi-h1"
+                        style="background: #f39c12; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" data-heading-tab="no-h2" id="heading-tab-no-h2"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Missing H2</span>
+                    <span class="side-nav-count" id="heading-count-no-h2"
+                        style="background: #e74c3c; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" data-heading-tab="many-h2" id="heading-tab-many-h2"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Too Many H2</span>
+                    <span class="side-nav-count" id="heading-count-many-h2"
+                        style="background: #e91e63; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" data-heading-tab="no-h3" id="heading-tab-no-h3"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Missing H3</span>
+                    <span class="side-nav-count" id="heading-count-no-h3"
+                        style="background: #e74c3c; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" data-heading-tab="many-h3" id="heading-tab-many-h3"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Too Many H3</span>
+                    <span class="side-nav-count" id="heading-count-many-h3"
+                        style="background: #e91e63; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" data-heading-tab="dup-h1" id="heading-tab-dup-h1"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Duplicate H1</span>
+                    <span class="side-nav-count" id="heading-count-dup-h1"
+                        style="background: #ff9800; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" data-heading-tab="dup-h2" id="heading-tab-dup-h2"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Duplicate H2</span>
+                    <span class="side-nav-count" id="heading-count-dup-h2"
+                        style="background: #ff9800; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" data-heading-tab="dup-h3" id="heading-tab-dup-h3"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent; display: none;">
+                    <span>Duplicate H3</span>
+                    <span class="side-nav-count" id="heading-count-dup-h3"
+                        style="background: #ff9800; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area" style="flex: 1; background: white;">
+                <div class="blue-header">
+                    <h1 id="heading-content-title">Missing H1</h1>
+                </div>
+
+                <!-- Missing H1 Table -->
+                <div id="heading-content-no-h1" class="heading-content-panel" style="display: block;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>H1 Count</th>
+                                    <th>H2 Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="heading-issues-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Multiple H1 Table -->
+                <div id="heading-content-multi-h1" class="heading-content-panel" style="display: none;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>H1 Count</th>
+                                    <th>H1 Tags</th>
+                                </tr>
+                            </thead>
+                            <tbody id="multi-h1-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Missing H2 Table -->
+                <div id="heading-content-no-h2" class="heading-content-panel" style="display: none;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>H2 Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="no-h2-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Too Many H2 Table -->
+                <div id="heading-content-many-h2" class="heading-content-panel" style="display: none;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>H2 Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="many-h2-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Missing H3 Table -->
+                <div id="heading-content-no-h3" class="heading-content-panel" style="display: none;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>H3 Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="no-h3-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Too Many H3 Table -->
+                <div id="heading-content-many-h3" class="heading-content-panel" style="display: none;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>H3 Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="many-h3-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Duplicate H1 Table -->
+                <div id="heading-content-dup-h1" class="heading-content-panel" style="display: none;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Duplicate H1 Text</th>
+                                    <th>Count</th>
+                                    <th>Page URL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="duplicate-h1-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Duplicate H2 Table -->
+                <div id="heading-content-dup-h2" class="heading-content-panel" style="display: none;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Duplicate H2 Text</th>
+                                    <th>Count</th>
+                                    <th>Page URL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="duplicate-h2-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Duplicate H3 Table -->
+                <div id="heading-content-dup-h3" class="heading-content-panel" style="display: none;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Duplicate H3 Text</th>
+                                    <th>Count</th>
+                                    <th>Page URL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="duplicate-h3-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 6: Backlinks -->
+    <div id="view-backlinks" class="view-section">
+        <div class="screenshot-view" style="display: flex; min-height: 500px;">
+            <!-- Side Navigation -->
+            <div class="side-nav" style="width: 200px; background: #1a1f2e; padding: 15px 0; flex-shrink: 0;">
+                <div class="side-nav-title"
+                    style="color: #8b95a5; font-size: 12px; padding: 10px 15px; text-transform: uppercase;">Backlinks
+                    Filters</div>
+                <div class="side-nav-item active" onclick="filterBacklinks('all', this)"
+                    style="color: white; padding: 12px 15px; cursor: pointer; border-left: 3px solid #1a73e8;">
+                    <span>All</span>
+                    <span class="side-nav-count" id="backlink-count-all"
+                        style="background: #ffffff20; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" onclick="filterBacklinks('high', this)"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent;">
+                    <span>High Spam</span>
+                    <span class="side-nav-count" id="backlink-count-high"
+                        style="background: #e74c3c; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" onclick="filterBacklinks('medium', this)"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent;">
+                    <span>Medium</span>
+                    <span class="side-nav-count" id="backlink-count-medium"
+                        style="background: #f39c12; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+                <div class="side-nav-item" onclick="filterBacklinks('low', this)"
+                    style="color: #8b95a5; padding: 12px 15px; cursor: pointer; border-left: 3px solid transparent;">
+                    <span>Safe</span>
+                    <span class="side-nav-count" id="backlink-count-low"
+                        style="background: #27ae60; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px;">0</span>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area" style="flex: 1; background: white; display: flex; flex-direction: column;">
+                <div class="blue-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h1>Backlinks Overview</h1>
+                    <button id="refresh-backlinks-btn" onclick="refreshBacklinks()"
+                        style="background: white; color: #1a73e8; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                        🔄 Refresh Backlinks
+                    </button>
+                </div>
+                <div class="heading-content-panel" style="display: block; flex: 1; overflow-y: auto;">
+                    <div class="table-container" style="padding: 20px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Referring Page</th>
+                                    <th>DR</th>
+                                    <th>Spam Score</th>
+                                    <th>Links</th>
+                                </tr>
+                            </thead>
+                            <tbody id="backlinks-body">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: #666; padding: 40px;">No
+                                        backlinks data found.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 7: Website Speed (PageSpeed Insights Style) -->
+    <div id="view-speed" class="view-section">
+        <div class="screenshot-view">
+            <div class="blue-header">
+                <h1>Website Speed</h1>
+                <p style="font-size: 14px; opacity: 0.9;" id="speed-domain">Mobile Page Speed Analysis</p>
+            </div>
+
+            <!-- Mobile/Desktop Toggle + Refresh Button -->
+            <div
+                style="display: flex; justify-content: center; align-items: center; padding: 15px; border-bottom: 1px solid #eee; gap: 20px;">
+                <div style="display: flex; background: #f5f5f5; border-radius: 4px; overflow: hidden;">
+                    <div id="toggle-mobile" onclick="showSpeedData('mobile')"
+                        style="padding: 8px 20px; background: #1a73e8; color: white; font-weight: 500; cursor: pointer;">
+                        📱 Mobile</div>
+                    <div id="toggle-desktop" onclick="showSpeedData('desktop')"
+                        style="padding: 8px 20px; color: #666; cursor: pointer;">🖥️ Desktop</div>
+                </div>
+                <button onclick="refreshPageSpeed()" id="refresh-speed-btn"
+                    style="background: white; border: 1px solid #ccc; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    🔄 Refresh Data
+                </button>
+            </div>
+            <!-- Score Circles Row -->
+            <div class="score-circles" style="padding: 20px 30px;">
+                <div class="score-circle">
+                    <div class="score-ring" id="perf-score">--</div>
+                    <div class="score-label">Performance</div>
+                </div>
+                <div class="score-circle">
+                    <div class="score-ring" id="access-score">--</div>
+                    <div class="score-label">Accessibility</div>
+                </div>
+                <div class="score-circle">
+                    <div class="score-ring" id="bp-score">--</div>
+                    <div class="score-label">Best Practices</div>
+                </div>
+                <div class="score-circle">
+                    <div class="score-ring" id="seo-score">--</div>
+                    <div class="score-label">SEO</div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div
+                style="display: flex; justify-content: center; gap: 30px; padding: 10px; font-size: 12px; color: #666;">
+                <span>🔴 0-49</span>
+                <span>🟠 50-89</span>
+                <span>🟢 90-100</span>
+            </div>
+
+            <!-- Core Web Vitals -->
+            <div style="padding: 15px 30px;">
+                <div
+                    style="font-weight: 600; color: #666; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                    METRICS</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="fcp-indicator" style="font-size: 14px;">●</span>
+                        <div>
+                            <div style="font-size: 12px; color: #666;">First Contentful Paint</div>
+                            <div style="font-size: 20px; font-weight: 600;" id="fcp-value">--</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="lcp-indicator" style="font-size: 14px;">●</span>
+                        <div>
+                            <div style="font-size: 12px; color: #666;">Largest Contentful Paint</div>
+                            <div style="font-size: 20px; font-weight: 600;" id="lcp-value">--</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="tbt-indicator" style="font-size: 14px;">●</span>
+                        <div>
+                            <div style="font-size: 12px; color: #666;">Total Blocking Time</div>
+                            <div style="font-size: 20px; font-weight: 600;" id="tbt-value">--</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="cls-indicator" style="font-size: 14px;">●</span>
+                        <div>
+                            <div style="font-size: 12px; color: #666;">Cumulative Layout Shift</div>
+                            <div style="font-size: 20px; font-weight: 600;" id="cls-value">--</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="si-indicator" style="font-size: 14px;">●</span>
+                        <div>
+                            <div style="font-size: 12px; color: #666;">Speed Index</div>
+                            <div style="font-size: 20px; font-weight: 600;" id="si-value">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 9: Content Readability (Hemingway-style) -->
+    <div id="view-readability" class="view-section">
+        <div class="screenshot-view" style="padding: 20px;">
+            <div class="blue-header">
+                <h1>Content Readability</h1>
+            </div>
+            <div style="background: white; border-radius: 8px; padding: 20px; margin-top: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <p style="color: #64748b; margin: 0;">Analyzing top 1-2 highest-traffic blog/article pages
+                        for
+                        readability...</p>
+                    <button onclick="analyzeReadability(true)"
+                        style="background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px;">🔄
+                        Re-analyze</button>
+                </div>
+
+                <div id="readability-results">
+                    <div style="text-align: center; padding: 40px; color: #94a3b8;">
+                        <button onclick="analyzeReadability()"
+                            style="background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">
+                            📝 Analyze Content Readability
+                        </button>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function showView(viewName) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.view-tab').forEach(el => el.classList.remove('active'));
+            const view = document.getElementById('view-' + viewName);
+            if (view) view.classList.add('active');
+
+            // Highlight active button
+            const buttons = document.querySelectorAll(`.view-tab[onclick*="${viewName}"]`);
+            if (buttons.length > 0) {
+                buttons.forEach(btn => btn.classList.add('active'));
+            } else if (event && event.target && event.target.classList) {
+                event.target.classList.add('active');
+            }
+
+            if (viewName === 'all-audits') {
+                loadAllAudits();
+            }
+
+            // Auto-load readability when that tab is selected
+            if (viewName === 'readability') {
+                analyzeReadability();
+            }
+        }
+
+        // Load all audits for the All Audits tab
+        async function loadAllAudits() {
+            const tbody = document.getElementById('all-audits-body');
+            tbody.innerHTML = `<tr>
+                <td colspan="3" style="text-align: center; padding: 20px; color: #94a3b8;">Loading audits...</td>
+            </tr>`;
+
+            try {
+                const res = await fetch('/api/audits/list?source=saas');
+                const data = await res.json();
+
+                if (data.success && data.audits && data.audits.length > 0) {
+                    tbody.innerHTML = '';
+                    data.audits.forEach(audit => {
+                        const row = document.createElement('tr');
+                        row.style.borderBottom = '1px solid #e2e8f0';
+                        const date = audit.created_at ? new Date(audit.created_at).toLocaleDateString() : 'N/A';
+                        const domain = audit.domain || audit.project_name || 'Unknown';
+                        row.innerHTML = `
+                        <td style="padding: 12px 15px;">
+                            <a href="/audit-dashboard.html?audit_id=${audit.id}"
+                                style="color: #3b82f6; text-decoration: none; font-weight: 500;">${domain}</a>
+                        </td>
+                        <td style="padding: 12px 15px; color: #64748b;">${date}</td>
+                        <td style="padding: 12px 15px; text-align: center;">
+                            <button onclick="deleteAudit('${audit.id}', '${domain}')"
+                                style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️
+                                Delete</button>
+                        </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                } else {
+                    tbody.innerHTML = `<tr>
+                        <td colspan="3" style="text-align: center; padding: 20px; color: #94a3b8;">No audits found. Click "New Audit" to start one.</td>
+                    </tr>`;
+                }
+            } catch (e) {
+                console.error('Error loading audits:', e);
+                tbody.innerHTML = `<tr>
+                    <td colspan="3" style="text-align: center; padding: 20px; color: #ef4444;">Error loading audits</td>
+                </tr>`;
+            }
+        }
+
+        // Delete an audit
+        async function deleteAudit(auditId, domain) {
+            if (!confirm(`Are you sure you want to delete the audit for "${domain}"? This cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/audits/${auditId}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    alert('Audit deleted successfully');
+                    loadAllAudits(); // Refresh the list
+                } else {
+                    alert('Error deleting audit: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error deleting audit: ' + e.message);
+            }
+        }
+
+        // Analyze content readability (Hemingway-style)
+        async function analyzeReadability(forceRefresh = false) {
+            const resultsDiv = document.getElementById('readability-results');
+            resultsDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #64748b;">⏳ Analyzing content readability...</div>`;
+
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const auditId = params.get('audit_id') || params.get('project_id');
+
+                if (!auditId) {
+                    resultsDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">No audit selected</div>`;
+                    return;
+                }
+
+                const refreshParam = forceRefresh ? '?refresh=true' : '';
+                const res = await fetch(`/api/audit/${auditId}/readability${refreshParam}`);
+                const data = await res.json();
+
+                if (data.success && data.results && data.results.length > 0) {
+                    let html = '';
+                    data.results.forEach((result, idx) => {
+                        const gradeColor = result.rating === 'easy' ? '#22c55e' :
+                            result.rating === 'good' ? '#3b82f6' :
+                                result.rating === 'moderate' ? '#f59e0b' : '#ef4444';
+
+                        html += `
+                        <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <div>
+                                    <h3 style="margin: 0; color: #1e293b; font-size: 16px;">${result.url}</h3>
+                                    <p style="margin: 5px 0 0 0; color: #64748b; font-size: 12px;">Blog/Article #${idx +
+                            1} • Est. ${result.reading_time_mins || 0} min read</p>
+                                </div>
+                                <div
+                                    style="background: ${gradeColor}; color: white; padding: 8px 16px; border-radius: 20px; font-weight: 600;">
+                                    Grade ${result.flesch_kincaid_grade || result.grade || 'N/A'}
+                                </div>
+                            </div>
+
+                            <div
+                                style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px;">
+                                <div
+                                    style="background: #f8fafc; padding: 12px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 600; color: ${gradeColor};">
+                                        ${result.flesch_reading_ease || 0}</div>
+                                    <div style="font-size: 11px; color: #64748b;">Reading Ease</div>
+                                    <div style="font-size: 10px; color: #94a3b8;">0-100, higher = easier</div>
+                                </div>
+                                <div
+                                    style="background: #f8fafc; padding: 12px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 600; color: #1e293b;">${result.gunning_fog
+                            || 0}</div>
+                                    <div style="font-size: 11px; color: #64748b;">Gunning Fog</div>
+                                    <div style="font-size: 10px; color: #94a3b8;">Years of education</div>
+                                </div>
+                                <div
+                                    style="background: #f8fafc; padding: 12px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 24px; font-weight: 600; color: #1e293b;">${result.smog_index
+                            || 0}</div>
+                                    <div style="font-size: 11px; color: #64748b;">SMOG Index</div>
+                                    <div style="font-size: 10px; color: #94a3b8;">Polysyllable density</div>
+                                </div>
+                            </div>
+
+                            <div
+                                style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 10px;">
+                                <div
+                                    style="background: #f8fafc; padding: 12px; border-radius: 6px; text-align: center;">
+                                    <div
+                                        style="font-size: 24px; font-weight: 600; color: ${result.avg_sentence_length > 20 ? '#f59e0b' : '#22c55e'};">
+                                        ${result.avg_sentence_length || 0}</div>
+                                    <div style="font-size: 11px; color: #64748b;">Avg Sentence Length</div>
+                                    <div style="font-size: 10px; color: #94a3b8;">Target: ≤20 words</div>
+                                </div>
+                                <div
+                                    style="background: #f8fafc; padding: 12px; border-radius: 6px; text-align: center;">
+                                    <div
+                                        style="font-size: 24px; font-weight: 600; color: ${result.difficult_words_pct > 15 ? '#ef4444' : '#22c55e'};">
+                                        ${result.difficult_words_pct || 0}%</div>
+                                    <div style="font-size: 11px; color: #64748b;">Complex Words</div>
+                                    <div style="font-size: 10px; color: #94a3b8;">3+ syllables</div>
+                                </div>
+                                <div
+                                    style="background: #f8fafc; padding: 12px; border-radius: 6px; text-align: center;">
+                                    <div
+                                        style="font-size: 24px; font-weight: 600; color: ${result.avg_syllables_per_word > 1.7 ? '#f59e0b' : '#22c55e'};">
+                                        ${result.avg_syllables_per_word || 0}</div>
+                                    <div style="font-size: 11px; color: #64748b;">Syllables/Word</div>
+                                    <div style="font-size: 10px; color: #94a3b8;">Target: ≤1.7</div>
+                                </div>
+                            </div>
+
+                            <div
+                                style="margin-top: 15px; padding: 10px; background: ${gradeColor}15; border-left: 3px solid ${gradeColor}; border-radius: 4px;">
+                                <span style="color: ${gradeColor}; font-weight: 500;">${result.rating_label || 'Analysis complete'}</span>
+                            </div>
+                        </div>
+                            `;
+                    });
+                    resultsDiv.innerHTML = html;
+                } else {
+                    resultsDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #f59e0b;">No blog/article pages found with traffic data. Try running a new audit with more pages.</div>';
+                }
+            } catch (e) {
+                console.error('Readability error:', e);
+                resultsDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #ef4444;">Error analyzing readability: ${e.message}</div>`;
+            }
+        }
+
+        // Switch between Meta Issues side tabs
+        function switchMetaTab(tabName) {
+            // Update side nav active state
+            document.querySelectorAll('#view-meta-issues .side-nav-item').forEach(el => {
+                el.style.color = '#8b95a5';
+                el.style.borderLeftColor = 'transparent';
+                el.classList.remove('active');
+            });
+            const activeTab = document.getElementById('meta-tab-' + tabName);
+            if (activeTab) {
+                activeTab.style.color = 'white';
+                activeTab.style.borderLeftColor = '#3498db';
+                activeTab.classList.add('active');
+            }
+
+            // Update content panel visibility
+            document.querySelectorAll('#view-meta-issues .meta-content-panel').forEach(el => {
+                el.style.display = 'none';
+            });
+            const activeContent = document.getElementById('meta-content-' + tabName);
+            if (activeContent) {
+                activeContent.style.display = 'block';
+            }
+
+            // Update header title
+            const titles = {
+                'title-long': 'Title Too Long (>60 chars)',
+                'no-desc': 'Missing Description',
+                'desc-long': 'Description Too Long (>160 chars)'
+            };
+            const headerTitle = document.getElementById('meta-content-title');
+            if (headerTitle && titles[tabName]) {
+                headerTitle.textContent = titles[tabName];
+            }
+        }
+
+        // Switch between Heading Issues side tabs
+        function switchHeadingTab(tabName) {
+            // Update side nav active state
+            document.querySelectorAll('#view-heading-issues .side-nav-item').forEach(el => {
+                el.style.color = '#8b95a5';
+                el.style.borderLeftColor = 'transparent';
+                el.classList.remove('active');
+            });
+            const activeTab = document.getElementById('heading-tab-' + tabName);
+            if (activeTab) {
+                activeTab.style.color = 'white';
+                activeTab.style.borderLeftColor = '#3498db';
+                activeTab.classList.add('active');
+            }
+
+            // Update content panel visibility
+            document.querySelectorAll('#view-heading-issues .heading-content-panel').forEach(el => {
+                el.style.display = 'none';
+            });
+            const activeContent = document.getElementById('heading-content-' + tabName);
+            if (activeContent) {
+                activeContent.style.display = 'block';
+            }
+
+            // Update header title
+            const titles = {
+                'no-h1': 'Missing H1',
+                'multi-h1': 'Multiple H1',
+                'no-h2': 'Missing H2',
+                'many-h2': 'Too Many H2 (>10)',
+                'no-h3': 'Missing H3',
+                'many-h3': 'Too Many H3 (>15)',
+                'dup-h1': 'Duplicate H1 Tags',
+                'dup-h2': 'Duplicate H2 Tags',
+                'dup-h3': 'Duplicate H3 Tags'
+            };
+            const headerTitle = document.getElementById('heading-content-title');
+            if (headerTitle && titles[tabName]) {
+                headerTitle.textContent = titles[tabName];
+            }
+        }
+
+        // Add event listeners for tabs
+        document.addEventListener('DOMContentLoaded', () => {
+            // Meta tabs
+            document.querySelectorAll('#view-meta-issues .side-nav-item').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabName = tab.getAttribute('data-meta-tab');
+                    if (tabName) switchMetaTab(tabName);
+                });
+            });
+            // Heading tabs
+            document.querySelectorAll('#view-heading-issues .side-nav-item').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabName = tab.getAttribute('data-heading-tab');
+                    if (tabName) switchHeadingTab(tabName);
+                });
+            });
+        });
+
+        // Capture a single dashboard section as base64 PNG
+        async function captureSection(sectionId) {
+            const element = document.querySelector(`#${sectionId} .screenshot-view`);
+            if (!element) {
+                console.warn(`Section ${sectionId} not found`);
+                return null;
+            }
+
+            // Temporarily show the section if hidden
+            const section = document.getElementById(sectionId);
+            const wasHidden = !section.classList.contains('active');
+            if (wasHidden) {
+                section.style.display = 'block';
+                section.style.position = 'absolute';
+                section.style.left = '-9999px';
+            }
+
+            try {
+                const canvas = await html2canvas(element, {
+                    scale: 2, // High resolution
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff'
+                });
+                return canvas.toDataURL('image/png');
+            } catch (err) {
+                console.error(`Error capturing ${sectionId}: `, err);
+                return null;
+            } finally {
+                if (wasHidden) {
+                    section.style.display = '';
+                    section.style.position = '';
+                    section.style.left = '';
+                }
+            }
+        }
+
+        // Capture all dashboard sections for slides
+        async function captureAllSections() {
+            console.log('📸 Capturing dashboard screenshots...');
+
+            const sections = {
+                'view-traffic': 'traffic_overview',
+                'view-top-pages': 'top_pages',
+                'view-keywords': 'keywords_report',
+                'view-meta-issues': 'meta_issues',
+                'view-heading-issues': 'heading_issues',
+                'view-speed': 'speed_analysis',
+                'view-backlinks': 'backlinks',
+                'view-readability': 'content_readability'
+            };
+
+            const screenshots = {};
+
+            for (const [sectionId, screenshotName] of Object.entries(sections)) {
+                console.log(` Capturing ${screenshotName}...`);
+
+                if (sectionId === 'view-meta-issues') {
+                    // Capture each sub-tab in Meta Issues if count > 0
+                    const metaTabs = ['title-long', 'no-desc', 'desc-long'];
+                    for (const tab of metaTabs) {
+                        const countEl = document.getElementById(`meta - count - ${tab}`);
+                        const count = countEl ? parseInt(countEl.textContent) || 0 : 0;
+                        if (count > 0) {
+                            console.log(`Capturing Meta sub - tab: ${tab}...`);
+                            switchMetaTab(tab);
+                            await new Promise(r => setTimeout(r, 300)); // Minor wait for UI
+                            const dataUrl = await captureSection(sectionId);
+                            if (dataUrl) {
+                                screenshots[`meta_issues_${tab.replace(/-/g, '_')}`] = dataUrl;
+                            }
+                        }
+                    }
+                    // Capture summary screenshot too
+                    const summaryUrl = await captureSection(sectionId);
+                    if (summaryUrl) screenshots[screenshotName] = summaryUrl;
+                }
+                else if (sectionId === 'view-heading-issues') {
+                    // Capture each sub-tab in Heading Issues if count > 0
+                    const headingTabs = ['no-h1', 'multi-h1', 'no-h2', 'many-h2', 'no-h3', 'many-h3', 'dup-h1',
+                        'dup-h2', 'dup-h3'];
+                    for (const tab of headingTabs) {
+                        const countEl = document.getElementById(`heading - count - ${tab}`);
+                        const count = countEl ? parseInt(countEl.textContent) || 0 : 0;
+                        if (count > 0) {
+                            console.log(`Capturing Heading sub - tab: ${tab}...`);
+                            switchHeadingTab(tab);
+                            await new Promise(r => setTimeout(r, 300)); // Minor wait for UI
+                            const dataUrl = await captureSection(sectionId);
+                            if (dataUrl) {
+                                screenshots[`heading_issues_${tab.replace(/-/g, '_')}`] = dataUrl;
+                            }
+                        }
+                    }
+                    // Capture summary screenshot too
+                    const summaryUrl = await captureSection(sectionId);
+                    if (summaryUrl) screenshots[screenshotName] = summaryUrl;
+                }
+                else if (sectionId === 'view-readability') {
+                    // Trigger readability analysis before capturing
+                    console.log(' Triggering readability analysis before capture...');
+                    await analyzeReadability();
+                    await new Promise(r => setTimeout(r, 1000)); // Wait for results to render
+                    const dataUrl = await captureSection(sectionId);
+                    if (dataUrl) {
+                        screenshots[screenshotName] = dataUrl;
+                    }
+                }
+                else {
+                    const dataUrl = await captureSection(sectionId);
+                    if (dataUrl) {
+                        screenshots[screenshotName] = dataUrl;
+                    }
+                }
+            }
+
+            console.log('✅ All screenshots captured:', Object.keys(screenshots));
+            return screenshots;
+        }
+
+        // ==========================================
+        // UTILITY: Error Handling & Retry Logic
+        // ==========================================
+
+        function showError(message) {
+            const el = document.getElementById('error-notification');
+            if (el) {
+                document.getElementById('error-message').innerText = message;
+                el.style.display = 'flex';
+                // Auto-hide after 8 seconds
+                setTimeout(() => {
+                    // Only hide if text hasn't changed (simple debounce)
+                    if (document.getElementById('error-message').innerText === message) {
+                        hideError();
+                    }
+                }, 8000);
+            } else {
+                // Fallback if DOM not ready
+                alert(message);
+            }
+        }
+
+        function hideError() {
+            const el = document.getElementById('error-notification');
+            if (el) el.style.display = 'none';
+        }
+
+        async function fetchWithRetry(url, options = {}, retries = 3, backoff = 500) {
+            try {
+                const response = await fetch(url, options);
+                // Retry specific server errors (5xx) or if explicitly requested options.retryOnFail
+                if (!response.ok && response.status >= 500 && retries > 0) {
+                    throw new Error(`Server Error: ${response.status}`);
+                }
+                return response;
+            } catch (err) {
+                if (retries > 0) {
+                    console.warn(`Fetch failed for ${url}, retrying... (${retries} attempts left)`);
+                    await new Promise(r => setTimeout(r, backoff));
+                    return fetchWithRetry(url, options, retries - 1, backoff * 2);
+                }
+                throw err;
+            }
+        }
+
+        // Wait for server to be ready before making API calls
+        async function waitForServer(maxAttempts = 5, interval = 1000) {
+            for (let i = 0; i < maxAttempts; i++) {
+                try {
+                    const response = await fetch('/ping', { method: 'GET' });
+                    if (response.ok) {
+                        console.log('✅ Server is ready');
+                        return true;
+                    }
+                } catch (err) {
+                    console.log(`Waiting for server... (attempt ${i + 1}/${maxAttempts})`);
+                }
+                await new Promise(r => setTimeout(r, interval));
+            }
+            console.warn('Server did not respond after maximum attempts');
+            return false;
+        }
+
+        // Generate Slides - captures screenshots first, then calls API
+        async function generateSlides() {
+            const params = new URLSearchParams(window.location.search);
+            const projectId = params.get('project_id') || params.get('audit_id');
+
+            if (!projectId) {
+                alert('No project ID found. Please open this dashboard from a project.');
+                return;
+            }
+
+            const btn = document.getElementById('generate-slides-btn');
+            const originalText = btn.textContent;
+            btn.textContent = '📸 Capturing...';
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+
+            try {
+                // Step 1: Capture all dashboard screenshots
+                const screenshots = await captureAllSections();
+
+                btn.textContent = '⏳ Generating...';
+
+                // Step 2: Collect issue counts from DOM for accurate slide bullet points
+                const getCount = (id) => parseInt(document.getElementById(id)?.textContent || '0', 10);
+                const issueCounts = {
+                    // Meta issues
+                    titleTooLong: getCount('meta-count-title-long'),
+                    noDesc: getCount('meta-count-no-desc'),
+                    descTooLong: getCount('meta-count-desc-long'),
+                    // Heading issues
+                    noH1: getCount('heading-count-no-h1'),
+                    multiH1: getCount('heading-count-multi-h1'),
+                    noH2: getCount('heading-count-no-h2'),
+                    manyH2: getCount('heading-count-many-h2'),
+                    noH3: getCount('heading-count-no-h3'),
+                    manyH3: getCount('heading-count-many-h3'),
+                    dupH1: getCount('heading-count-dup-h1'),
+                    dupH2: getCount('heading-count-dup-h2'),
+                    dupH3: getCount('heading-count-dup-h3')
+                };
+
+                // Step 3: Send to API with screenshots and issue counts
+                const response = await fetch('/api/deep-audit/generate-slides', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: projectId,
+                        screenshots: screenshots,
+                        issue_counts: issueCounts
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.presentation_url) {
+                    // Log the URL to console
+                    console.log('✅ Presentation created:', data.presentation_url);
+
+                    // Open the presentation in a new tab
+                    const newWindow = window.open(data.presentation_url, '_blank');
+
+                    // If popup was blocked, show the URL
+                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                        prompt('Popup blocked! Copy this URL:', data.presentation_url);
+                    }
+
+                    btn.textContent = '✅ Slides Created!';
+                    setTimeout(() => { btn.textContent = originalText; }, 3000);
+                } else {
+                    throw new Error(data.error || 'Failed to generate slides');
+                }
+            } catch (error) {
+                console.error('Slide generation error:', error);
+                showError('Error generating slides: ' + error.message);
+                btn.textContent = originalText;
+            } finally {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }
+        }
+
+        // Format CPC as currency
+        function formatCPC(value) {
+            if (!value || value === 'N/A') return 'N/A';
+            return '$' + parseFloat(value).toFixed(2);
+        }
+
+        // Get position class
+        function getPositionClass(pos) {
+            if (pos <= 3) return 'position-highlight position-good';
+            if (pos <= 10) return 'position-highlight';
+            return '';
+        }
+
+        // Get char count class function
+        function getCharClass(len, max, min = 0) {
+            if (len === 0 && min > 0) return 'char-error';
+            if (len > max) return 'char-error';
+            if (len > max * 0.85) return 'char-warn';
+            return 'char-ok';
+        }
+
+        let projectData = null;
+        let currentAuditData = null;
+
+        // Load data from URL params or API
+        async function loadProjectData() {
+            const params = new URLSearchParams(window.location.search);
+            const auditId = params.get('audit_id');
+            const projectId = params.get('project_id');
+            const autoGenerate = params.get('auto_generate') === 'true';
+
+            if (auditId) {
+                console.log('Loading project data for audit ID:', auditId);
+                try {
+                    // Use the project-data endpoint which returns full_audit_data directly
+                    const response = await fetchWithRetry(`/api/project-data/${auditId}`);
+                    const data = await response.json();
+                    console.log('Project Data API Response:', data);
+
+                    if (data.success && data.data) {
+                        const auditData = data.data;
+
+                        // Update badges
+                        const domainBadge = document.getElementById('domain-badge');
+                        if (domainBadge) domainBadge.textContent = data.domain || auditData.domain || '';
+                        if (auditData.created_at) {
+                            const dateBadge = document.getElementById('date-badge');
+                            if (dateBadge) dateBadge.textContent = new Date(auditData.created_at).toLocaleDateString();
+                        }
+
+                        projectData = auditData;
+                        currentAuditData = auditData;
+
+                        try {
+                            populateDashboard(auditData);
+                            populateSpeedMetrics(auditData);
+                        } catch (popErr) {
+                            console.error('Error in populateDashboard:', popErr);
+                            showError('Error populating dashboard: ' + popErr.message);
+                        }
+
+                        // Auto-generate slides if requested (hidden iframe mode)
+                        if (autoGenerate) {
+                            console.log('Auto-generate mode: waiting for render then generating slides...');
+                            setTimeout(async () => {
+                                try {
+                                    await autoGenerateSlides(auditId);
+                                } catch (err) {
+                                    console.error('Auto-generate failed:', err);
+                                    if (window.parent !== window) {
+                                        window.parent.postMessage({ type: 'slides-error', error: err.message }, '*');
+                                    }
+                                }
+                            }, 3000); // Wait 3s for full render before capturing
+                        }
+                    } else {
+                        console.error('API returned failure:', data);
+                        showError('API Error: ' + (data.error || 'Unknown error'));
+                        if (autoGenerate && window.parent !== window) {
+                            window.parent.postMessage({ type: 'slides-error', error: data.error || 'Failed to load data' }, '*');
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to load project data:', err);
+                    showError("Error loading audit data. Please verify connection and try again.");
+                    if (autoGenerate && window.parent !== window) {
+                        window.parent.postMessage({ type: 'slides-error', error: err.message }, '*');
+                    }
+                }
+                return;
+            }
+
+            if (projectId) {
+                try {
+                    const response = await fetchWithRetry(`/api/project/${projectId}/full-audit-data`);
+                    const data = await response.json();
+
+                    if (data.success) {
+                        projectData = data.data;
+                        populateDashboard(projectData);
+                        populateSpeedMetrics(projectData);
+                    }
+                } catch (err) {
+                    console.error('Failed to load project data:', err);
+                    showError("Error loading project data: " + err.message);
+                }
+                return;
+            }
+
+            console.log('No audit_id or project_id provided');
+        }
+
+        // Auto-generate slides (called in hidden iframe mode)
+        async function autoGenerateSlides(auditId) {
+            console.log('Auto-generating slides for audit:', auditId);
+
+            // Step 1: Run readability analysis
+            try {
+                console.log('Running readability analysis...');
+                await fetch(`/api/audit/${auditId}/readability`);
+            } catch (e) { console.warn('Readability analysis skipped:', e); }
+
+            // Step 1.5: Fetch PageSpeed data and populate speed section
+            try {
+                console.log('Fetching PageSpeed data (this may take ~60-90s)...');
+                const psRes = await fetch(`/api/audit/${auditId}/refresh-speed`, { method: 'POST' });
+                const psData = await psRes.json();
+                if (psData.success && psData.pagespeed) {
+                    console.log('PageSpeed data received, updating display...');
+                    // Update currentAuditData so populateSpeedMetrics works
+                    if (currentAuditData) currentAuditData.pagespeed = psData.pagespeed;
+                    // Re-populate speed section with fresh data
+                    if (typeof updateSpeedDisplay === 'function') {
+                        updateSpeedDisplay(psData.pagespeed);
+                    } else if (typeof populateSpeedMetrics === 'function' && currentAuditData) {
+                        populateSpeedMetrics(currentAuditData);
+                    }
+                    // Wait for DOM to update
+                    await new Promise(r => setTimeout(r, 500));
+                } else {
+                    console.warn('PageSpeed fetch returned no data:', psData);
+                }
+            } catch (e) { console.warn('PageSpeed fetch skipped:', e); }
+
+            // Step 2: Capture all dashboard screenshots
+            const screenshots = await captureAllSections();
+
+            // Step 3: Collect issue counts from DOM
+            const getCount = (id) => parseInt(document.getElementById(id)?.textContent || '0', 10);
+            const issueCounts = {
+                titleTooLong: getCount('meta-count-title-long'),
+                noDesc: getCount('meta-count-no-desc'),
+                descTooLong: getCount('meta-count-desc-long'),
+                noH1: getCount('heading-count-no-h1'),
+                multiH1: getCount('heading-count-multi-h1'),
+                noH2: getCount('heading-count-no-h2'),
+                manyH2: getCount('heading-count-many-h2'),
+                noH3: getCount('heading-count-no-h3'),
+                manyH3: getCount('heading-count-many-h3'),
+                dupH1: getCount('heading-count-dup-h1'),
+                dupH2: getCount('heading-count-dup-h2'),
+                dupH3: getCount('heading-count-dup-h3')
+            };
+
+            // Step 4: Send to API
+            const response = await fetch('/api/deep-audit/generate-slides', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: auditId,
+                    screenshots: screenshots,
+                    issue_counts: issueCounts
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.presentation_url) {
+                console.log('Slides generated:', data.presentation_url);
+                // Send result back to parent (agency dashboard)
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'slides-ready',
+                        presentation_url: data.presentation_url,
+                        presentation_id: data.presentation_id
+                    }, '*');
+                }
+            } else {
+                throw new Error(data.error || 'Failed to generate slides');
+            }
+        }
+
+        // Populate dashboard with data
+        function populateDashboard(data) {
+            const keywords = data.organic_keywords || [];
+            const pages = data.pages || [];
+
+            // === TRAFFIC STATS ===
+            console.log('DEBUG: populateDashboard total_traffic:', data.total_traffic);
+            // Fix: Use total_traffic from backend if available (accurate domain total), otherwise sum visible keywords
+            let totalTraffic = data.total_traffic ? parseInt(data.total_traffic) : 0;
+            console.log('DEBUG: Initial totalTraffic:', totalTraffic);
+            let totalVolume = 0;
+            let top3 = 0;
+            let top10 = 0;
+            let needsWork = 0; // Keywords ranked > 20
+            let positionSum = 0;
+            let positionCount = 0;
+
+            keywords.forEach(k => {
+                const serp = k?.ranked_serp_element?.serp_item || {};
+                const pos = k.position || serp.rank_absolute || 100;
+                const vol = k.volume || k.keyword_data?.keyword_info?.search_volume || 0;
+                // Only sum traffic if we didn't get a total from valid backend data
+                if (!data.total_traffic) {
+                    const etv = k.traffic_etv || serp.etv || 0;
+                    totalTraffic += etv;
+                }
+
+                totalVolume += vol;
+                if (pos <= 3) top3++;
+                if (pos <= 10) top10++;
+                if (pos > 20) needsWork++;
+
+                if (pos < 100) {
+                    positionSum += pos;
+                    positionCount++;
+                }
+            });
+            console.log('DEBUG: Final totalTraffic:', totalTraffic);
+            const statTraffic = document.getElementById('stat-traffic');
+            if (statTraffic) statTraffic.textContent = Math.round(totalTraffic).toLocaleString();
+
+            const countToCheck = data.total_keywords || keywords.length;
+            const isAtLimit = data.keywords_at_limit || (keywords.length >= 1000);
+
+            // Fix: If we have a specific total from domain metrics (countToCheck > 1000), show it.
+            // Only default to '1000+' if we are capped and don't have a higher total.
+            let keywordDisplay = countToCheck > 1000 ? countToCheck.toLocaleString() : (isAtLimit ? '1000+' : countToCheck.toLocaleString());
+
+            const statKeywords = document.getElementById('stat-keywords');
+            if (statKeywords) statKeywords.textContent = keywordDisplay;
+
+            const statTop3 = document.getElementById('stat-top3');
+            if (statTop3) statTop3.textContent = top3;
+
+            const statTop10 = document.getElementById('stat-top10');
+            if (statTop10) statTop10.textContent = top10;
+
+            const statAvgPos = document.getElementById('stat-avg-position');
+            if (statAvgPos) statAvgPos.textContent = positionCount > 0 ? (positionSum / positionCount).toFixed(1) : 'N/A';
+
+            const statNeedsWork = document.getElementById('stat-needs-work');
+            if (statNeedsWork) statNeedsWork.textContent = needsWork;
+
+            // === KEYWORDS TABLE ===
+            const kwBody = document.getElementById('keywords-body');
+            if (!kwBody) return; // Exit if keywords table doesn't exist
+            kwBody.innerHTML = '';
+
+            const sortedKw = [...keywords].sort((a, b) => {
+                const posA = a.position || a.ranked_serp_element?.serp_item?.rank_absolute || 100;
+                const posB = b.position || b.ranked_serp_element?.serp_item?.rank_absolute || 100;
+                return posB - posA; // Descending
+            });
+
+            sortedKw.forEach(k => {
+                const kwData = k.keyword_data || k;
+                const kwInfo = kwData.keyword_info || {};
+                const serp = k.ranked_serp_element?.serp_item || {};
+
+                const keyword = k.keyword || kwData.keyword || 'N/A';
+                const pos = k.position || serp.rank_absolute || 'N/A';
+                const vol = k.volume || kwInfo.search_volume || 0;
+                const cpc = k.cpc || kwInfo.cpc || 0;
+                const url = k.url || serp.url || '';
+                const traffic = k.traffic_cost || serp.etv || 0;
+
+                const intentInfo = kwData.search_intent_info || {};
+                const intent = (intentInfo.main_intent || '').charAt(0).toLowerCase();
+                const intentClass = intent ? `intent-${intent}` : '';
+                const intentLabel = intent ? intent.toUpperCase() : '-';
+
+                const serpInfo = kwData.serp_info || {};
+                const serpTypes = serpInfo.serp_item_types || [];
+                let sfHtml = '';
+                if (serpTypes.includes('people_also_ask')) sfHtml += '<span class="serp-feat paa">PAA</span>';
+                if (serpTypes.includes('video')) sfHtml += '<span class="serp-feat vid">Vid</span>';
+                if (serpTypes.includes('images')) sfHtml += '<span class="serp-feat img">Img</span>';
+                if (serpTypes.includes('featured_snippet')) sfHtml += '<span class="serp-feat fs">FS</span>';
+                if (!sfHtml) sfHtml = '-';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${keyword}</td>
+                        <td><span class="intent-badge ${intentClass}">${intentLabel}</span></td>
+                        <td><div class="serp-features">${sfHtml}</div></td>
+                        <td>${vol.toLocaleString()}</td>
+                        <td>${formatCPC(cpc)}</td>
+                        <td>${Math.round(traffic)}</td>
+                        <td><span class="${getPositionClass(pos)}">${pos}</span></td>
+                        <td class="url-cell" title="${url}">${(url || 'N/A').replace(/https?:\/\//, '').substring(0, 35)}</td>
+                        `;
+                kwBody.appendChild(row);
+            });
+
+            // === TOP PAGES TABLE ===
+            const pagesBody = document.getElementById('top-pages-body');
+            pagesBody.innerHTML = '';
+
+            const pageData = {};
+            keywords.forEach(k => {
+                const serp = k.ranked_serp_element?.serp_item || {};
+                const url = k.url || serp.url;
+                if (!url) return;
+
+                if (!pageData[url]) {
+                    pageData[url] = { traffic: 0, keywords: 0, topKeyword: '', topVolume: 0, topPosition: 100 };
+                }
+
+                pageData[url].traffic += k.traffic_cost || serp.etv || 0;
+                pageData[url].keywords++;
+
+                const vol = k.volume || k.keyword_data?.keyword_info?.search_volume || 0;
+                if (vol > pageData[url].topVolume) {
+                    pageData[url].topVolume = vol;
+                    pageData[url].topKeyword = k.keyword || k.keyword_data?.keyword || '';
+                    pageData[url].topPosition = k.position || serp.rank_absolute || 100;
+                }
+            });
+
+            const sortedPages = Object.entries(pageData).sort((a, b) => a[1].traffic - b[1].traffic);
+
+            sortedPages.forEach(([url, pd]) => {
+                const row = document.createElement('tr');
+                const shortUrl = url.replace(/https?:\/\//, '').substring(0, 35);
+                row.innerHTML = `
+                        <td class="url-cell" title="${url}">${shortUrl}${url.length > 40 ? '...' : ''}</td>
+                        <td>${Math.round(pd.traffic).toLocaleString()}</td>
+                        <td>${pd.keywords}</td>
+                        <td>${pd.topKeyword.substring(0, 25)}${pd.topKeyword.length > 25 ? '...' : ''}</td>
+                        <td>${pd.topVolume.toLocaleString()}</td>
+                        <td><span class="${getPositionClass(pd.topPosition)}">${pd.topPosition}</span></td>
+                        `;
+                pagesBody.appendChild(row);
+            });
+
+            // === META ISSUES ===
+            const titleLongBody = document.getElementById('title-long-body');
+            if (titleLongBody) titleLongBody.innerHTML = '';
+            const noDescBody = document.getElementById('no-desc-body');
+            if (noDescBody) noDescBody.innerHTML = '';
+            const descLongBody = document.getElementById('desc-long-body');
+            if (descLongBody) descLongBody.innerHTML = '';
+
+            let titleTooLong = 0;
+            let noDesc = 0;
+            let descTooLong = 0;
+            const titleLongPages = [];
+            const noDescPages = [];
+            const descLongPages = [];
+
+            // DataForSEO pages have FLAT structure: p.title, p.description (not nested p.meta.title)
+            const crawledPages = pages.filter(p => {
+                // Try both nested (p.meta.title) and flat (p.title) structures
+                const meta = p.meta || {};
+                const title = meta.title || p.title || '';
+                if (!title || title === 'Pending Audit' || title.length < 5) return false;
+                return true;
+            });
+
+            crawledPages.forEach(p => {
+                // Support both nested (p.meta) and flat (p.title, p.description) structures
+                const meta = p.meta || {};
+                const title = meta.title || p.title || '';
+                const desc = meta.description || p.description || '';
+                const titleLen = title.length;
+                const descLen = desc.length;
+
+                if (titleLen > 60) {
+                    titleTooLong++;
+                    titleLongPages.push({ url: p.url, title, titleLen });
+                }
+                if (descLen === 0) {
+                    noDesc++;
+                    noDescPages.push({ url: p.url, desc: '(empty)', descLen: 0 });
+                }
+                if (descLen > 160) {
+                    descTooLong++;
+                    descLongPages.push({ url: p.url, desc, descLen });
+                }
+            });
+
+            document.getElementById('meta-count-title-long').textContent = titleTooLong;
+            document.getElementById('meta-count-no-desc').textContent = noDesc;
+            document.getElementById('meta-count-desc-long').textContent = descTooLong;
+
+            const tabTitleLong = document.getElementById('meta-tab-title-long');
+            const tabNoDesc = document.getElementById('meta-tab-no-desc');
+            const tabDescLong = document.getElementById('meta-tab-desc-long');
+
+            if (titleTooLong > 0) tabTitleLong.style.display = 'block';
+            if (noDesc > 0) tabNoDesc.style.display = 'block';
+            if (descTooLong > 0) tabDescLong.style.display = 'block';
+
+            if (titleTooLong > 0) {
+                titleLongPages.slice(0, 30).forEach(p => {
+                    const row = document.createElement('tr');
+                    const displayUrl = p.url.replace(/https?:\/\//, '');
+                    row.innerHTML = `
+                        <td class="url-cell" title="${p.url}">${displayUrl}</td>
+                            <td title="${p.title}">${p.title.substring(0, 50)}${p.title.length > 50 ? '...' : ''}</td>
+                            <td><span class="char-count error-cell">${p.titleLen}</span></td>
+                            `;
+                    titleLongBody.appendChild(row);
+                });
+            }
+
+            if (noDesc > 0) {
+                noDescPages.slice(0, 30).forEach(p => {
+                    const row = document.createElement('tr');
+                    const displayUrl = p.url.replace(/https?:\/\//, '');
+                    row.innerHTML = `
+                        <td class="url-cell" title="${p.url}">${displayUrl}</td>
+                            <td style="color: #999; font-style: italic;">${p.desc}</td>
+                            <td><span class="char-count issue-cell">${p.descLen}</span></td>
+                            `;
+                    noDescBody.appendChild(row);
+                });
+            }
+
+            if (descTooLong > 0) {
+                descLongPages.slice(0, 30).forEach(p => {
+                    const row = document.createElement('tr');
+                    const displayUrl = p.url.replace(/https?:\/\//, '');
+                    row.innerHTML = `
+                        <td class="url-cell" title="${p.url}">${displayUrl}</td>
+                            <td title="${p.desc}">${p.desc.substring(0, 60)}${p.desc.length > 60 ? '...' : ''}</td>
+                            <td><span class="char-count warning-cell">${p.descLen}</span></td>
+                            `;
+                    descLongBody.appendChild(row);
+                });
+            }
+
+            // Auto-select first visible tab if needed
+            let firstVisibleTab = null;
+            if (titleTooLong > 0) firstVisibleTab = 'title-long';
+            else if (noDesc > 0) firstVisibleTab = 'no-desc';
+            else if (descTooLong > 0) firstVisibleTab = 'desc-long';
+
+            if (firstVisibleTab) {
+                switchMetaTab(firstVisibleTab);
+            }
+
+            // === HEADING ISSUES ===
+            const headingBody = document.getElementById('heading-issues-body');
+            if (headingBody) headingBody.innerHTML = '';
+
+            let noH1 = 0, multiH1 = 0, noH2 = 0, manyH2 = 0, noH3 = 0, manyH3 = 0;
+            let dupH1 = 0, dupH2 = 0, dupH3 = 0;
+            const headingIssuePages = [];
+            const h1Map = {}, h2Map = {}, h3Map = {}; // For duplicate tracking
+
+            crawledPages.forEach(p => {
+                const meta = p.meta || {};
+                const h1List = meta.h1 || p.h1 || [];
+                const h2List = meta.h2 || p.h2 || [];
+                const h3List = meta.h3 || p.h3 || [];
+                const h1Count = Array.isArray(h1List) ? h1List.length : 0;
+                const h2Count = meta.h2_count || p.h2_count || (Array.isArray(h2List) ? h2List.length : 0);
+                const h3Count = meta.h3_count || p.h3_count || (Array.isArray(h3List) ? h3List.length : 0);
+
+                let hasIssue = false;
+                if (h1Count === 0) { noH1++; hasIssue = true; }
+                if (h1Count > 1) { multiH1++; hasIssue = true; }
+                if (h2Count === 0) { noH2++; hasIssue = true; }
+                if (h2Count > 10) { manyH2++; hasIssue = true; }
+                if (h3Count === 0) { noH3++; hasIssue = true; }
+                if (h3Count > 15) { manyH3++; hasIssue = true; }
+
+                // Track duplicates
+                if (Array.isArray(h1List)) {
+                    h1List.forEach(h => {
+                        const key = (h || '').toLowerCase().trim();
+                        if (key && key.length > 3) {
+                            if (!h1Map[key]) h1Map[key] = [];
+                            h1Map[key].push(p.url);
+                        }
+                    });
+                }
+                if (Array.isArray(h2List)) {
+                    h2List.forEach(h => {
+                        const key = (h || '').toLowerCase().trim();
+                        if (key && key.length > 3) {
+                            if (!h2Map[key]) h2Map[key] = [];
+                            h2Map[key].push(p.url);
+                        }
+                    });
+                }
+                if (Array.isArray(h3List)) {
+                    h3List.forEach(h => {
+                        const key = (h || '').toLowerCase().trim();
+                        if (key && key.length > 3) {
+                            if (!h3Map[key]) h3Map[key] = [];
+                            h3Map[key].push(p.url);
+                        }
+                    });
+                }
+
+                if (hasIssue) {
+                    headingIssuePages.push({
+                        url: p.url,
+                        h1Count,
+                        h2Count,
+                        h3Count,
+                        h1Text: Array.isArray(h1List) ? h1List.join(' | ') : (h1List || '(no H1)')
+                    });
+                }
+            });
+
+            // Count duplicates
+            dupH1 = Object.values(h1Map).filter(urls => urls.length > 1).length;
+            dupH2 = Object.values(h2Map).filter(urls => urls.length > 1).length;
+            dupH3 = Object.values(h3Map).filter(urls => urls.length > 1).length;
+
+            // Update counts
+            const setCount = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            setCount('heading-count-no-h1', noH1);
+            setCount('heading-count-multi-h1', multiH1);
+            setCount('heading-count-no-h2', noH2);
+            setCount('heading-count-many-h2', manyH2);
+            setCount('heading-count-no-h3', noH3);
+            setCount('heading-count-many-h3', manyH3);
+            setCount('heading-count-dup-h1', dupH1);
+            setCount('heading-count-dup-h2', dupH2);
+            setCount('heading-count-dup-h3', dupH3);
+
+            // Show tabs if counts > 0
+            const showTab = (id, count) => { const el = document.getElementById(id); if (el && count > 0) el.style.display = 'block'; };
+            showTab('heading-tab-no-h1', noH1);
+            showTab('heading-tab-multi-h1', multiH1);
+            showTab('heading-tab-no-h2', noH2);
+            showTab('heading-tab-many-h2', manyH2);
+            showTab('heading-tab-no-h3', noH3);
+            showTab('heading-tab-many-h3', manyH3);
+            showTab('heading-tab-dup-h1', dupH1);
+            showTab('heading-tab-dup-h2', dupH2);
+            showTab('heading-tab-dup-h3', dupH3);
+
+            // Populate Missing H1 table
+            headingIssuePages.filter(p => p.h1Count === 0).slice(0, 50).forEach(p => {
+                const row = document.createElement('tr');
+                const displayUrl = p.url.replace(/https?:\/\//, '');
+                row.innerHTML = `
+                    <td class="url-cell" title="${p.url}">${displayUrl}</td>
+                    <td class="issue-cell">${p.h1Count}</td>
+                    <td>${p.h2Count}</td>
+                `;
+                if (headingBody) headingBody.appendChild(row);
+            });
+
+            // Additional Heading Tables
+            const multiH1Body = document.getElementById('multi-h1-body');
+            if (multiH1Body) {
+                multiH1Body.innerHTML = '';
+                headingIssuePages.filter(p => p.h1Count > 1).slice(0, 30).forEach(p => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="url-cell" title="${p.url}">${p.url.replace(/https?:\/\//, '')}</td>
+                        <td class="issue-cell">${p.h1Count}</td>
+                        <td title="${p.h1Text}">${p.h1Text.substring(0, 40)}...</td>
+                    `;
+                    multiH1Body.appendChild(row);
+                });
+            }
+
+            const noH2Body = document.getElementById('no-h2-body');
+            if (noH2Body) {
+                noH2Body.innerHTML = '';
+                headingIssuePages.filter(p => p.h2Count === 0).slice(0, 30).forEach(p => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="url-cell" title="${p.url}">${p.url.replace(/https?:\/\//, '')}</td>
+                        <td class="issue-cell">${p.h2Count}</td>
+                    `;
+                    noH2Body.appendChild(row);
+                });
+            }
+
+            // Too Many H2 table
+            const manyH2Body = document.getElementById('many-h2-body');
+            if (manyH2Body) {
+                manyH2Body.innerHTML = '';
+                headingIssuePages.filter(p => p.h2Count > 10).slice(0, 50).forEach(p => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="url-cell" title="${p.url}">${p.url.replace(/https?:\/\//, '')}</td>
+                        <td class="issue-cell">${p.h2Count}</td>
+                    `;
+                    manyH2Body.appendChild(row);
+                });
+            }
+
+            // Missing H3 table
+            const noH3Body = document.getElementById('no-h3-body');
+            if (noH3Body) {
+                noH3Body.innerHTML = '';
+                headingIssuePages.filter(p => p.h3Count === 0).slice(0, 50).forEach(p => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="url-cell" title="${p.url}">${p.url.replace(/https?:\/\//, '')}</td>
+                        <td class="issue-cell">${p.h3Count}</td>
+                    `;
+                    noH3Body.appendChild(row);
+                });
+            }
+
+            // Too Many H3 table
+            const manyH3Body = document.getElementById('many-h3-body');
+            if (manyH3Body) {
+                manyH3Body.innerHTML = '';
+                headingIssuePages.filter(p => p.h3Count > 15).slice(0, 50).forEach(p => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="url-cell" title="${p.url}">${p.url.replace(/https?:\/\//, '')}</td>
+                        <td class="issue-cell">${p.h3Count}</td>
+                    `;
+                    manyH3Body.appendChild(row);
+                });
+            }
+
+            // Duplicate H1 table
+            const dupH1Body = document.getElementById('duplicate-h1-body');
+            if (dupH1Body) {
+                dupH1Body.innerHTML = '';
+                Object.entries(h1Map).filter(([k, urls]) => urls.length > 1).slice(0, 50).forEach(([heading, urls]) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td title="${heading}">${heading.substring(0, 50)}${heading.length > 50 ? '...' : ''}</td>
+                        <td class="issue-cell">${urls.length}</td>
+                        <td class="url-cell" title="${urls.join(', ')}">${urls[0].replace(/https?:\/\//, '').substring(0, 30)}...</td>
+                    `;
+                    dupH1Body.appendChild(row);
+                });
+            }
+
+            // Duplicate H2 table
+            const dupH2Body = document.getElementById('duplicate-h2-body');
+            if (dupH2Body) {
+                dupH2Body.innerHTML = '';
+                Object.entries(h2Map).filter(([k, urls]) => urls.length > 1).slice(0, 50).forEach(([heading, urls]) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td title="${heading}">${heading.substring(0, 50)}${heading.length > 50 ? '...' : ''}</td>
+                        <td class="issue-cell">${urls.length}</td>
+                        <td class="url-cell" title="${urls.join(', ')}">${urls[0].replace(/https?:\/\//, '').substring(0, 30)}...</td>
+                    `;
+                    dupH2Body.appendChild(row);
+                });
+            }
+
+            // Duplicate H3 table
+            const dupH3Body = document.getElementById('duplicate-h3-body');
+            if (dupH3Body) {
+                dupH3Body.innerHTML = '';
+                Object.entries(h3Map).filter(([k, urls]) => urls.length > 1).slice(0, 50).forEach(([heading, urls]) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td title="${heading}">${heading.substring(0, 50)}${heading.length > 50 ? '...' : ''}</td>
+                        <td class="issue-cell">${urls.length}</td>
+                        <td class="url-cell" title="${urls.join(', ')}">${urls[0].replace(/https?:\/\//, '').substring(0, 30)}...</td>
+                    `;
+                    dupH3Body.appendChild(row);
+                });
+            }
+
+            // Auto-select first visible heading tab
+            if (noH1 > 0) switchHeadingTab('no-h1');
+            else if (multiH1 > 0) switchHeadingTab('multi-h1');
+            else if (noH2 > 0) switchHeadingTab('no-h2');
+            else if (manyH2 > 0) switchHeadingTab('many-h2');
+            else if (noH3 > 0) switchHeadingTab('no-h3');
+
+            // === BACKLINKS TABLE ===
+            const backlinksBody = document.getElementById('backlinks-body');
+            const referringDomains = data.referring_domains || [];
+            const backlinksSummary = data.backlinks_summary || data.backlinks || {};
+
+            // Save to global for filtering
+            window.currentBacklinks = referringDomains;
+            window.currentBacklinksSummary = backlinksSummary; // Save summary for empty states
+
+            // Calculate Counts
+            const domains = referringDomains;
+            const allCount = domains.length;
+            const highCount = domains.filter(d => (d.backlinks_spam_score || 0) > 60).length;
+            const mediumCount = domains.filter(d => (d.backlinks_spam_score || 0) >= 30 && (d.backlinks_spam_score || 0) <= 60).length;
+            const lowCount = domains.filter(d => (d.backlinks_spam_score || 0) < 30).length;
+
+            const updateBadge = (id, count) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = count;
+            };
+            updateBadge('backlink-count-all', allCount);
+            updateBadge('backlink-count-high', highCount);
+            updateBadge('backlink-count-medium', mediumCount);
+            updateBadge('backlink-count-low', lowCount);
+
+            if (backlinksBody) {
+                // Use filters to render content
+                if (window.filterBacklinks && domains.length > 0) {
+                    const allTab = document.querySelector('#view-backlinks .side-nav-item');
+                    window.filterBacklinks('all', allTab);
+                } else if (backlinksSummary.referring_domains || backlinksSummary.total_backlinks) {
+                    // Summary fallback (if no detailed domains)
+                    backlinksBody.innerHTML = '';
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td colspan="4" style="text-align: center; padding: 20px;">
+                            <strong>Backlinks Summary:</strong><br>
+                            Total Backlinks: ${(backlinksSummary.total_backlinks || 0).toLocaleString()}<br>
+                            Referring Domains: ${(backlinksSummary.referring_domains || 0).toLocaleString()}<br>
+                            Domain Rank: ${backlinksSummary.rank || 'N/A'}
+                        </td>
+                    `;
+                    backlinksBody.appendChild(row);
+                } else {
+                    backlinksBody.innerHTML = `
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: #666; padding: 40px;">
+                                No backlinks data available. Run a new audit to fetch backlink information.
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
+        }
+
+        // Populate Speed Metrics
+        function populateSpeedMetrics(data) {
+            const ps = data.pagespeed || {};
+            // Handle nested structure: ps.mobile or ps.desktop
+            const mobileData = ps.mobile || ps;
+            const desktopData = ps.desktop || {};
+
+            // Use mobile data by default, fall back to desktop or flat structure
+            const activeData = mobileData.scores ? mobileData : (desktopData.scores ? desktopData : ps);
+            const scores = activeData.scores || {};
+            const metrics = activeData.metrics || {};
+            const loadingExp = activeData.loadingExperience || {};
+
+            // Reset UI
+            const overallScore = document.getElementById('overall-score');
+            if (overallScore) overallScore.textContent = '--';
+            ['fcp', 'lcp', 'cls', 'tbt', 'si'].forEach(k => {
+                const valParams = document.getElementById(k + '-value');
+                if (valParams) valParams.textContent = '--';
+            });
+
+            if (!scores.performance && scores.performance !== 0) {
+                const domain = data.domain || '';
+                if (domain) {
+                    const speedDomain = document.getElementById('speed-domain');
+                    if (speedDomain) speedDomain.textContent = domain;
+                }
+                return;
+            }
+
+            // Overall Score - API returns integers directly
+            const scoreVal = scores.performance || 0;
+            const perfEl = document.getElementById('perf-score');
+            if (perfEl) {
+                perfEl.textContent = scoreVal;
+                perfEl.className = 'score-ring ' + getScoreClass(scoreVal / 100);
+            }
+
+            // Helper for score class (expects 0-1 scale)
+            function getScoreClass(score) {
+                if (score >= 0.9) return 'good';
+                if (score >= 0.5) return 'average';
+                return 'poor';
+            }
+
+            // Populate other scores - API returns integers directly
+            const accEl = document.getElementById('access-score');
+            if (accEl) {
+                accEl.textContent = scores.accessibility || 0;
+                accEl.className = 'score-ring ' + getScoreClass((scores.accessibility || 0) / 100);
+            }
+
+            const bpEl = document.getElementById('bp-score');
+            if (bpEl) {
+                bpEl.textContent = scores.best_practices || 0;
+                bpEl.className = 'score-ring ' + getScoreClass((scores.best_practices || 0) / 100);
+            }
+
+            const seoEl = document.getElementById('seo-score');
+            if (seoEl) {
+                seoEl.textContent = scores.seo || 0;
+                seoEl.className = 'score-ring ' + getScoreClass((scores.seo || 0) / 100);
+            }
+
+            // Domain
+            const domainEl = document.getElementById('speed-domain');
+            const url = data.url || activeData.url || '';
+            const strategy = activeData.strategy || 'mobile';
+            if (url && domainEl) {
+                const domain = url.replace(/https?:\/\//, '').replace(/\/$/, '');
+                const label = strategy === 'mobile' ? 'Mobile' : 'Desktop';
+                domainEl.textContent = `${label} Page Speed Analysis for ${domain}`;
+            }
+
+            // Helper for metric color
+            function getMetricIndicator(score) {
+                if (score >= 0.9) return { color: '#0cce6b', emoji: '🟢' };
+                if (score >= 0.5) return { color: '#ffa400', emoji: '🟠' };
+                return { color: '#ff4e42', emoji: '🔴' };
+            }
+
+            if (metrics.fcp) {
+                const el = document.getElementById('fcp-value');
+                if (el) {
+                    el.textContent = metrics.fcp;
+                    const ind = getMetricIndicator(metrics.fcp_score || 0);
+                    el.style.color = ind.color;
+                    const icon = document.getElementById('fcp-indicator');
+                    if (icon) icon.textContent = ind.emoji;
+                }
+            }
+            if (metrics.lcp) {
+                const el = document.getElementById('lcp-value');
+                if (el) {
+                    el.textContent = metrics.lcp;
+                    const ind = getMetricIndicator(metrics.lcp_score || 0);
+                    el.style.color = ind.color;
+                    const icon = document.getElementById('lcp-indicator');
+                    if (icon) icon.textContent = ind.emoji;
+                }
+            }
+            if (metrics.cls) {
+                const el = document.getElementById('cls-value');
+                if (el) {
+                    el.textContent = metrics.cls;
+                    const ind = getMetricIndicator(metrics.cls_score || 0);
+                    el.style.color = ind.color;
+                    const icon = document.getElementById('cls-indicator');
+                    if (icon) icon.textContent = ind.emoji;
+                }
+            }
+            if (metrics.tbt) {
+                const el = document.getElementById('tbt-value');
+                if (el) {
+                    el.textContent = metrics.tbt;
+                    const ind = getMetricIndicator(metrics.tbt_score || 0);
+                    el.style.color = ind.color;
+                    const icon = document.getElementById('tbt-indicator');
+                    if (icon) icon.textContent = ind.emoji;
+                }
+            }
+            if (metrics.speed_index) {
+                const el = document.getElementById('si-value');
+                if (el) {
+                    el.textContent = metrics.speed_index;
+                    const ind = getMetricIndicator(metrics.speed_index_score || 0);
+                    el.style.color = ind.color;
+                    const icon = document.getElementById('si-indicator');
+                    if (icon) icon.textContent = ind.emoji;
+                }
+            }
+        }
+
+        // Toggle between Mobile and Desktop PageSpeed data
+        function showSpeedData(strategy) {
+            const ps = currentAuditData?.pagespeed || {};
+            const data = ps[strategy] || {};
+
+            // Update toggle button styles
+            const mobileBtn = document.getElementById('toggle-mobile');
+            const desktopBtn = document.getElementById('toggle-desktop');
+            if (strategy === 'mobile') {
+                mobileBtn.style.background = '#1a73e8';
+                mobileBtn.style.color = 'white';
+                desktopBtn.style.background = 'transparent';
+                desktopBtn.style.color = '#666';
+            } else {
+                desktopBtn.style.background = '#1a73e8';
+                desktopBtn.style.color = 'white';
+                mobileBtn.style.background = 'transparent';
+                mobileBtn.style.color = '#666';
+            }
+
+            // Populate with selected strategy data
+            if (data.scores) {
+                populateSpeedMetricsWithData(data);
+            } else {
+                console.log('No data for strategy:', strategy);
+            }
+        }
+
+        // Helper to populate speed metrics from a specific strategy's data
+        function populateSpeedMetricsWithData(data) {
+            const scores = data.scores || {};
+            const metrics = data.metrics || {};
+
+            // Scores
+            const perfEl = document.getElementById('perf-score');
+            if (perfEl) {
+                perfEl.textContent = scores.performance || 0;
+                perfEl.className = 'score-ring ' + (scores.performance >= 90 ? 'good' : scores.performance >= 50 ? 'average' : 'poor');
+            }
+            const accEl = document.getElementById('access-score');
+            if (accEl) {
+                accEl.textContent = scores.accessibility || 0;
+                accEl.className = 'score-ring ' + (scores.accessibility >= 90 ? 'good' : scores.accessibility >= 50 ? 'average' : 'poor');
+            }
+            const bpEl = document.getElementById('bp-score');
+            if (bpEl) {
+                bpEl.textContent = scores.best_practices || 0;
+                bpEl.className = 'score-ring ' + (scores.best_practices >= 90 ? 'good' : scores.best_practices >= 50 ? 'average' : 'poor');
+            }
+            const seoEl = document.getElementById('seo-score');
+            if (seoEl) {
+                seoEl.textContent = scores.seo || 0;
+                seoEl.className = 'score-ring ' + (scores.seo >= 90 ? 'good' : scores.seo >= 50 ? 'average' : 'poor');
+            }
+
+            // Metrics
+            const metricIds = { fcp: 'fcp-value', lcp: 'lcp-value', cls: 'cls-value', tbt: 'tbt-value', speed_index: 'si-value' };
+            Object.entries(metricIds).forEach(([key, id]) => {
+                const el = document.getElementById(id);
+                if (el && metrics[key]) {
+                    el.textContent = metrics[key];
+                    const score = metrics[key + '_score'] || 0;
+                    el.style.color = score >= 0.9 ? '#0cce6b' : score >= 0.5 ? '#ffa400' : '#ff4e42';
+                }
+            });
+
+            // Update domain label
+            const domainEl = document.getElementById('speed-domain');
+            if (domainEl && data.url) {
+                const strategy = data.strategy || 'mobile';
+                const label = strategy === 'mobile' ? 'Mobile' : 'Desktop';
+                domainEl.textContent = `${label} Page Speed Analysis for ${data.url.replace(/https?:\/\//, '').replace(/\/$/, '')}`;
+            }
+        }
+
+        // Refresh backlinks data without running full audit
+        async function refreshBacklinks() {
+            const btn = document.getElementById('refresh-backlinks-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Loading...';
+            btn.disabled = true;
+
+            // Get project ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentProjectId = urlParams.get('audit_id') || urlParams.get('project_id');
+
+            if (!currentProjectId) {
+                alert('No project ID found');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/refresh-backlinks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: currentProjectId })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update global data for filtering
+                    const domains = data.referring_domains || [];
+                    window.currentBacklinks = domains;
+                    window.currentBacklinksSummary = data.backlinks_summary || {};
+
+                    // Calculate Counts
+                    const allCount = domains.length;
+                    const highCount = domains.filter(d => (d.backlinks_spam_score || 0) > 60).length;
+                    const mediumCount = domains.filter(d => (d.backlinks_spam_score || 0) >= 30 && (d.backlinks_spam_score || 0) <= 60).length;
+                    const lowCount = domains.filter(d => (d.backlinks_spam_score || 0) < 30).length;
+
+                    // Update Sidebar Badges
+                    const updateBadge = (id, count) => {
+                        const el = document.getElementById(id);
+                        if (el) el.textContent = count;
+                    };
+                    updateBadge('backlink-count-all', allCount);
+                    updateBadge('backlink-count-high', highCount);
+                    updateBadge('backlink-count-medium', mediumCount);
+                    updateBadge('backlink-count-low', lowCount);
+
+                    // Refresh view using filter function
+                    if (window.filterBacklinks) {
+                        // Find the 'All' tab and activate it
+                        const allTab = document.querySelector('#view-backlinks .side-nav-item'); // First item is All
+                        window.filterBacklinks('all', allTab);
+                    } else {
+                        window.location.reload();
+                        return;
+                    }
+
+                    btn.innerHTML = '✅ Updated!';
+                    setTimeout(() => { btn.innerHTML = originalText; btn.disabled = false; }, 2000);
+                } else {
+                    throw new Error(data.error || 'Failed to refresh backlinks');
+                }
+            } catch (err) {
+                console.error('Error refreshing backlinks:', err);
+                btn.innerHTML = '❌ Failed';
+                setTimeout(() => { btn.innerHTML = originalText; btn.disabled = false; }, 2000);
+            }
+        }
+
+        // Global Filter Function
+        window.filterBacklinks = function (type, btn) {
+            // Update active sidebar style
+            const items = document.querySelectorAll('#view-backlinks .side-nav-item');
+            items.forEach(b => {
+                b.classList.remove('active');
+                // Reset styling to default (inactive)
+                b.style.color = '#8b95a5';
+                b.style.borderLeft = '3px solid transparent';
+            });
+
+            if (btn) {
+                btn.classList.add('active');
+                // Apply active styling
+                btn.style.color = 'white';
+                btn.style.borderLeft = '3px solid #1a73e8';
+            }
+
+            const backlinksBody = document.getElementById('backlinks-body');
+            if (!backlinksBody || !window.currentBacklinks) return;
+
+            backlinksBody.innerHTML = '';
+
+            // Filter logic
+            let filtered = window.currentBacklinks;
+            if (type === 'high') {
+                filtered = filtered.filter(d => (d.backlinks_spam_score || 0) > 60);
+            } else if (type === 'medium') {
+                filtered = filtered.filter(d => (d.backlinks_spam_score || 0) >= 30 && (d.backlinks_spam_score || 0) <= 60);
+            } else if (type === 'low') {
+                filtered = filtered.filter(d => (d.backlinks_spam_score || 0) < 30);
+            }
+
+            if (filtered.length > 0) {
+                filtered.forEach(domain => {
+                    const row = document.createElement('tr');
+                    const domainName = domain.domain || domain.target || 'Unknown';
+                    const rank = domain.rank || domain.domain_rank || 0;
+                    const spam = domain.backlinks_spam_score || 0;
+                    const linksCount = domain.backlinks || domain.backlinks_count || 1;
+
+                    // DR Calculation: sin(rank/636.62)*100
+                    const dr = Math.round(Math.sin(rank / 636.62) * 100);
+
+                    row.innerHTML = `
+                    <td class="url-cell" title="${domainName}">${domainName}</td>
+                    <td>${dr}</td>
+                    <td>${spam}</td>
+                    <td>${linksCount}</td>
+                `;
+                    backlinksBody.appendChild(row);
+                });
+            } else {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="4" style="text-align:center; padding: 20px;">No links found for this filter.</td>`;
+                backlinksBody.appendChild(row);
+            }
+        };
+
+        function toggleNewAuditModal() {
+            const modal = document.getElementById('new-audit-modal');
+            modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+        }
+
+        let auditInProgress = false; // Prevent double-click
+
+        async function startNewAudit() {
+            // Prevent double-click / duplicate submission
+            if (auditInProgress) {
+                console.log('Audit already in progress, ignoring duplicate click');
+                return;
+            }
+
+            const domain = document.getElementById('new-audit-domain').value;
+            const limit = document.getElementById('new-audit-limit').value;
+
+            if (!domain) return alert("Please enter a domain");
+
+            // Lock the audit
+            auditInProgress = true;
+
+            // Disable the button visually
+            const startBtn = document.querySelector('button[onclick="startNewAudit()"]');
+            if (startBtn) {
+                startBtn.disabled = true;
+                startBtn.textContent = 'Starting...';
+            }
+
+            document.getElementById('audit-progress').style.display = 'block';
+            document.getElementById('audit-status-text').textContent = "Initializing audit...";
+            document.getElementById('audit-progress-bar').style.width = '10%';
+
+            try {
+                const res = await fetch('/api/audits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaign_id: 'deep-audit', domain: domain, max_pages: parseInt(limit), type: 'technical' })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    const auditId = data.audit_id;
+                    const taskId = data.onpage_task_id;
+
+                    document.getElementById('audit-progress-bar').style.width = '30%';
+                    document.getElementById('audit-status-text').textContent = "Crawling in progress (this takes ~1-2 mins)...";
+
+                    pollStatus(auditId, taskId);
+                } else {
+                    alert("Error starting audit: " + data.error);
+                    document.getElementById('audit-progress').style.display = 'none';
+                    auditInProgress = false;
+                    if (startBtn) {
+                        startBtn.disabled = false;
+                        startBtn.textContent = 'Start Audit';
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Request failed: " + e.message);
+                document.getElementById('audit-progress').style.display = 'none';
+                auditInProgress = false;
+                if (startBtn) {
+                    startBtn.disabled = false;
+                    startBtn.textContent = 'Start Audit';
+                }
+            }
+        }
+
+        function pollStatus(auditId, taskId) {
+            let attempts = 0;
+            const maxAttempts = 540;
+
+            const interval = setInterval(async () => {
+                attempts++;
+                if (attempts > maxAttempts) {
+                    clearInterval(interval);
+                    alert("Audit timed out. Please check back later in the history.");
+                    closeAuditModal();
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`/api/deep-audit/status/${taskId}`);
+                    const statusData = await res.json();
+
+                    if (statusData.ready) {
+                        clearInterval(interval);
+                        document.getElementById('audit-progress-bar').style.width = '80%';
+                        document.getElementById('audit-status-text').textContent = "Crawl complete! Saving results...";
+                        finalizeAudit(auditId, taskId);
+                    } else {
+                        const currentWidth = 30 + Math.min(45, attempts);
+                        document.getElementById('audit-progress-bar').style.width = currentWidth + '%';
+                    }
+                } catch (e) {
+                    console.error("Polling error", e);
+                }
+            }, 5000);
+        }
+
+        async function finalizeAudit(auditId, taskId) {
+            try {
+                const res = await fetch('/api/save-audit-results', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ audit_id: auditId, task_id: taskId })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('audit-progress-bar').style.width = '100%';
+                    document.getElementById('audit-status-text').textContent = "Done! Loading dashboard...";
+                    setTimeout(() => {
+                        window.location.href = `/audit-dashboard.html?audit_id=${auditId}`;
+                    }, 1000);
+                } else {
+                    alert("Error saving results: " + data.error);
+                    closeAuditModal();
+                }
+            } catch (e) {
+                alert("Error finalizing audit: " + e.message);
+                closeAuditModal();
+            }
+        }
+
+        function closeAuditModal() {
+            const modal = document.getElementById('new-audit-modal');
+            if (modal) modal.style.display = 'none';
+            const progressBar = document.getElementById('audit-progress-bar');
+            if (progressBar) progressBar.style.width = '0%';
+            const statusText = document.getElementById('audit-status-text');
+            if (statusText) statusText.textContent = '';
+
+            // Reset the audit-in-progress flag and button
+            auditInProgress = false;
+            const startBtn = document.querySelector('button[onclick="startNewAudit()"]');
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.textContent = 'Start Audit';
+            }
+        }
+
+        async function refreshPageSpeed() {
+            const params = new URLSearchParams(window.location.search);
+            const auditId = params.get('audit_id');
+            if (!auditId) return showError("No audit selected");
+
+            const btn = document.getElementById('refresh-speed-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Refreshing...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/audit/${auditId}/refresh-speed`, { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success && data.pagespeed) {
+                    // Update the speed table in-place with the fresh data
+                    updateSpeedDisplay(data.pagespeed);
+                    btn.innerHTML = '✅ Refreshed';
+                    setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                } else {
+                    showError("Error refreshing: " + (data.error || 'Unknown error'));
+                    btn.innerHTML = originalText;
+                }
+            } catch (e) {
+                showError("Request failed: " + e.message);
+                btn.innerHTML = originalText;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Update speed display in-place without page reload
+        function updateSpeedDisplay(pagespeed) {
+            const mobileData = pagespeed.mobile || pagespeed;
+            const desktopData = pagespeed.desktop || pagespeed;
+
+            // Mobile scores
+            const mobileScores = mobileData.scores || {};
+            const mobilePerfEl = document.getElementById('mobile-performance');
+            const mobileA11yEl = document.getElementById('mobile-accessibility');
+            const mobileBpEl = document.getElementById('mobile-best-practices');
+            const mobileSeoEl = document.getElementById('mobile-seo');
+
+            if (mobilePerfEl) mobilePerfEl.textContent = mobileScores.performance || 0;
+            if (mobileA11yEl) mobileA11yEl.textContent = mobileScores.accessibility || 0;
+            if (mobileBpEl) mobileBpEl.textContent = mobileScores.best_practices || 0;
+            if (mobileSeoEl) mobileSeoEl.textContent = mobileScores.seo || 0;
+
+            // Desktop scores
+            const desktopScores = desktopData.scores || {};
+            const desktopPerfEl = document.getElementById('desktop-performance');
+            const desktopA11yEl = document.getElementById('desktop-accessibility');
+            const desktopBpEl = document.getElementById('desktop-best-practices');
+            const desktopSeoEl = document.getElementById('desktop-seo');
+
+            if (desktopPerfEl) desktopPerfEl.textContent = desktopScores.performance || 0;
+            if (desktopA11yEl) desktopA11yEl.textContent = desktopScores.accessibility || 0;
+            if (desktopBpEl) desktopBpEl.textContent = desktopScores.best_practices || 0;
+            if (desktopSeoEl) desktopSeoEl.textContent = desktopScores.seo || 0;
+
+            // Update Core Web Vitals metrics for active tab
+            const activeTab = document.querySelector('.speed-tab-btn.active');
+            const strategy = activeTab ? activeTab.dataset.strategy : 'mobile';
+            const metricsData = strategy === 'mobile' ? mobileData : desktopData;
+            const metrics = metricsData.metrics || {};
+
+            // Update metric displays if elements exist
+            const updateMetric = (id, value) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = value || 'N/A';
+            };
+            updateMetric('metrics-fcp', metrics.fcp || metrics.first_contentful_paint);
+            updateMetric('metrics-lcp', metrics.lcp || metrics.largest_contentful_paint);
+            updateMetric('metrics-tbt', metrics.tbt || metrics.total_blocking_time);
+            updateMetric('metrics-cls', metrics.cls || metrics.cumulative_layout_shift);
+            updateMetric('metrics-si', metrics.speed_index);
+
+            console.log('PageSpeed updated in-place:', pagespeed);
+        }
+    </script>
+
+    <!-- NEW AUDIT MODAL -->
+    <div id="new-audit-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div
+            style="background: white; padding: 30px; border-radius: 8px; width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+            <h2 style="margin-top: 0;">Start New SEO Audit</h2>
+            <p style="color: #666; margin-bottom: 20px;">Enter a domain
+                to crawl and analyze. This will consume
+                API
+                credits.</p>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: bold;">Domain</label>
+                <input type="text" id="new-audit-domain" placeholder="example.com"
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: bold;">Page
+                    Limit</label>
+                <select id="new-audit-limit"
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; background: white;">
+                    <option value="5">5 Pages (Fastest)</option>
+                    <option value="10">10 Pages</option>
+                    <option value="20">20 Pages</option>
+                    <option value="100">100 Pages</option>
+                    <option value="200" selected>200 Pages (Standard)
+                    </option>
+                    <option value="10000">Entire Website (Max 10k)
+                    </option>
+                </select>
+                <p style="font-size: 12px; color: #666; margin-top: 5px;">
+                    Higher limits take longer to crawl.
+                </p>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button onclick="toggleNewAuditModal()"
+                    style="padding: 10px 20px; border: 1px solid #ccc; background: white; border-radius: 4px; cursor: pointer;">Cancel</button>
+                <button onclick="startNewAudit()"
+                    style="padding: 10px 20px; background: #3366cc; color: white; border: none; border-radius: 4px; cursor: pointer;">Start
+                    Audit</button>
+            </div>
+
+            <div id="audit-progress"
+                style="display: none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                    <div
+                        style="width: 20px; height: 20px; border: 2px solid #3366cc; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;">
+                    </div>
+                    <span id="audit-status-text" style="font-weight: 500;">Initializing...</span>
+                </div>
+                <div style="height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; margin-top: 5px;">
+                    <div id="audit-progress-bar"
+                        style="height: 100%; width: 0%; background: #2ecc71; transition: width 0.3s;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+
+    <script>
+        // === AUDIT MANAGEMENT ===
+
+        function loadAuditFromHistory(auditId) {
+            if (auditId) {
+                window.location.href = `?audit_id=${auditId}`;
+            }
+        }
+
+        function loadProjectList() {
+            fetch('/api/audits/list')
+                .then(res => res.json())
+                .then(data => {
+                    const select = document.getElementById('project-select');
+                    select.innerHTML = '<option value="" disabled selected>Select Past Audit...</option>';
+
+                    data.audits.forEach(audit => {
+                        const date = new Date(audit.created_at).toLocaleDateString();
+                        const option = document.createElement('option');
+                        option.value = audit.id;
+                        option.textContent = `${audit.domain} (${date})`;
+                        select.appendChild(option);
+                    });
+
+                    // Select current if in URL
+                    const currentId = new URLSearchParams(window.location.search).get('audit_id');
+                    if (currentId) select.value = currentId;
+                })
+                .catch(err => console.error('Error loading audits:', err));
+        }
+
+        // Load projects on startup
+        loadProjectList();
+
+        // Initial Data Load (Legacy & New)
+        // loadProjectData() is defined earlier in the file and called by body onload or similar?
+        // Actually, let's just call it here to be safe if it's not called elsewhere.
+        // It's usually better to ensure DOM is ready.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', async () => {
+                await waitForServer();
+                loadProjectData();
+            });
+        } else {
+            (async () => {
+                await waitForServer();
+                loadProjectData();
+            })();
+        }
+    </script>
+</body>
+
+</html>

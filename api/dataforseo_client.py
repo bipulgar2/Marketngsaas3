@@ -1628,28 +1628,31 @@ def fetch_backlinks_summary(domain: str) -> Dict[str, Any]:
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-
-def capture_screenshot_via_dataforseo(url: str, browser_preset: str = "desktop_chrome") -> Optional[str]:
+def fetch_dataforseo_screenshot(url: str) -> Optional[str]:
     """
-    Capture a high-quality screenshot using DataForSEO On-Page Screenshot API.
-    This bypasses local headless browser issues by using DataForSEO's infrastructure.
+    Fetch a screenshot of a page using DataForSEO On-Page API.
     
     Args:
-        url: URL to screenshot
-        browser_preset: 'desktop_chrome', 'mobile_chrome', 'desktop_firefox', etc.
+        url: The URL to screenshot
         
     Returns:
-        URL of the screenshot (DataForSEO hosted) or None
+        Base64 encoded string of the image (plain base64, no prefix), or None
     """
     endpoint = f"{DATAFORSEO_API_URL}/on_page/page_screenshot"
     
+    # Enable JS and resources for better rendering
     payload = [{
         "url": url,
-        "full_page_screenshot": False
+        "full_page": False,
+        "enable_javascript": True,
+        "load_resources": True,
+        "enable_browser_rendering": True,
+        "browser_screen_width": 1920,
+        "browser_screen_height": 1080,
     }]
     
     try:
-        print(f"DEBUG: Requesting DataForSEO screenshot for {url}")
+        print(f"DEBUG: Requesting DataForSEO screenshot for {url}...", file=sys.stderr, flush=True)
         response = requests.post(
             endpoint,
             headers={**get_auth_header(), "Content-Type": "application/json"},
@@ -1661,23 +1664,46 @@ def capture_screenshot_via_dataforseo(url: str, browser_preset: str = "desktop_c
         
         if data.get('status_code') == 20000 and data.get('tasks'):
             result = (data['tasks'][0].get('result') or [{}])[0] or {}
-            items = result.get('items') or []
             
-            if items and len(items) > 0:
-                image_url = items[0].get('image')
-                if image_url:
-                    print(f"DEBUG: DataForSEO screenshot success: {image_url}")
-                    return image_url
+            # Check for direct image or nested in items
+            image_data = result.get('image')
             
-            print(f"DEBUG: DataForSEO returned valid response but no image found in items: {result}")
-            return None
+            if not image_data and result.get('items'):
+                items = result.get('items')
+                if items and isinstance(items, list) and len(items) > 0:
+                    image_data = items[0].get('image')
+            
+            if image_data:
+                # Handle URL response instead of Base64
+                if str(image_data).startswith('http'):
+                    print(f"DEBUG: DataForSEO returned URL ({image_data}), downloading...", file=sys.stderr, flush=True)
+                    try:
+                        img_response = requests.get(image_data, timeout=30)
+                        img_response.raise_for_status()
+                        # Convert binary content to base64 string
+                        image_data = base64.b64encode(img_response.content).decode('utf-8')
+                        print(f"DEBUG: Downloaded and encoded image ({len(image_data)} chars)", file=sys.stderr, flush=True)
+                    except Exception as img_err:
+                        print(f"ERROR: Failed to download DataForSEO image URL: {img_err}", file=sys.stderr, flush=True)
+                        return None
+                
+                print(f"DEBUG: DataForSEO screenshot success ({len(image_data)} chars)", file=sys.stderr, flush=True)
+                return image_data
+            else:
+                print(f"DEBUG: DataForSEO returned no image data. Keys: {list(result.keys())}", file=sys.stderr, flush=True)
+                if result.get('items'):
+                    print(f"DEBUG: Items found but no image? First item keys: {list(result['items'][0].keys()) if result['items'] else 'empty'}", file=sys.stderr, flush=True)
+                
         else:
-            print(f"DEBUG: DataForSEO error: {data.get('status_message')}")
-            return None
+            print(f"DEBUG: DataForSEO Error: {data.get('status_message')}", file=sys.stderr, flush=True)
             
-    except Exception as e:
-        print(f"ERROR: DataForSEO screenshot failed: {e}")
         return None
+    except Exception as e:
+        print(f"Error fetching DataForSEO screenshot: {e}", file=sys.stderr, flush=True)
+        return None
+
+# Backward compatibility alias
+capture_screenshot_via_dataforseo = fetch_dataforseo_screenshot
 
 if __name__ == '__main__':
     # Test the client (requires credentials in env)

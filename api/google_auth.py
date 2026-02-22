@@ -35,32 +35,8 @@ def get_service_account_credentials():
     2. service_account.json file in project root
     
     Returns google.oauth2.service_account.Credentials or None
-    # returns google.oauth2.service_account.Credentials, google.oauth2.credentials.Credentials, or None
     """
-    # 1. Check for OAuth Refresh Token (Highest Priority for Personal Gmail Workaround)
-    refresh_token = os.getenv('GOOGLE_REFRESH_TOKEN')
-    client_id = os.getenv('GOOGLE_CLIENT_ID')
-    client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
-
-    if refresh_token and client_id and client_secret:
-        try:
-            print("Using OAuth Refresh Token (Headless/Admin mode)")
-            creds = Credentials.from_authorized_user_info(
-                info={
-                    'refresh_token': refresh_token,
-                    'client_id': client_id,
-                    'client_secret': client_secret,
-                    'scopes': SCOPES
-                }
-            )
-            return creds
-        except Exception as e:
-            print(f"Error loading Refresh Token credentials: {e}")
-            # If env vars exist but fail, we should probably tell the user why
-            # instead of falling back silently.
-            raise ValueError(f"OAuth Configured but Failed: {str(e)}")
-
-    # 2. Check environment variable for Service Account
+    # Check environment variable first
     env_sa = os.getenv('GOOGLE_SERVICE_ACCOUNT')
     if env_sa:
         try:
@@ -70,10 +46,12 @@ def get_service_account_credentials():
             return creds
         except json.JSONDecodeError as e:
             print(f"Error parsing GOOGLE_SERVICE_ACCOUNT: {e}")
+            return None
         except Exception as e:
             print(f"Error loading Service Account: {e}")
+            return None
     
-    # 3. Fall back to file
+    # Fall back to file
     file_path = os.path.join(PROJECT_ROOT, "service_account.json")
     if os.path.exists(file_path):
         try:
@@ -83,6 +61,32 @@ def get_service_account_credentials():
         except Exception as e:
             print(f"Error loading service_account.json: {e}")
             return None
+    
+    return None
+
+
+def get_token_json_credentials():
+    """
+    Get OAuth token credentials from env var.
+    Allows using personal Google account on Railway without a Service Account.
+    
+    Priority:
+    1. GOOGLE_TOKEN_JSON env var (JSON string)
+    """
+    env_token = os.getenv('GOOGLE_TOKEN_JSON')
+    if env_token:
+        try:
+            token_info = json.loads(env_token)
+            creds = Credentials.from_authorized_user_info(token_info, SCOPES)
+            print("Using OAuth Credentials from GOOGLE_TOKEN_JSON env var")
+            
+            # Refresh if expired available
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            
+            return creds
+        except Exception as e:
+            print(f"Error loading GOOGLE_TOKEN_JSON: {e}")
     
     return None
 
@@ -129,14 +133,41 @@ def get_google_credentials():
     
     Priority:
     1. Service Account (recommended, no user interaction)
-    2. OAuth token.json (local development)
-    3. OAuth flow (requires user login)
+    2. OAuth token JSON env var
+    3. GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET + GOOGLE_REFRESH_TOKEN env vars
+    4. OAuth token.json file (local development)
+    5. OAuth flow (requires user login)
     """
     # Try Service Account first (best for production)
     sa_creds = get_service_account_credentials()
     if sa_creds:
         return sa_creds
     
+    # Try Env Var OAuth Token (for personal account on production)
+    token_creds = get_token_json_credentials()
+    if token_creds:
+        return token_creds
+
+    # Try building from individual env vars (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN)
+    client_id = os.getenv('GOOGLE_CLIENT_ID')
+    client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
+    refresh_token = os.getenv('GOOGLE_REFRESH_TOKEN')
+    if client_id and client_secret and refresh_token:
+        try:
+            creds = Credentials(
+                token=None,
+                refresh_token=refresh_token,
+                client_id=client_id,
+                client_secret=client_secret,
+                token_uri="https://oauth2.googleapis.com/token",
+                scopes=SCOPES
+            )
+            creds.refresh(Request())
+            print("Using OAuth Credentials from GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN env vars")
+            return creds
+        except Exception as e:
+            print(f"Error building credentials from env vars: {e}")
+
     # Fall back to OAuth for local development
     token_file = os.path.join(PROJECT_ROOT, "token.json")
     if os.path.exists(token_file):

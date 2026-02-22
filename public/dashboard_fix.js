@@ -135,6 +135,55 @@ async function generateSlides(auditId) {
     }
 }
 
+async function exportAudit(auditId) {
+    try {
+        const btn = event.currentTarget;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Exporting...`;
+        btn.disabled = true;
+        lucide.createIcons();
+
+        const response = await fetch(`/api/audits/${auditId}/export`);
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Export failed');
+        }
+
+        // Trigger download
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+
+        // Try to get filename from header
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'audit_report.xlsx';
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+            if (filenameMatch.length === 2)
+                filename = filenameMatch[1];
+        }
+
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        lucide.createIcons();
+
+    } catch (error) {
+        console.error("Export error:", error);
+        alert("Failed to export: " + error.message);
+        // Reset button state if available in scope, heavily context dependent
+        // Reloading content is safest to reset UI state
+        // loadContent(); 
+    }
+}
+
 function renderAuditDetail() {
     const contentArea = document.getElementById('contentArea');
     const results = activeAudit.results || {};
@@ -151,6 +200,10 @@ function renderAuditDetail() {
                     <div class="h-4 w-px bg-gray-700"></div>
                     <span class="text-sm text-gray-400">Viewing Audit: ${new Date(activeAudit.created_at).toLocaleDateString()}</span>
                     
+                    <button onclick="exportAudit('${activeAudit.id}')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ml-auto border border-gray-700 transition-colors">
+                        <i data-lucide="download" class="w-4 h-4"></i> Export Excel
+                    </button>
+
                     ${activeAudit.slides_url ?
             `<a href="${activeAudit.slides_url}" target="_blank" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ml-2">
                             <i data-lucide="presentation" class="w-4 h-4"></i> View Slides
@@ -237,7 +290,3 @@ function renderAuditDetail() {
 
 // Start
 init();
-    </script >
-</body >
-
-</html >

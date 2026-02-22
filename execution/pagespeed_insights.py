@@ -35,7 +35,7 @@ def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int 
                 "category": ["performance", "accessibility", "best-practices", "seo"]
             }
             
-            response = requests.get(PAGESPEED_API, params=params, timeout=60)
+            response = requests.get(PAGESPEED_API, params=params, timeout=120)
             
             # Handle rate limiting
             if response.status_code == 429:

@@ -997,7 +997,7 @@
             if (domain) updateData.domain = domain.value;
 
             try {
-                const res = await fetch(`/ api / campaigns / ${currentClient.id} `, {
+                const res = await fetch(`/api/campaigns/${currentClient.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(updateData)
@@ -1011,14 +1011,14 @@
                     if (idx >= 0) clients[idx] = campaign;
 
                     showModal(`
-                    < div class="p-6 text-center" >
+                    <div class="p-6 text-center">
                             <div class="w-12 h-12 mx-auto mb-4 bg-emerald-500/20 rounded-full flex items-center justify-center">
                                 <i data-lucide="check" class="w-6 h-6 text-emerald-400"></i>
                             </div>
                             <h3 class="text-lg font-semibold text-white mb-2">Settings Saved</h3>
                             <p class="text-gray-400 text-sm mb-4">Client settings have been updated.</p>
                             <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                        </div >
+                        </div>
                     `);
                     lucide.createIcons();
                 } else {
@@ -1055,12 +1055,12 @@
 
         function showNewClientModal() {
             showModal(`
-                    < div class="p-4 border-b border-gray-800 flex items-center justify-between" >
+                    <div class="p-4 border-b border-gray-800 flex items-center justify-between">
                     <h3 class="text-lg font-semibold text-white">New Client</h3>
                     <button onclick="hideModal()" class="text-gray-400 hover:text-white">
                         <i data-lucide="x" class="w-5 h-5"></i>
                     </button>
-                </div >
+                </div>
                     <form onsubmit="createClient(event)" class="p-4 space-y-4">
                         <div>
                             <label class="block text-sm text-gray-400 mb-1">Domain</label>
@@ -1180,14 +1180,14 @@
 
                 if (res.ok) {
                     showModal(`
-                    < div class="p-6 text-center" >
+                    <div class="p-6 text-center">
                                 <div class="w-12 h-12 mx-auto mb-4 bg-emerald-500/20 rounded-full flex items-center justify-center">
                                     <i data-lucide="check" class="w-6 h-6 text-emerald-400"></i>
                                 </div>
                                 <h3 class="text-lg font-semibold text-white mb-2">Password Updated</h3>
                                 <p class="text-gray-400 text-sm mb-4">Your password has been changed successfully.</p>
                                 <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                            </div >
+                            </div>
                     `);
                     lucide.createIcons();
                 } else {
@@ -1254,14 +1254,14 @@
                 if (res.ok) {
                     showModal(`
 
-                    < div class="p-6 text-center" >
+                    <div class="p-6 text-center">
                             <div class="w-12 h-12 mx-auto mb-4 bg-violet-500/20 rounded-full flex items-center justify-center">
                                 <i data-lucide="loader-2" class="w-6 h-6 text-violet-400 animate-spin"></i>
                             </div>
                             <h3 class="text-lg font-semibold text-white mb-2">Audit Started</h3>
                             <p class="text-gray-400 text-sm mb-4">Running technical audit for ${currentClient.domain}...</p>
                             <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                        </div >
+                        </div>
                     `);
                     lucide.createIcons();
                 } else {
@@ -1275,9 +1275,9 @@
 
         function showInviteModal() {
             showModal(`
-                    < div class="p-4 border-b border-gray-800" >
+                    <div class="p-4 border-b border-gray-800">
                         <h3 class="text-lg font-semibold text-white">Invite Team Member</h3>
-                </div >
+                </div>
                     <div class="p-4 text-center text-gray-400">
                         <p>Team invites coming soon</p>
                     </div>
@@ -1309,7 +1309,7 @@
             const pageActions = document.getElementById('pageActions');
 
             pageActions.innerHTML = `
-                    < div class="flex items-center gap-3" >
+                    <div class="flex items-center gap-3">
                     <select id="techAuditPageLimitTop" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 block p-2">
                         <option value="10">10 pages</option>
                         <option value="20">20 pages</option>
@@ -1318,10 +1318,10 @@
                         <option value="200" selected>200 pages</option>
                         <option value="10000">Full website</option>
                     </select>
-                    <button onclick="runAudit(false, null, parseInt(document.getElementById('techAuditPageLimitTop').value))" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
+                    <button onclick="runAudit(false, null, parseInt(document.getElementById('techAuditPageLimitTop').value))" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
                         <i data-lucide="play" class="w-4 h-4"></i> Run Audit
                     </button>
-                </div >
+                </div>
                     `;
 
             // If we have an active audit, show details
@@ -1332,13 +1332,13 @@
 
             try {
                 // Fetch ONLY technical audits for this view
-                const response = await fetch(`/ api / audits ? campaign_id = ${currentClient.id}& type=technical`);
+                const response = await fetch(`/api/ audits ? campaign_id = ${currentClient.id}& type=technical`);
                 const data = await response.json();
                 const audits = data.audits || [];
 
                 if (audits.length === 0) {
                     contentArea.innerHTML = `
-                    < div class="flex flex-col items-center justify-center h-64 text-center" >
+                    <div class="flex flex-col items-center justify-center h-64 text-center">
                             <i data-lucide="search-check" class="w-12 h-12 text-gray-600 mb-4"></i>
                             <h3 class="text-lg font-semibold text-white mb-2">No audits yet</h3>
                             <p class="text-gray-400 mb-4">Run your first technical audit for ${currentClient.domain}</p>
@@ -1355,10 +1355,10 @@
                                     Run Audit
                                 </button>
                             </div>
-                        </div > `;
+                        </div> `;
                 } else {
                     contentArea.innerHTML = `
-                    < div class="grid gap-4" >
+                    <div class="grid gap-4">
                         ${audits.map(audit => {
                         const isCrawling = audit.status === 'crawling' || audit.status === 'running';
                         const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
@@ -1396,10 +1396,10 @@
                                 </div>`;
                     }).join('')
                         }
-                        </div > `;
+                        </div> `;
                 }
             } catch (error) {
-                contentArea.innerHTML = `< div class="text-red-400" > Error loading audits: ${error.message}</div > `;
+                contentArea.innerHTML = `<div class="text-red-400"> Error loading audits: ${error.message}</div> `;
             }
             lucide.createIcons();
         }
@@ -1409,7 +1409,7 @@
 
             const btn = event.currentTarget || document.querySelector('button[onclick*="runAudit"]');
             const originalText = btn.innerHTML;
-            btn.innerHTML = `< i data - lucide="loader-2" class="w-4 h-4 animate-spin" ></i > Starting...`;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Starting...`;
             btn.disabled = true;
 
             // Show loading state immediately based on view
@@ -1453,7 +1453,7 @@
 
         async function checkAuditStatus(auditId) {
             try {
-                const response = await fetch(`/ api / audits / ${auditId} `);
+                const response = await fetch(`/api/ audits / ${auditId} `);
                 const data = await response.json();
 
                 if (data.audit && data.audit.status === 'completed') {
@@ -1461,10 +1461,10 @@
                     await loadAuditContent();
                 } else {
                     // Still running, maybe show a toast
-                    const btn = document.querySelector(`button[onclick = "checkAuditStatus('${auditId}')"]`);
+                    const btn = document.querySelector(`button[onclick="checkAuditStatus('${auditId}')"]`);
                     if (btn) {
                         const original = btn.innerHTML;
-                        btn.innerHTML = `< i data - lucide="check" class="w-3 h-3 text-emerald-400" ></i > Still running...`;
+                        btn.innerHTML = `<i data-lucide="check" class="w-3 h-3 text-emerald-400"></i> Still running...`;
                         setTimeout(() => btn.innerHTML = original, 2000);
                     }
                 }
@@ -1476,10 +1476,10 @@
         async function viewAuditResults(auditId) {
             try {
                 // Show loading state
-                const btn = document.querySelector(`button[onclick = "viewAuditResults('${auditId}')"]`);
-                if (btn) btn.innerHTML = `< i data - lucide="loader-2" class="w-3 h-3 animate-spin" ></i > Loading...`;
+                const btn = document.querySelector(`button[onclick="viewAuditResults('${auditId}')"]`);
+                if (btn) btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i> Loading...`;
 
-                const response = await fetch(`/ api / audits / ${auditId} `);
+                const response = await fetch(`/api/ audits / ${auditId} `);
                 const data = await response.json();
 
                 if (data.audit) {
@@ -1501,18 +1501,18 @@
             const pageActions = document.getElementById('pageActions');
 
             pageActions.innerHTML = `
-                    < button onclick = "document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
+                    <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
                         <i data-lucide="plus" class="w-4 h-4"></i> Add Competitor
-                </button >
+                </button>
                     `;
 
             if (currentSideTab !== 'overview') {
                 contentArea.innerHTML = `
-                    < div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center" >
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
                         <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
                         <h3 class="text-lg font-semibold text-white mb-2">${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
                         <p class="text-gray-400">Deep gap analysis and content library features coming in Phase 3.</p>
-                    </div > `;
+                    </div> `;
                 lucide.createIcons();
                 return;
             }
@@ -1524,32 +1524,32 @@
             }
 
             contentArea.innerHTML = `
-                    < div class="flex items-center justify-center h-full text-gray-500" >
+                    <div class="flex items-center justify-center h-full text-gray-500">
                         <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading competitors...
-                </div >
+                </div>
                     `;
             lucide.createIcons();
 
             try {
                 // Fetch ONLY competitor audits
-                const response = await fetch(`/ api / audits ? campaign_id = ${currentClient.id}& type=competitor`);
+                const response = await fetch(`/api/ audits ? campaign_id = ${currentClient.id}& type=competitor`);
                 const data = await response.json();
                 const audits = data.audits || [];
 
                 if (audits.length === 0) {
                     contentArea.innerHTML = `
-                    < div class="flex flex-col items-center justify-center h-64 text-center" >
+                    <div class="flex flex-col items-center justify-center h-64 text-center">
                             <i data-lucide="swords" class="w-12 h-12 text-gray-600 mb-4"></i>
                             <h3 class="text-lg font-semibold text-white mb-2">No Competitor Audits</h3>
                             <p class="text-gray-400 mb-4">Add a competitor domain to run a deep technical comparison.</p>
                             <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
                                 Add Competitor
                             </button>
-                        </div >
+                        </div>
                     `;
                 } else {
                     contentArea.innerHTML = `
-                    < div class="grid gap-4" >
+                    <div class="grid gap-4">
                         ${audits.map(audit => {
                         const isCrawling = audit.status === 'crawling' || audit.status === 'running';
                         const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
@@ -1589,13 +1589,13 @@
                                 `;
                     }).join('')
                         }
-                        </div >
+                        </div>
                     `;
                 }
 
                 // Add the modal HTML to contentArea at the end so it's always ready
                 contentArea.innerHTML += `
-                    < div id = "addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" >
+                    <div id="addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
                             <h3 class="text-lg font-bold text-white mb-2">Analyze Competitor</h3>
                             <p class="text-sm text-gray-400 mb-4">Enter a competitor's domain. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
@@ -1607,11 +1607,11 @@
                                     <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
                                 </div>
                         </div>
-                    </div >
+                    </div>
                     `;
 
             } catch (error) {
-                contentArea.innerHTML = `< div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl" > Error loading competitors: ${error.message}</div > `;
+                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl"> Error loading competitors: ${error.message}</div> `;
             }
             lucide.createIcons();
         }
@@ -1622,9 +1622,9 @@
             const pageActions = document.getElementById('pageActions');
 
             pageActions.innerHTML = `
-                    < button onclick = "document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
+                    <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
                         <i data-lucide="plus" class="w-4 h-4"></i> Add Competitor
-                </button >
+                </button>
                     `;
 
             // If we have an active audit (clicked into details), show details
@@ -1634,32 +1634,32 @@
             }
 
             contentArea.innerHTML = `
-                    < div class="flex items-center justify-center h-full text-gray-500" >
+                    <div class="flex items-center justify-center h-full text-gray-500">
                         <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading competitors...
-                </div >
+                </div>
                     `;
             lucide.createIcons();
 
             try {
                 // Fetch ONLY competitor audits
-                const response = await fetch(`/ api / audits ? campaign_id = ${currentClient.id}& type=competitor`);
+                const response = await fetch(`/api/ audits ? campaign_id = ${currentClient.id}& type=competitor`);
                 const data = await response.json();
                 const audits = data.audits || [];
 
                 if (audits.length === 0) {
                     contentArea.innerHTML = `
-                    < div class="flex flex-col items-center justify-center h-64 text-center" >
+                    <div class="flex flex-col items-center justify-center h-64 text-center">
                             <i data-lucide="swords" class="w-12 h-12 text-gray-600 mb-4"></i>
                             <h3 class="text-lg font-semibold text-white mb-2">No Competitor Audits</h3>
                             <p class="text-gray-400 mb-4">Add a competitor domain to run a deep technical comparison.</p>
                             <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
                                 Add Competitor
                             </button>
-                        </div >
+                        </div>
                     `;
                 } else {
                     contentArea.innerHTML = `
-                    < div class="grid gap-4" >
+                    <div class="grid gap-4">
                         ${audits.map(audit => {
                         const isCrawling = audit.status === 'crawling' || audit.status === 'running';
                         const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
@@ -1696,13 +1696,13 @@
                                 `;
                     }).join('')
                         }
-                        </div >
+                        </div>
                     `;
                 }
 
                 // Add the modal HTML to contentArea at the end so it's always ready
                 contentArea.innerHTML += `
-                    < div id = "addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" >
+                    <div id="addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
                             <h3 class="text-lg font-bold text-white mb-2">Analyze Competitor</h3>
                             <p class="text-sm text-gray-400 mb-4">Enter a competitor's domain. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
@@ -1725,11 +1725,11 @@
                                     <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
                                 </div>
                         </div>
-                    </div >
+                    </div>
                     `;
 
             } catch (error) {
-                contentArea.innerHTML = `< div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl" > Error loading competitors: ${error.message}</div > `;
+                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl"> Error loading competitors: ${error.message}</div> `;
             }
             lucide.createIcons();
         }
@@ -1743,7 +1743,7 @@
             modal.id = 'slideGenModal';
             modal.className = 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm';
             modal.innerHTML = `
-                    < div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center" >
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
                     <div class="mb-6">
                         <div class="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                     </div>
@@ -1753,7 +1753,7 @@
                         <div id="slideGenProgress" class="bg-indigo-500 h-2 rounded-full transition-all duration-500" style="width: 10%"></div>
                     </div>
                     <p class="text-gray-500 text-xs">This may take 1-2 minutes. Do not close this window.</p>
-                </div >
+                </div>
                     `;
             document.body.appendChild(modal);
             lucide.createIcons();
@@ -1787,7 +1787,7 @@
                     updateProgress(100, 'Presentation ready!');
 
                     // Save the slides_url to the audit record
-                    fetch(`/ api / audits / ${auditId}/slides-url`, {
+                    fetch(`/api/ audits / ${auditId}/slides-url`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ slides_url: event.data.presentation_url })
@@ -1900,7 +1900,7 @@
 
             const btn = document.querySelector('button[onclick="runCompetitorAnalysis()"]');
             const originalText = btn.innerHTML;
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin" ></i> Analyzing...`;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Analyzing...`;
             btn.disabled = true;
 
             try {

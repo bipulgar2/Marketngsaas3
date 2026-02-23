@@ -776,7 +776,7 @@
             const pageActions = document.getElementById('pageActions');
 
             if (!currentClient) {
-                contentArea.innerHTML = `< div class="text-center text-gray-500 py-12" > Select a client to view settings</div > `;
+                contentArea.innerHTML = `<div class="text-center text-gray-500 py-12">Select a client to view settings</div>`;
                 return;
             }
 
@@ -784,13 +784,13 @@
             let settings = currentClient.settings || {};
 
             pageActions.innerHTML = `
-                    < button onclick = "saveClientSettings()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
+                    <button onclick="saveClientSettings()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
                         <i data-lucide="save" class="w-4 h-4"></i> Save Settings
-                </button > `;
+                    </button>`;
 
             if (currentSideTab === 'general') {
                 contentArea.innerHTML = `
-                    < div class="max-w-2xl" >
+                    <div class="max-w-2xl">
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
                             <h3 class="text-lg font-semibold text-white mb-4">General Information</h3>
                             <div class="grid grid-cols-2 gap-4">
@@ -823,13 +823,13 @@
                                 </div>
                             </div>
                         </div>
-                    </div > `;
+                    </div>`;
             } else if (currentSideTab === 'google') {
-                contentArea.innerHTML = `< div class="p-6 flex justify-center" > <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-gray-400"></i></div > `;
+                contentArea.innerHTML = `<div class="p-6 flex justify-center"><i data-lucide="loader-2" class="w-6 h-6 animate-spin text-gray-400"></i></div>`;
                 lucide.createIcons();
 
-                let gscOptions = `< option value = "" > --No Property Link--</option > `;
-                let ga4Options = `< option value = "" > --No Property Link--</option > `;
+                let gscOptions = `<option value="">--No Property Link--</option>`;
+                let ga4Options = `<option value="">--No Property Link--</option>`;
 
                 try {
                     const response = await fetch('/api/google/properties');
@@ -838,13 +838,13 @@
                     if (propData.gsc) {
                         propData.gsc.forEach(p => {
                             const selected = p.property_url_or_id === settings.gsc_property ? 'selected' : '';
-                            gscOptions += `< option value = "${p.property_url_or_id}" ${selected}> ${p.property_name}</option > `;
+                            gscOptions += `<option value="${p.property_url_or_id}" ${selected}>${p.property_name}</option>`;
                         });
                     }
                     if (propData.ga4) {
                         propData.ga4.forEach(p => {
                             const selected = p.property_url_or_id === settings.ga4_property ? 'selected' : '';
-                            ga4Options += `< option value = "${p.property_url_or_id}" ${selected}> ${p.property_name}</option > `;
+                            ga4Options += `<option value="${p.property_url_or_id}" ${selected}>${p.property_name}</option>`;
                         });
                     }
                 } catch (e) {
@@ -852,7 +852,7 @@
                 }
 
                 contentArea.innerHTML = `
-                    < div class="max-w-2xl" >
+                    <div class="max-w-2xl">
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
                             <h3 class="text-lg font-semibold text-white mb-2">Google Search Console</h3>
                             <p class="text-xs text-gray-400 mb-4">Select a synced GSC property</p>
@@ -877,10 +877,10 @@
                                 </div>
                             </div>
                         </div>
-                    </div > `;
+                    </div>`;
             } else if (currentSideTab === 'cms') {
                 contentArea.innerHTML = `
-                    < div class="max-w-2xl" >
+                    <div class="max-w-2xl">
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
                             <h3 class="text-lg font-semibold text-white mb-2">WordPress</h3>
                             <p class="text-xs text-gray-400 mb-4">REST API credentials for content publishing</p>
@@ -918,10 +918,10 @@
                                 </div>
                             </div>
                         </div>
-                    </div > `;
+                    </div>`;
             } else if (currentSideTab === 'analytics') {
                 contentArea.innerHTML = `
-                    < div class="max-w-2xl" >
+                    <div class="max-w-2xl">
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
                             <h3 class="text-lg font-semibold text-white mb-2">Microsoft Clarity</h3>
                             <p class="text-xs text-gray-400 mb-4">For heatmaps and session recordings</p>
@@ -940,7 +940,7 @@
                                     class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
                             </div>
                         </div>
-                    </div > `;
+                    </div>`;
             }
 
             lucide.createIcons();

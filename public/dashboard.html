@@ -688,12 +688,10 @@
             lucide.createIcons();
 
             try {
-                const { data: { session } } = await supabase.auth.getSession();
                 const response = await fetch('/api/google/metrics', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + session.access_token
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         gsc_property: gscProp,
@@ -834,10 +832,7 @@
                 let ga4Options = `< option value = "" > --No Property Link--</option > `;
 
                 try {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    const response = await fetch('/api/google/properties', {
-                        headers: { 'Authorization': 'Bearer ' + session.access_token }
-                    });
+                    const response = await fetch('/api/google/properties');
                     const propData = await response.json();
 
                     if (propData.gsc) {
@@ -1111,12 +1106,12 @@
 
         function showUserSettingsModal() {
             showModal(`
-                    < div class="p-4 border-b border-gray-800 flex items-center justify-between" >
+                    <div class="p-4 border-b border-gray-800 flex items-center justify-between">
                         <h3 class="text-lg font-semibold text-white">User Settings</h3>
                         <button onclick="hideModal()" class="text-gray-400 hover:text-white">
                             <i data-lucide="x" class="w-5 h-5"></i>
                         </button>
-                    </div >
+                    </div>
                     <div class="p-6">
                         <h4 class="text-sm font-medium text-gray-300 mb-4">Change Password</h4>
                         <form onsubmit="changePassword(event)" class="space-y-4">
@@ -2308,16 +2303,8 @@
                 btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Syncing...';
                 resultDiv.classList.add('hidden');
 
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) {
-                    throw new Error("No session found");
-                }
-
                 const response = await fetch('/api/google/sync-properties', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + session.access_token
-                    }
+                    method: 'POST'
                 });
 
                 const data = await response.json();

@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from flask import Blueprint, request, jsonify, redirect, url_for
+from flask import Blueprint, request, jsonify, redirect, url_for, session
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -152,18 +152,12 @@ def google_callback():
 @google_integration_bp.route('/api/google/sync-properties', methods=['POST'])
 def sync_google_properties():
     """Fetches GSC and GA4 properties and saves them to the DB."""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header:
-        return jsonify({'error': 'Unauthorized'}), 401
+    if 'user' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
         
     try:
         from api.index import supabase, supabase_admin
-        token = auth_header.replace('Bearer ', '')
-        user = supabase.auth.get_user(token)
-        if not user or not user.user:
-            return jsonify({'error': 'Unauthorized'}), 401
-            
-        user_id = user.user.id
+        user_id = session['user']['id']
         client = supabase_admin or supabase
         
         # Get the integration
@@ -261,18 +255,12 @@ def sync_google_properties():
 @google_integration_bp.route('/api/google/properties', methods=['GET'])
 def get_google_properties():
     """Returns the list of synced GSC and GA4 properties from the database."""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header:
-        return jsonify({'error': 'Unauthorized'}), 401
+    if 'user' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
         
     try:
         from api.index import supabase, supabase_admin
-        token = auth_header.replace('Bearer ', '')
-        user = supabase.auth.get_user(token)
-        if not user or not user.user:
-            return jsonify({'error': 'Unauthorized'}), 401
-            
-        user_id = user.user.id
+        user_id = session['user']['id']
         client = supabase_admin or supabase
         
         # Get the integration to find the ID
@@ -300,18 +288,12 @@ def get_google_properties():
 @google_integration_bp.route('/api/google/metrics', methods=['POST'])
 def get_google_metrics():
     """Fetches live metrics from GSC and GA4 for specific properties."""
-    auth_header = request.headers.get('Authorization')
-    if not auth_header:
-        return jsonify({'error': 'Unauthorized'}), 401
+    if 'user' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
         
     try:
         from api.index import supabase, supabase_admin
-        token = auth_header.replace('Bearer ', '')
-        user = supabase.auth.get_user(token)
-        if not user or not user.user:
-            return jsonify({'error': 'Unauthorized'}), 401
-            
-        user_id = user.user.id
+        user_id = session['user']['id']
         client = supabase_admin or supabase
         
         # Parse request body

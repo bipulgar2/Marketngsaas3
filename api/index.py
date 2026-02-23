@@ -97,6 +97,13 @@ app = Flask(
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
 CORS(app)
 
+# Register Google OAuth Integration Blueprint
+try:
+    from api.google_integration import google_integration_bp
+    app.register_blueprint(google_integration_bp)
+except Exception as e:
+    logger.error(f"Failed to register google_integration blueprint: {e}")
+
 # Supabase client
 from supabase import create_client, Client
 

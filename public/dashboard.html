@@ -643,6 +643,8 @@
                 await loadTasksContent();
             } else if (currentTopTab === 'client-settings') {
                 await loadClientSettingsContent();
+            } else if (currentTopTab === 'reports' && currentSideTab === 'analytics') {
+                await loadAnalyticsDashboard();
             } else {
                 contentArea.innerHTML = `
                     <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
@@ -656,12 +658,127 @@
             lucide.createIcons();
         }
 
+        async function loadAnalyticsDashboard() {
+            const contentArea = document.getElementById('contentArea');
+            const pageActions = document.getElementById('pageActions');
+
+            if (!currentClient || !currentClient.settings) {
+                contentArea.innerHTML = `<div class="text-center text-gray-500 py-12">No client selected or settings missing.</div>`;
+                return;
+            }
+
+            const gscProp = currentClient.settings.gsc_property;
+            const ga4Prop = currentClient.settings.ga4_property;
+
+            if (!gscProp && !ga4Prop) {
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center max-w-2xl mx-auto mt-8">
+                        <i data-lucide="alert-triangle" class="w-12 h-12 text-yellow-500 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">No Google Properties Connected</h3>
+                        <p class="text-gray-400 mb-6">Please go to Client Settings &gt; Google (GSC, GA4) to map a property to this client.</p>
+                        <button onclick="switchSideTab('google'); switchTopTab('client-settings');" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                            Go to Settings
+                        </button>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            contentArea.innerHTML = `<div class="flex items-center justify-center p-12"><i data-lucide="loader-2" class="w-8 h-8 text-violet-500 animate-spin"></i><span class="ml-3 text-gray-400">Fetching live Google data...</span></div>`;
+            lucide.createIcons();
+
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const response = await fetch('/api/google/metrics', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + session.access_token
+                    },
+                    body: JSON.stringify({
+                        gsc_property: gscProp,
+                        ga4_property: ga4Prop,
+                        start_date: '30daysAgo',
+                        end_date: 'today'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                const formatNumber = (num) => new Intl.NumberFormat('en-US').format(num || 0);
+                const gsc = data.gsc || {};
+                const ga4 = data.ga4 || {};
+
+                contentArea.innerHTML = `
+                    <div class="mb-6 flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-white">Live Analytics (Last 30 Days)</h2>
+                        <div class="flex items-center space-x-2 text-sm text-gray-400">
+                            <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-2"></span>GSC: ${gscProp ? 'Connected' : 'Not Connected'}</span>
+                            <span class="mx-2">•</span>
+                            <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>GA4: ${ga4Prop ? 'Connected' : 'Not Connected'}</span>
+                        </div>
+                    </div>
+                    
+                    <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Google Search Console</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                            <div class="text-gray-400 text-sm mb-1 flex items-center justify-between">Total Clicks <i data-lucide="mouse-pointer-click" class="w-4 h-4"></i></div>
+                            <div class="text-3xl font-bold text-white">${formatNumber(gsc.clicks)}</div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                            <div class="text-gray-400 text-sm mb-1 flex items-center justify-between">Total Impressions <i data-lucide="eye" class="w-4 h-4"></i></div>
+                            <div class="text-3xl font-bold text-white">${formatNumber(gsc.impressions)}</div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                            <div class="text-gray-400 text-sm mb-1 flex items-center justify-between">Avg. CTR <i data-lucide="percent" class="w-4 h-4"></i></div>
+                            <div class="text-3xl font-bold text-white">${(gsc.ctr * 100 || 0).toFixed(2)}%</div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                            <div class="text-gray-400 text-sm mb-1 flex items-center justify-between">Avg. Position <i data-lucide="bar-chart" class="w-4 h-4"></i></div>
+                            <div class="text-3xl font-bold text-white">${(gsc.position || 0).toFixed(1)}</div>
+                        </div>
+                    </div>
+                    
+                    <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Google Analytics 4</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                            <div class="text-gray-400 text-sm mb-1 flex items-center justify-between">Active Users <i data-lucide="users" class="w-4 h-4"></i></div>
+                            <div class="text-3xl font-bold text-white">${formatNumber(ga4.activeUsers)}</div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                            <div class="text-gray-400 text-sm mb-1 flex items-center justify-between">Sessions <i data-lucide="activity" class="w-4 h-4"></i></div>
+                            <div class="text-3xl font-bold text-white">${formatNumber(ga4.sessions)}</div>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                            <div class="text-gray-400 text-sm mb-1 flex items-center justify-between">Conversions <i data-lucide="target" class="w-4 h-4"></i></div>
+                            <div class="text-3xl font-bold text-white">${formatNumber(ga4.conversions)}</div>
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+            } catch (err) {
+                console.error(err);
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-red-900 rounded-xl p-8 text-center max-w-2xl mx-auto mt-8">
+                        <i data-lucide="x-circle" class="w-12 h-12 text-red-500 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">Failed to load analytics</h3>
+                        <p class="text-gray-400 mb-2">${err.message}</p>
+                        <p class="text-sm text-gray-500">Ensure your Google Account is connected and the selected properties are valid.</p>
+                    </div>`;
+                lucide.createIcons();
+            }
+        }
+
         async function loadClientSettingsContent() {
             const contentArea = document.getElementById('contentArea');
             const pageActions = document.getElementById('pageActions');
 
             if (!currentClient) {
-                contentArea.innerHTML = `<div class="text-center text-gray-500 py-12">Select a client to view settings</div>`;
+                contentArea.innerHTML = `< div class="text-center text-gray-500 py-12" > Select a client to view settings</div > `;
                 return;
             }
 
@@ -669,24 +786,24 @@
             let settings = currentClient.settings || {};
 
             pageActions.innerHTML = `
-                <button onclick="saveClientSettings()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
-                    <i data-lucide="save" class="w-4 h-4"></i> Save Settings
-                </button>`;
+                    < button onclick = "saveClientSettings()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
+                        <i data-lucide="save" class="w-4 h-4"></i> Save Settings
+                </button > `;
 
             if (currentSideTab === 'general') {
                 contentArea.innerHTML = `
-                    <div class="max-w-2xl">
+                    < div class="max-w-2xl" >
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
                             <h3 class="text-lg font-semibold text-white mb-4">General Information</h3>
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm text-gray-400 mb-1">Client Name</label>
-                                    <input type="text" id="setting_name" value="${currentClient.name || ''}" 
+                                    <input type="text" id="setting_name" value="${currentClient.name || ''}"
                                         class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-sm text-gray-400 mb-1">Domain</label>
-                                    <input type="text" id="setting_domain" value="${currentClient.domain || ''}" 
+                                    <input type="text" id="setting_domain" value="${currentClient.domain || ''}"
                                         class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
                                 </div>
                                 <div>
@@ -708,36 +825,67 @@
                                 </div>
                             </div>
                         </div>
-                    </div>`;
+                    </div > `;
             } else if (currentSideTab === 'google') {
+                contentArea.innerHTML = `< div class="p-6 flex justify-center" > <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-gray-400"></i></div > `;
+                lucide.createIcons();
+
+                let gscOptions = `< option value = "" > --No Property Link--</option > `;
+                let ga4Options = `< option value = "" > --No Property Link--</option > `;
+
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const response = await fetch('/api/google/properties', {
+                        headers: { 'Authorization': 'Bearer ' + session.access_token }
+                    });
+                    const propData = await response.json();
+
+                    if (propData.gsc) {
+                        propData.gsc.forEach(p => {
+                            const selected = p.property_url_or_id === settings.gsc_property ? 'selected' : '';
+                            gscOptions += `< option value = "${p.property_url_or_id}" ${selected}> ${p.property_name}</option > `;
+                        });
+                    }
+                    if (propData.ga4) {
+                        propData.ga4.forEach(p => {
+                            const selected = p.property_url_or_id === settings.ga4_property ? 'selected' : '';
+                            ga4Options += `< option value = "${p.property_url_or_id}" ${selected}> ${p.property_name}</option > `;
+                        });
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch properties', e);
+                }
+
                 contentArea.innerHTML = `
-                    <div class="max-w-2xl">
+                    < div class="max-w-2xl" >
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
                             <h3 class="text-lg font-semibold text-white mb-2">Google Search Console</h3>
-                            <p class="text-xs text-gray-400 mb-4">Property URL from GSC</p>
+                            <p class="text-xs text-gray-400 mb-4">Select a synced GSC property</p>
                             <div class="space-y-4">
                                 <div>
-                                    <label class="block text-sm text-gray-400 mb-1">GSC Property URL</label>
-                                    <input type="text" id="setting_gsc_property" value="${settings.gsc_property || ''}" placeholder="https://example.com/"
-                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                    <label class="block text-sm text-gray-400 mb-1">GSC Property</label>
+                                    <select id="setting_gsc_property" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                        ${gscOptions}
+                                    </select>
                                 </div>
                             </div>
                         </div>
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
                             <h3 class="text-lg font-semibold text-white mb-2">Google Analytics 4</h3>
-                            <p class="text-xs text-gray-400 mb-4">Your GA4 property ID</p>
+                            <p class="text-xs text-gray-400 mb-4">Select a synced GA4 property</p>
                             <div class="space-y-4">
                                 <div>
-                                    <label class="block text-sm text-gray-400 mb-1">GA4 Property ID</label>
-                                    <input type="text" id="setting_ga4_property" value="${settings.ga4_property || ''}" placeholder="123456789"
-                                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                    <label class="block text-sm text-gray-400 mb-1">GA4 Property</label>
+                                    <select id="setting_ga4_property" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                        ${ga4Options}
+                                    </select>
                                 </div>
                             </div>
                         </div>
-                    </div>`;
+                    </div > `;
             } else if (currentSideTab === 'cms') {
                 contentArea.innerHTML = `
-                    <div class="max-w-2xl">
+                    < div class="max-w-2xl" >
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
                             <h3 class="text-lg font-semibold text-white mb-2">WordPress</h3>
                             <p class="text-xs text-gray-400 mb-4">REST API credentials for content publishing</p>
@@ -775,10 +923,10 @@
                                 </div>
                             </div>
                         </div>
-                    </div>`;
+                    </div > `;
             } else if (currentSideTab === 'analytics') {
                 contentArea.innerHTML = `
-                    <div class="max-w-2xl">
+                    < div class="max-w-2xl" >
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
                             <h3 class="text-lg font-semibold text-white mb-2">Microsoft Clarity</h3>
                             <p class="text-xs text-gray-400 mb-4">For heatmaps and session recordings</p>
@@ -797,7 +945,7 @@
                                     class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
                             </div>
                         </div>
-                    </div>`;
+                    </div > `;
             }
 
             lucide.createIcons();
@@ -854,7 +1002,7 @@
             if (domain) updateData.domain = domain.value;
 
             try {
-                const res = await fetch(`/api/campaigns/${currentClient.id}`, {
+                const res = await fetch(`/ api / campaigns / ${currentClient.id} `, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(updateData)
@@ -868,14 +1016,14 @@
                     if (idx >= 0) clients[idx] = campaign;
 
                     showModal(`
-                        <div class="p-6 text-center">
+                    < div class="p-6 text-center" >
                             <div class="w-12 h-12 mx-auto mb-4 bg-emerald-500/20 rounded-full flex items-center justify-center">
                                 <i data-lucide="check" class="w-6 h-6 text-emerald-400"></i>
                             </div>
                             <h3 class="text-lg font-semibold text-white mb-2">Settings Saved</h3>
                             <p class="text-gray-400 text-sm mb-4">Client settings have been updated.</p>
                             <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                        </div>
+                        </div >
                     `);
                     lucide.createIcons();
                 } else {
@@ -912,12 +1060,12 @@
 
         function showNewClientModal() {
             showModal(`
-                    <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                    < div class="p-4 border-b border-gray-800 flex items-center justify-between" >
                     <h3 class="text-lg font-semibold text-white">New Client</h3>
                     <button onclick="hideModal()" class="text-gray-400 hover:text-white">
                         <i data-lucide="x" class="w-5 h-5"></i>
                     </button>
-                </div>
+                </div >
                     <form onsubmit="createClient(event)" class="p-4 space-y-4">
                         <div>
                             <label class="block text-sm text-gray-400 mb-1">Domain</label>
@@ -963,12 +1111,12 @@
 
         function showUserSettingsModal() {
             showModal(`
-                    <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                    < div class="p-4 border-b border-gray-800 flex items-center justify-between" >
                         <h3 class="text-lg font-semibold text-white">User Settings</h3>
                         <button onclick="hideModal()" class="text-gray-400 hover:text-white">
                             <i data-lucide="x" class="w-5 h-5"></i>
                         </button>
-                    </div>
+                    </div >
                     <div class="p-6">
                         <h4 class="text-sm font-medium text-gray-300 mb-4">Change Password</h4>
                         <form onsubmit="changePassword(event)" class="space-y-4">
@@ -991,6 +1139,20 @@
                                 <button type="submit" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">Update Password</button>
                             </div>
                         </form>
+                    </div>
+                    <div class="p-6 border-t border-gray-800">
+                        <h4 class="text-sm font-medium text-gray-300 mb-4">Google Integrations</h4>
+                        <p class="text-xs text-gray-400 mb-4">Connect your agency Google account to pull GSC and GA4 data for all clients.</p>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <button onclick="connectGoogleAccount()" class="bg-white text-black hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 flex-1">
+                                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" class="w-4 h-4">
+                                Connect Google Account
+                            </button>
+                            <button onclick="syncGoogleProperties()" id="syncPropsBtn" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 flex-1 border border-gray-700">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync Properties
+                            </button>
+                        </div>
+                        <div id="googleSyncResult" class="text-xs mt-3 hidden"></div>
                     </div>
                 `);
         }
@@ -1023,14 +1185,14 @@
 
                 if (res.ok) {
                     showModal(`
-                        <div class="p-6 text-center">
+                    < div class="p-6 text-center" >
                                 <div class="w-12 h-12 mx-auto mb-4 bg-emerald-500/20 rounded-full flex items-center justify-center">
                                     <i data-lucide="check" class="w-6 h-6 text-emerald-400"></i>
                                 </div>
                                 <h3 class="text-lg font-semibold text-white mb-2">Password Updated</h3>
                                 <p class="text-gray-400 text-sm mb-4">Your password has been changed successfully.</p>
                                 <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                            </div>
+                            </div >
                     `);
                     lucide.createIcons();
                 } else {
@@ -1097,15 +1259,15 @@
                 if (res.ok) {
                     showModal(`
 
-                        <div class="p-6 text-center" >
+                    < div class="p-6 text-center" >
                             <div class="w-12 h-12 mx-auto mb-4 bg-violet-500/20 rounded-full flex items-center justify-center">
                                 <i data-lucide="loader-2" class="w-6 h-6 text-violet-400 animate-spin"></i>
                             </div>
                             <h3 class="text-lg font-semibold text-white mb-2">Audit Started</h3>
                             <p class="text-gray-400 text-sm mb-4">Running technical audit for ${currentClient.domain}...</p>
                             <button onclick="hideModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">OK</button>
-                        </div>
-                        `);
+                        </div >
+                    `);
                     lucide.createIcons();
                 } else {
                     const err = await res.json();
@@ -1118,12 +1280,12 @@
 
         function showInviteModal() {
             showModal(`
-                        <div class="p-4 border-b border-gray-800" >
+                    < div class="p-4 border-b border-gray-800" >
                         <h3 class="text-lg font-semibold text-white">Invite Team Member</h3>
-                </div>
-                        <div class="p-4 text-center text-gray-400">
-                            <p>Team invites coming soon</p>
-                        </div>
+                </div >
+                    <div class="p-4 text-center text-gray-400">
+                        <p>Team invites coming soon</p>
+                    </div>
                 `);
         }
 
@@ -1152,7 +1314,7 @@
             const pageActions = document.getElementById('pageActions');
 
             pageActions.innerHTML = `
-                <div class="flex items-center gap-3">
+                    < div class="flex items-center gap-3" >
                     <select id="techAuditPageLimitTop" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 block p-2">
                         <option value="10">10 pages</option>
                         <option value="20">20 pages</option>
@@ -1164,8 +1326,8 @@
                     <button onclick="runAudit(false, null, parseInt(document.getElementById('techAuditPageLimitTop').value))" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
                         <i data-lucide="play" class="w-4 h-4"></i> Run Audit
                     </button>
-                </div>
-            `;
+                </div >
+                    `;
 
             // If we have an active audit, show details
             if (activeAudit) {
@@ -1175,13 +1337,13 @@
 
             try {
                 // Fetch ONLY technical audits for this view
-                const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=technical`);
+                const response = await fetch(`/ api / audits ? campaign_id = ${currentClient.id}& type=technical`);
                 const data = await response.json();
                 const audits = data.audits || [];
 
                 if (audits.length === 0) {
                     contentArea.innerHTML = `
-                    <div class="flex flex-col items-center justify-center h-64 text-center" >
+                    < div class="flex flex-col items-center justify-center h-64 text-center" >
                             <i data-lucide="search-check" class="w-12 h-12 text-gray-600 mb-4"></i>
                             <h3 class="text-lg font-semibold text-white mb-2">No audits yet</h3>
                             <p class="text-gray-400 mb-4">Run your first technical audit for ${currentClient.domain}</p>
@@ -1198,10 +1360,10 @@
                                     Run Audit
                                 </button>
                             </div>
-                        </div> `;
+                        </div > `;
                 } else {
                     contentArea.innerHTML = `
-                        <div class="grid gap-4" >
+                    < div class="grid gap-4" >
                         ${audits.map(audit => {
                         const isCrawling = audit.status === 'crawling' || audit.status === 'running';
                         const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
@@ -1239,10 +1401,10 @@
                                 </div>`;
                     }).join('')
                         }
-                        </div> `;
+                        </div > `;
                 }
             } catch (error) {
-                contentArea.innerHTML = `<div class="text-red-400" > Error loading audits: ${error.message}</div> `;
+                contentArea.innerHTML = `< div class="text-red-400" > Error loading audits: ${error.message}</div > `;
             }
             lucide.createIcons();
         }
@@ -1252,7 +1414,7 @@
 
             const btn = event.currentTarget || document.querySelector('button[onclick*="runAudit"]');
             const originalText = btn.innerHTML;
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin" ></i> Starting...`;
+            btn.innerHTML = `< i data - lucide="loader-2" class="w-4 h-4 animate-spin" ></i > Starting...`;
             btn.disabled = true;
 
             // Show loading state immediately based on view
@@ -1296,7 +1458,7 @@
 
         async function checkAuditStatus(auditId) {
             try {
-                const response = await fetch(`/api/audits/${auditId}`);
+                const response = await fetch(`/ api / audits / ${auditId} `);
                 const data = await response.json();
 
                 if (data.audit && data.audit.status === 'completed') {
@@ -1307,7 +1469,7 @@
                     const btn = document.querySelector(`button[onclick = "checkAuditStatus('${auditId}')"]`);
                     if (btn) {
                         const original = btn.innerHTML;
-                        btn.innerHTML = `<i data-lucide="check" class="w-3 h-3 text-emerald-400" ></i> Still running...`;
+                        btn.innerHTML = `< i data - lucide="check" class="w-3 h-3 text-emerald-400" ></i > Still running...`;
                         setTimeout(() => btn.innerHTML = original, 2000);
                     }
                 }
@@ -1320,9 +1482,9 @@
             try {
                 // Show loading state
                 const btn = document.querySelector(`button[onclick = "viewAuditResults('${auditId}')"]`);
-                if (btn) btn.innerHTML = `<i data-lucide="loader-2" class="w-3 h-3 animate-spin" ></i> Loading...`;
+                if (btn) btn.innerHTML = `< i data - lucide="loader-2" class="w-3 h-3 animate-spin" ></i > Loading...`;
 
-                const response = await fetch(`/api/audits/${auditId}`);
+                const response = await fetch(`/ api / audits / ${auditId} `);
                 const data = await response.json();
 
                 if (data.audit) {
@@ -1344,18 +1506,18 @@
             const pageActions = document.getElementById('pageActions');
 
             pageActions.innerHTML = `
-                <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
-                    <i data-lucide="plus" class="w-4 h-4"></i> Add Competitor
-                </button>
-            `;
+                    < button onclick = "document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
+                        <i data-lucide="plus" class="w-4 h-4"></i> Add Competitor
+                </button >
+                    `;
 
             if (currentSideTab !== 'overview') {
                 contentArea.innerHTML = `
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center" >
+                    < div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center" >
                         <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
                         <h3 class="text-lg font-semibold text-white mb-2">${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
                         <p class="text-gray-400">Deep gap analysis and content library features coming in Phase 3.</p>
-                    </div> `;
+                    </div > `;
                 lucide.createIcons();
                 return;
             }
@@ -1367,33 +1529,33 @@
             }
 
             contentArea.innerHTML = `
-                <div class="flex items-center justify-center h-full text-gray-500">
-                    <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading competitors...
-                </div>
-            `;
+                    < div class="flex items-center justify-center h-full text-gray-500" >
+                        <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading competitors...
+                </div >
+                    `;
             lucide.createIcons();
 
             try {
                 // Fetch ONLY competitor audits
-                const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=competitor`);
+                const response = await fetch(`/ api / audits ? campaign_id = ${currentClient.id}& type=competitor`);
                 const data = await response.json();
                 const audits = data.audits || [];
 
                 if (audits.length === 0) {
                     contentArea.innerHTML = `
-                        <div class="flex flex-col items-center justify-center h-64 text-center">
+                    < div class="flex flex-col items-center justify-center h-64 text-center" >
                             <i data-lucide="swords" class="w-12 h-12 text-gray-600 mb-4"></i>
                             <h3 class="text-lg font-semibold text-white mb-2">No Competitor Audits</h3>
                             <p class="text-gray-400 mb-4">Add a competitor domain to run a deep technical comparison.</p>
                             <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
                                 Add Competitor
                             </button>
-                        </div>
+                        </div >
                     `;
                 } else {
                     contentArea.innerHTML = `
-                        <div class="grid gap-4">
-                            ${audits.map(audit => {
+                    < div class="grid gap-4" >
+                        ${audits.map(audit => {
                         const isCrawling = audit.status === 'crawling' || audit.status === 'running';
                         const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
                         const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
@@ -1430,30 +1592,31 @@
                                         </div>
                                     </div>
                                 `;
-                    }).join('')}
-                        </div>
+                    }).join('')
+                        }
+                        </div >
                     `;
                 }
 
                 // Add the modal HTML to contentArea at the end so it's always ready
                 contentArea.innerHTML += `
-                    <div id="addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
+                    < div id = "addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" >
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
                             <h3 class="text-lg font-bold text-white mb-2">Analyze Competitor</h3>
                             <p class="text-sm text-gray-400 mb-4">Enter a competitor's domain. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
-                            
+
                             <input type="text" id="competitorDomainInput" placeholder="competitor.com" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">
-                            
-                            <div class="flex justify-end gap-3">
-                                <button onclick="document.getElementById('addCompetitorModal').classList.add('hidden')" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
-                                <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
-                            </div>
+
+                                <div class="flex justify-end gap-3">
+                                    <button onclick="document.getElementById('addCompetitorModal').classList.add('hidden')" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
+                                    <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
+                                </div>
                         </div>
-                    </div>
-                `;
+                    </div >
+                    `;
 
             } catch (error) {
-                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl">Error loading competitors: ${error.message}</div>`;
+                contentArea.innerHTML = `< div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl" > Error loading competitors: ${error.message}</div > `;
             }
             lucide.createIcons();
         }
@@ -1464,10 +1627,10 @@
             const pageActions = document.getElementById('pageActions');
 
             pageActions.innerHTML = `
-                <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
-                    <i data-lucide="plus" class="w-4 h-4"></i> Add Competitor
-                </button>
-            `;
+                    < button onclick = "document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" >
+                        <i data-lucide="plus" class="w-4 h-4"></i> Add Competitor
+                </button >
+                    `;
 
             // If we have an active audit (clicked into details), show details
             if (activeAudit) {
@@ -1476,33 +1639,33 @@
             }
 
             contentArea.innerHTML = `
-                <div class="flex items-center justify-center h-full text-gray-500">
-                    <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading competitors...
-                </div>
-            `;
+                    < div class="flex items-center justify-center h-full text-gray-500" >
+                        <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading competitors...
+                </div >
+                    `;
             lucide.createIcons();
 
             try {
                 // Fetch ONLY competitor audits
-                const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=competitor`);
+                const response = await fetch(`/ api / audits ? campaign_id = ${currentClient.id}& type=competitor`);
                 const data = await response.json();
                 const audits = data.audits || [];
 
                 if (audits.length === 0) {
                     contentArea.innerHTML = `
-                        <div class="flex flex-col items-center justify-center h-64 text-center">
+                    < div class="flex flex-col items-center justify-center h-64 text-center" >
                             <i data-lucide="swords" class="w-12 h-12 text-gray-600 mb-4"></i>
                             <h3 class="text-lg font-semibold text-white mb-2">No Competitor Audits</h3>
                             <p class="text-gray-400 mb-4">Add a competitor domain to run a deep technical comparison.</p>
                             <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
                                 Add Competitor
                             </button>
-                        </div>
+                        </div >
                     `;
                 } else {
                     contentArea.innerHTML = `
-                        <div class="grid gap-4">
-                            ${audits.map(audit => {
+                    < div class="grid gap-4" >
+                        ${audits.map(audit => {
                         const isCrawling = audit.status === 'crawling' || audit.status === 'running';
                         const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
                         const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
@@ -1536,41 +1699,42 @@
                                         </div>
                                     </div>
                                 `;
-                    }).join('')}
-                        </div>
+                    }).join('')
+                        }
+                        </div >
                     `;
                 }
 
                 // Add the modal HTML to contentArea at the end so it's always ready
                 contentArea.innerHTML += `
-                    <div id="addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
+                    < div id = "addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" >
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
                             <h3 class="text-lg font-bold text-white mb-2">Analyze Competitor</h3>
                             <p class="text-sm text-gray-400 mb-4">Enter a competitor's domain. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
-                            
+
                             <label class="block text-sm font-medium text-gray-300 mb-2">Competitor Domain</label>
                             <input type="text" id="competitorDomainInput" placeholder="competitor.com" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
-                            
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Pages to Crawl (Max Pages)</label>
-                            <select id="competitorPageLimitInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">
-                                <option value="10">10 pages</option>
-                                <option value="20">20 pages</option>
-                                <option value="50">50 pages</option>
-                                <option value="100">100 pages</option>
-                                <option value="200" selected>200 pages</option>
-                                <option value="10000">Full website</option>
-                            </select>
-                            
-                            <div class="flex justify-end gap-3">
-                                <button onclick="document.getElementById('addCompetitorModal').classList.add('hidden')" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
-                                <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
-                            </div>
+
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Pages to Crawl (Max Pages)</label>
+                                <select id="competitorPageLimitInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">
+                                    <option value="10">10 pages</option>
+                                    <option value="20">20 pages</option>
+                                    <option value="50">50 pages</option>
+                                    <option value="100">100 pages</option>
+                                    <option value="200" selected>200 pages</option>
+                                    <option value="10000">Full website</option>
+                                </select>
+
+                                <div class="flex justify-end gap-3">
+                                    <button onclick="document.getElementById('addCompetitorModal').classList.add('hidden')" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
+                                    <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
+                                </div>
                         </div>
-                    </div>
-                `;
+                    </div >
+                    `;
 
             } catch (error) {
-                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl">Error loading competitors: ${error.message}</div>`;
+                contentArea.innerHTML = `< div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl" > Error loading competitors: ${error.message}</div > `;
             }
             lucide.createIcons();
         }
@@ -1584,7 +1748,7 @@
             modal.id = 'slideGenModal';
             modal.className = 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm';
             modal.innerHTML = `
-                <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                    < div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center" >
                     <div class="mb-6">
                         <div class="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                     </div>
@@ -1594,8 +1758,8 @@
                         <div id="slideGenProgress" class="bg-indigo-500 h-2 rounded-full transition-all duration-500" style="width: 10%"></div>
                     </div>
                     <p class="text-gray-500 text-xs">This may take 1-2 minutes. Do not close this window.</p>
-                </div>
-            `;
+                </div >
+                    `;
             document.body.appendChild(modal);
             lucide.createIcons();
 
@@ -1616,7 +1780,7 @@
             // Create hidden iframe
             const iframe = document.createElement('iframe');
             iframe.id = 'slideGenIframe';
-            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true`;
+            iframe.src = `/ audit - dashboard.html ? audit_id = ${auditId}& auto_generate=true`;
             iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1400px;height:900px;opacity:0;pointer-events:none;';
             document.body.appendChild(iframe);
 
@@ -1628,7 +1792,7 @@
                     updateProgress(100, 'Presentation ready!');
 
                     // Save the slides_url to the audit record
-                    fetch(`/api/audits/${auditId}/slides-url`, {
+                    fetch(`/ api / audits / ${auditId}/slides-url`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ slides_url: event.data.presentation_url })
@@ -2127,6 +2291,61 @@
 
         // Start
         init();
+        function connectGoogleAccount() {
+            if (!currentUser) {
+                alert('Please sign in first');
+                return;
+            }
+            window.location.href = '/api/google/auth?user_id=' + currentUser.id;
+        }
+
+        async function syncGoogleProperties() {
+            try {
+                const btn = document.getElementById('syncPropsBtn');
+                const resultDiv = document.getElementById('googleSyncResult');
+
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Syncing...';
+                resultDiv.classList.add('hidden');
+
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    throw new Error("No session found");
+                }
+
+                const response = await fetch('/api/google/sync-properties', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + session.access_token
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    resultDiv.textContent = '✅ ' + data.message;
+                    resultDiv.className = 'text-xs mt-3 text-green-400 block';
+
+                    // Refresh client settings content if open to update property dropdowns
+                    if (currentSideTab === 'google') {
+                        loadClientSettingsContent();
+                    }
+                } else {
+                    resultDiv.textContent = '❌ Error: ' + (data.error || 'Failed to sync');
+                    resultDiv.className = 'text-xs mt-3 text-red-400 block';
+                }
+            } catch (err) {
+                console.error(err);
+                const resultDiv = document.getElementById('googleSyncResult');
+                resultDiv.textContent = '❌ ' + (err.message || 'Error syncing properties');
+                resultDiv.className = 'text-xs mt-3 text-red-400 block';
+            } finally {
+                const btn = document.getElementById('syncPropsBtn');
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync Properties';
+                lucide.createIcons();
+            }
+        }
     </script>
 </body>
 

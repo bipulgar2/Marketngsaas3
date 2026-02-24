@@ -16,148 +16,148 @@ def create_tasks_from_audit(categorized_data: dict, campaign_id: str, supabase_c
         'title_missing': {
             'title': 'Fix Missing Page Titles',
             'description': 'Page titles are critical for ranking and CTR. Create unique, keyword-rich titles for these pages.',
-            'type': 'onpage', 'role': 'content_writer', 'priority': 'high'
+            'type': 'onpage', 'role': 'Content Creator', 'priority': 'high'
         },
         'title_duplicate': {
             'title': 'Rewrite Duplicate Page Titles',
             'description': 'Duplicate titles confuse search engines. Ensure every page has a unique title.',
-            'type': 'onpage', 'role': 'content_writer', 'priority': 'medium'
+            'type': 'onpage', 'role': 'Content Creator', 'priority': 'medium'
         },
         'title_over_65': {
             'title': 'Shorten Page Titles (>65 chars)',
             'description': 'Titles over 65 characters get truncated in SERPs. Rewrite them to be concise.',
-            'type': 'onpage', 'role': 'content_writer', 'priority': 'low'
+            'type': 'onpage', 'role': 'Content Creator', 'priority': 'low'
         },
         'desc_missing': {
             'title': 'Add Meta Descriptions',
             'description': 'Meta descriptions improve click-through rates. Write compelling descriptions for these pages.',
-            'type': 'onpage', 'role': 'content_writer', 'priority': 'high'
+            'type': 'onpage', 'role': 'Content Creator', 'priority': 'high'
         },
         'desc_duplicate': {
             'title': 'Rewrite Duplicate Meta Descriptions',
             'description': 'Each page should have a unique description summary.',
-            'type': 'onpage', 'role': 'content_writer', 'priority': 'medium'
+            'type': 'onpage', 'role': 'Content Creator', 'priority': 'medium'
         },
         'desc_over_155': {
             'title': 'Shorten Meta Descriptions (>155 chars)',
             'description': 'Descriptions over 155 characters are truncated. Keep them concise.',
-            'type': 'onpage', 'role': 'content_writer', 'priority': 'low'
+            'type': 'onpage', 'role': 'Content Creator', 'priority': 'low'
         },
         'h1_missing': {
             'title': 'Add H1 Tags',
             'description': 'The H1 tag is the main headline of the page. Ensure every page has exactly one H1.',
-            'type': 'onpage', 'role': 'content_writer', 'priority': 'high'
+            'type': 'onpage', 'role': 'Content Creator', 'priority': 'high'
         },
         'h1_multiple': {
             'title': 'Fix Multiple H1 Tags',
             'description': 'Pages should have only one H1 tag. Differentiate subheadings with H2-H6.',
-            'type': 'onpage', 'role': 'content_writer', 'priority': 'medium'
+            'type': 'onpage', 'role': 'Content Creator', 'priority': 'medium'
         },
         'h2_missing': {
             'title': 'Add Subheadings (H2)',
             'description': 'Content structure is important. Break up long content with H2 subheadings.',
-            'type': 'content', 'role': 'content_writer', 'priority': 'medium'
+            'type': 'content', 'role': 'Content Creator', 'priority': 'medium'
         },
         'low_word_count': {
             'title': 'Expand Thin Content (<300 words)',
             'description': 'These pages have very little content. Expand them to add value or consolidate/redirect them.',
-            'type': 'content', 'role': 'content_writer', 'priority': 'medium'
+            'type': 'content', 'role': 'Content Creator', 'priority': 'medium'
         },
         'misspelling': {
             'title': 'Fix Grammar & Spelling Errors',
             'description': 'Spelling errors hurt credibility. Review and fix typos on these pages.',
-            'type': 'content', 'role': 'content_writer', 'priority': 'low'
+            'type': 'content', 'role': 'Content Creator', 'priority': 'low'
         },
         'links_broken': {
             'title': 'Fix Broken Links (404s)',
             'description': 'These pages contain links to URLs that return errors (4xx/5xx). Remove or update the links.',
-            'type': 'technical', 'role': 'technical_seo', 'priority': 'high'
+            'type': 'technical', 'role': 'Link Builder', 'priority': 'high'
         },
         'links_redirect_3xx': {
             'title': 'Audit Internal Redirects (3xx)',
             'description': 'Update internal links to point directly to the final destination, avoiding redirect chains.',
-            'type': 'technical', 'role': 'technical_seo', 'priority': 'low'
+            'type': 'technical', 'role': 'Link Builder', 'priority': 'low'
         },
         'orphan_urls': {
             'title': 'Link Orphan Pages',
             'description': 'These pages have no internal links pointing to them. Add links from other relevant pages.',
-            'type': 'usability', 'role': 'technical_seo', 'priority': 'medium'
+            'type': 'usability', 'role': 'Link Builder', 'priority': 'medium'
         },
 
         # --- Accessibility (Speed & Experience) ---
         'mobile_friendly': {
             'title': 'Fix Mobile Friendliness Issues',
             'description': 'These pages failed the mobile-friendly check. Verify viewport settings and responsive design.',
-            'type': 'technical', 'role': 'developer', 'priority': 'high'
+            'type': 'technical', 'role': 'Optimization Specialist', 'priority': 'high'
         },
         'image_alt_missing': {
             'title': 'Add Alt Text to Images',
             'description': 'Alt text helps accessibility and Image SEO. Describe the images.',
-            'type': 'onpage', 'role': 'content_writer', 'priority': 'medium'
+            'type': 'onpage', 'role': 'Content Creator', 'priority': 'medium'
         },
         'images_large': {
             'title': 'Compress Large Images (>100KB)',
             'description': 'These images are too large and slow down the page. Compress or resize them.',
-            'type': 'technical', 'role': 'developer', 'priority': 'medium'
+            'type': 'technical', 'role': 'Optimization Specialist', 'priority': 'medium'
         },
         'core_web_vitals': {
             'title': 'Optimize Core Web Vitals (LCP/CLS)',
             'description': 'These pages failed Core Web Vitals checks. Improve loading speed and visual stability.',
-            'type': 'technical', 'role': 'developer', 'priority': 'high'
+            'type': 'technical', 'role': 'Optimization Specialist', 'priority': 'high'
         },
 
         # --- Architecture (Site Structure) ---
         'site_architecture': {
             'title': 'Build Site Architecture',
             'description': 'Define and visualize the site structure.',
-            'type': 'architecture', 'role': 'technical_seo', 'priority': 'high'
+            'type': 'architecture', 'role': 'Optimization Specialist', 'priority': 'high'
         },
 
         # --- Usability (Technical & Content) ---
         'permalink_issues': {
             'title': 'Optimize URL Structure',
             'description': 'URLs should be clean, readable, and keyword-rich (avoid special chars/IDs).',
-            'type': 'usability', 'role': 'technical_seo', 'priority': 'medium'
+            'type': 'usability', 'role': 'Optimization Specialist', 'priority': 'medium'
         },
         'sitemap_issues': {
             'title': 'Fix Sitemap Issues',
             'description': 'Ensure sitemap.xml exists and contains valid URLs.',
-            'type': 'usability', 'role': 'technical_seo', 'priority': 'high'
+            'type': 'usability', 'role': 'Optimization Specialist', 'priority': 'high'
         },
         'robots_issues': {
             'title': 'Review Robots.txt',
             'description': 'Ensure robots.txt is not blocking important pages.',
-            'type': 'usability', 'role': 'technical_seo', 'priority': 'high'
+            'type': 'usability', 'role': 'Optimization Specialist', 'priority': 'high'
         },
         'no_canonical': {
             'title': 'Add Canonical Tags',
             'description': 'Canonical tags prevent duplicate content issues. Add self-referencing canonicals if unique.',
-            'type': 'usability', 'role': 'technical_seo', 'priority': 'medium'
+            'type': 'usability', 'role': 'Optimization Specialist', 'priority': 'medium'
         },
         'duplicate_content': {
             'title': 'Resolve Duplicate Content',
             'description': 'These pages are very similar to others. Use canonicals or distinct content.',
-            'type': 'content', 'role': 'content_writer', 'priority': 'high'
+            'type': 'content', 'role': 'Content Creator', 'priority': 'high'
         },
         'no_index': {
             'title': 'Review No-Index Tags',
             'description': 'These pages are marked as no-index. Confirm this is intentional.',
-            'type': 'usability', 'role': 'technical_seo', 'priority': 'low'
+            'type': 'usability', 'role': 'Optimization Specialist', 'priority': 'low'
         },
         'schema_missing': {
             'title': 'Implement Structured Data (Schema)',
             'description': 'Add relevant schema markup (Organization, Article, Product) to improve SERP features.',
-            'type': 'technical', 'role': 'technical_seo', 'priority': 'medium'
+            'type': 'technical', 'role': 'Optimization Specialist', 'priority': 'medium'
         },
         'server_errors_5xx': {
             'title': 'Fix Server Errors (5xx)',
             'description': 'These pages returned a 500-level error. Investigate server logs immediately.',
-            'type': 'technical', 'role': 'developer', 'priority': 'critical'
+            'type': 'technical', 'role': 'Optimization Specialist', 'priority': 'critical'
         },
         'client_errors_4xx': {
             'title': 'Fix Broken Pages (404/4xx)',
             'description': 'These URLs do not exist. Redirect them or restore the content.',
-            'type': 'technical', 'role': 'technical_seo', 'priority': 'high'
+            'type': 'technical', 'role': 'Optimization Specialist', 'priority': 'high'
         }
     }
     

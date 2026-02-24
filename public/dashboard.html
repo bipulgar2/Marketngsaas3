@@ -1930,11 +1930,22 @@
 
         let currentLoadedTasks = [];
 
-        window.renderTasksTable = function (roleFilter = 'all') {
+        window.renderTasksTable = function () {
             const contentArea = document.getElementById('contentArea');
-            const tasksToRender = roleFilter === 'all'
-                ? currentLoadedTasks
-                : currentLoadedTasks.filter(t => t.assigned_role === roleFilter);
+            const roleFilter = document.getElementById('roleFilterSelect')?.value || 'all';
+            const priorityFilter = document.getElementById('priorityFilterSelect')?.value || 'all';
+
+            let tasksToRender = currentLoadedTasks;
+
+            if (roleFilter !== 'all') {
+                tasksToRender = tasksToRender.filter(t => t.assigned_role === roleFilter);
+            }
+            if (priorityFilter !== 'all') {
+                tasksToRender = tasksToRender.filter(t => Number(t.priority) === Number(priorityFilter));
+            }
+
+            const activeTasks = tasksToRender.filter(t => t.status !== 'done');
+            const completedTasks = tasksToRender.filter(t => t.status === 'done');
 
             const getPriorityBadge = (pLevel) => {
                 const level = Number(pLevel);
@@ -1943,6 +1954,31 @@
                 if (level === 1) return `<span class="px-2 py-1 rounded text-xs bg-orange-500/10 text-orange-400 border border-orange-500/20">Medium</span>`;
                 return `<span class="px-2 py-1 rounded text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20">Low</span>`;
             };
+
+            const renderTaskRow = (t) => `
+                <tr class="hover:bg-gray-800/30 transition-colors ${t.status === 'done' ? 'opacity-60' : ''}">
+                    <td class="px-6 py-4">
+                        <div class="font-medium text-white ${t.status === 'done' ? 'line-through' : ''}">${t.title}</div>
+                        <div class="text-gray-500 text-xs mt-1 ${t.status === 'done' ? 'line-through' : ''}">${t.description}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="px-2 py-1 rounded text-xs bg-gray-800 text-gray-300 border border-gray-700">
+                            ${t.type}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-gray-400 capitalize">${t.assigned_role?.replace('_', ' ') || '-'}</td>
+                     <td class="px-6 py-4">
+                        ${getPriorityBadge(t.priority)}
+                    </td>
+                    <td class="px-6 py-4">
+                        <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 ${t.status === 'done' ? 'text-green-500' : 'text-gray-300'} text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500">
+                            <option value="pending" ${t.status === 'pending' ? 'selected' : ''} class="text-gray-300">Pending</option>
+                            <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''} class="text-gray-300">In Progress</option>
+                            <option value="done" ${t.status === 'done' ? 'selected' : ''} class="text-green-500">Done</option>
+                        </select>
+                    </td>
+                </tr>
+            `;
 
             if (currentLoadedTasks.length === 0) {
                 contentArea.innerHTML = `
@@ -1957,7 +1993,14 @@
                         <div class="flex items-center justify-between">
                             <h2 class="text-xl font-semibold text-white">Tasks</h2>
                             <div class="flex gap-4 items-center">
-                                <select onchange="window.renderTasksTable(this.value)" class="bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-violet-500">
+                                <select id="priorityFilterSelect" onchange="window.renderTasksTable()" class="bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-violet-500">
+                                    <option value="all" ${priorityFilter === 'all' ? 'selected' : ''}>All Priorities</option>
+                                    <option value="3" ${priorityFilter === '3' ? 'selected' : ''}>Critical</option>
+                                    <option value="2" ${priorityFilter === '2' ? 'selected' : ''}>High</option>
+                                    <option value="1" ${priorityFilter === '1' ? 'selected' : ''}>Medium</option>
+                                    <option value="0" ${priorityFilter === '0' ? 'selected' : ''}>Low</option>
+                                </select>
+                                <select id="roleFilterSelect" onchange="window.renderTasksTable()" class="bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-violet-500">
                                     <option value="all" ${roleFilter === 'all' ? 'selected' : ''}>All Roles</option>
                                     <option value="Campaign Manager" ${roleFilter === 'Campaign Manager' ? 'selected' : ''}>Campaign Manager</option>
                                     <option value="Content Strategist" ${roleFilter === 'Content Strategist' ? 'selected' : ''}>Content Strategist</option>
@@ -1982,33 +2025,24 @@
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-800 text-sm">
-                                    ${tasksToRender.length === 0 ? `<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No tasks found for this role.</td></tr>` : ''}
-                                    ${tasksToRender.map(t => `
-                                        <tr class="hover:bg-gray-800/30 transition-colors">
-                                            <td class="px-6 py-4">
-                                                <div class="font-medium text-white">${t.title}</div>
-                                                <div class="text-gray-500 text-xs mt-1">${t.description}</div>
-                                            </td>
-                                            <td class="px-6 py-4">
-                                                <span class="px-2 py-1 rounded text-xs bg-gray-800 text-gray-300 border border-gray-700">
-                                                    ${t.type}
-                                                </span>
-                                            </td>
-                                            <td class="px-6 py-4 text-gray-400 capitalize">${t.assigned_role?.replace('_', ' ') || '-'}</td>
-                                             <td class="px-6 py-4">
-                                                ${getPriorityBadge(t.priority)}
-                                            </td>
-                                            <td class="px-6 py-4">
-                                                <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500">
-                                                    <option value="pending" ${t.status === 'pending' ? 'selected' : ''}>Pending</option>
-                                                    <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
-                                                    <option value="done" ${t.status === 'done' ? 'selected' : ''}>Done</option>
-                                                </select>
-                                            </td>
-                                        </tr>
-                                    `).join('')}
+                                    ${activeTasks.length === 0 && completedTasks.length === 0 ? `<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No tasks found for this role.</td></tr>` : ''}
+                                    ${activeTasks.map(renderTaskRow).join('')}
                                 </tbody>
                             </table>
+                            
+                            ${completedTasks.length > 0 ? `
+                            <div class="bg-gray-900/80 border-t-2 border-dashed border-gray-800">
+                                <div class="px-6 py-3 bg-gray-800/30 text-xs font-semibold uppercase text-gray-400 flex items-center gap-2">
+                                    <i data-lucide="check-circle-2" class="w-4 h-4 text-green-500"></i>
+                                    Completed Tasks (${completedTasks.length})
+                                </div>
+                                <table class="w-full">
+                                    <tbody class="divide-y divide-gray-800 text-sm">
+                                        ${completedTasks.map(renderTaskRow).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                            ` : ''}
                         </div>
                     </div>`;
             }
@@ -2032,7 +2066,7 @@
                 const response = await fetch(url);
                 const data = await response.json();
                 currentLoadedTasks = data.tasks || [];
-                window.renderTasksTable('all');
+                window.renderTasksTable();
 
             } catch (error) {
                 contentArea.innerHTML = `<div class="text-red-400 p-8 text-center">Error loading tasks: ${error.message}</div>`;
@@ -2043,14 +2077,29 @@
 
         async function updateTaskStatus(taskId, newStatus) {
             try {
-                await fetch(`/api/tasks/${taskId}`, {
+                const res = await fetch(`/api/tasks/${taskId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: newStatus })
                 });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Failed to update status on server');
+                }
+
+                // Update local state and trigger re-render
+                const taskIndex = currentLoadedTasks.findIndex(t => t.id === taskId);
+                if (taskIndex !== -1) {
+                    currentLoadedTasks[taskIndex].status = newStatus;
+                }
+                window.renderTasksTable();
+
             } catch (e) {
                 console.error(e);
-                alert('Failed to update status');
+                alert('Task update failed: ' + e.message);
+                // Revert UI by re-rendering
+                window.renderTasksTable();
             }
         }
 

@@ -690,7 +690,8 @@ def update_task(task_id):
             return jsonify({'error': 'Task not found'}), 404
         
         # Check permission
-        if user['role'] not in ['admin', 'campaign_manager']:
+        user_role = user.get('role', '').lower()
+        if user_role not in ['admin', 'administrator', 'campaign_manager']:
             if task.data.get('assigned_to') != user['id']:
                 return jsonify({'error': 'Not authorized'}), 403
         

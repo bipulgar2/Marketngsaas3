@@ -163,49 +163,84 @@ def create_tasks_from_audit(categorized_data: dict, campaign_id: str, supabase_c
     
     created_tasks = []
 
-    # Flatten categories to iterate easily
-    # Dictionary structure: data[category][issue_key] = {'issues': N, 'items': [...]}
+    # 1. Fetch existing pending/in-progress tasks for this campaign
+    existing_tasks = []
+    try:
+        res = supabase_client.table('tasks').select('*').eq('campaign_id', campaign_id).in_('status', ['pending', 'in_progress']).execute()
+        existing_tasks = res.data or []
+    except Exception as e:
+        print(f"Error fetching existing tasks: {e}")
+
+    # 2. Iterate and Merge/Create
     for category, issues_map in categorized_data.items():
         if not isinstance(issues_map, dict):
             continue
             
         for issue_key, issue_data in issues_map.items():
-            # Skip if no issues found
-            if issue_data.get('issues', 0) == 0:
+            if not isinstance(issue_data, dict) or issue_data.get('issues', 0) == 0:
                 continue
 
-            # Skip generic score keys that don't have items (like 'page_speed' score)
             items = issue_data.get('items', [])
-            if not items and issue_key != 'sitemap_issues': # Sitemap might default to logic
+            if not items and issue_key != 'sitemap_issues':
                  continue
 
             template = TASK_TEMPLATES.get(issue_key)
             if not template:
                 continue
 
-            # Construct Task
-            task_data = {
-                'campaign_id': campaign_id,
-                'type': template['type'],
-                'title': f"{template['title']} ({len(items)} pages)",
-                'description': template['description'],
-                'checklist': [{'item': url, 'completed': False} for url in items[:50]],  # Limit to 50 items per task to avoid bloat
-                'assigned_role': template['role'],
-                'priority': template.get('priority', 'medium'),
-                'status': 'pending',
-                'created_at': 'now()'
-            }
-            
-            try:
-                # Insert implementation
-                # Note: We probably want to check for duplicates later, but consistent title helps ID them
-                result = supabase_client.table('tasks').insert(task_data).execute()
-                if result.data:
-                    created_tasks.append(result.data[0])
-            except Exception as e:
-                print(f"Error creating task for {issue_key}: {e}")
+            base_title = template['title']
+            new_urls = items[:50] # Hard cap per run to avoid huge db rows
 
-    print(f"Created {len(created_tasks)} tasks from audit.")
+            # Find if a matching task already exists by prefix title
+            matching_task = next((t for t in existing_tasks if t.get('title', '').startswith(base_title)), None)
+
+            if matching_task:
+                # Merge checklist
+                current_checklist = matching_task.get('checklist') or []
+                existing_urls = {item['item'] for item in current_checklist if isinstance(item, dict) and 'item' in item}
+                
+                # Append new unique URLs
+                added = False
+                for url in new_urls:
+                    if url not in existing_urls:
+                        current_checklist.append({'item': url, 'completed': False})
+                        added = True
+                
+                if added:
+                    # Update task title with new total count
+                    total_count = len(current_checklist)
+                    new_title = f"{base_title} ({total_count} pages)"
+                    try:
+                        supabase_client.table('tasks').update({
+                            'checklist': current_checklist,
+                            'title': new_title
+                        }).eq('id', matching_task['id']).execute()
+                        created_tasks.append(matching_task)
+                    except Exception as e:
+                        print(f"Error updating task {issue_key}: {e}")
+            else:
+                # Create brand new task
+                priority_map = {'critical': 3, 'high': 2, 'medium': 1, 'low': 0}
+                task_data = {
+                    'campaign_id': campaign_id,
+                    'type': template['type'],
+                    'title': f"{base_title} ({len(new_urls)} pages)",
+                    'description': template['description'],
+                    'checklist': [{'item': url, 'completed': False} for url in new_urls],
+                    'assigned_role': template['role'],
+                    'priority': priority_map.get(template.get('priority', 'medium'), 1),
+                    'status': 'pending',
+                    'created_at': 'now()'
+                }
+                
+                try:
+                    result = supabase_client.table('tasks').insert(task_data).execute()
+                    if result.data:
+                        created_tasks.append(result.data[0])
+                except Exception as e:
+                    print(f"Error creating task for {issue_key}: {e}")
+
+    print(f"Processed {len(created_tasks)} tasks from audit.")
     return created_tasks
 
 def categorize_audit_issues(pages: list, summary: dict = None) -> dict:

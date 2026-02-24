@@ -1944,7 +1944,8 @@
                 tasksToRender = tasksToRender.filter(t => Number(t.priority) === Number(priorityFilter));
             }
 
-            const activeTasks = tasksToRender.filter(t => t.status !== 'done');
+            const pendingTasks = tasksToRender.filter(t => t.status === 'pending');
+            const inProgressTasks = tasksToRender.filter(t => t.status === 'in_progress');
             const completedTasks = tasksToRender.filter(t => t.status === 'done');
 
             const getPriorityBadge = (pLevel) => {
@@ -2014,35 +2015,57 @@
                         </div>
 
                         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                            <table class="w-full">
+                            <table class="w-full text-sm text-left">
                                 <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
                                     <tr>
-                                        <th class="px-6 py-4 text-left font-medium">Task</th>
-                                        <th class="px-6 py-4 text-left font-medium">Type</th>
-                                        <th class="px-6 py-4 text-left font-medium">Role</th>
-                                        <th class="px-6 py-4 text-left font-medium">Priority</th>
-                                        <th class="px-6 py-4 text-left font-medium">Status</th>
+                                        <th class="px-6 py-4 font-medium w-2/5">Task</th>
+                                        <th class="px-6 py-4 font-medium">Type</th>
+                                        <th class="px-6 py-4 font-medium">Role</th>
+                                        <th class="px-6 py-4 font-medium">Priority</th>
+                                        <th class="px-6 py-4 font-medium">Status</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-gray-800 text-sm">
-                                    ${activeTasks.length === 0 && completedTasks.length === 0 ? `<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No tasks found for this role.</td></tr>` : ''}
-                                    ${activeTasks.map(renderTaskRow).join('')}
+                                
+                                ${tasksToRender.length === 0 ? `
+                                <tbody>
+                                    <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">No tasks found for these filters.</td></tr>
                                 </tbody>
+                                ` : ''}
+
+                                ${pendingTasks.length > 0 ? `
+                                <tbody class="divide-y divide-gray-800">
+                                    ${pendingTasks.map(renderTaskRow).join('')}
+                                </tbody>
+                                ` : ''}
+
+                                ${inProgressTasks.length > 0 ? `
+                                <tbody class="divide-y divide-gray-800 border-t border-gray-700">
+                                    <tr>
+                                        <td colspan="5" class="px-6 py-3 bg-gray-800/20 text-xs font-semibold uppercase text-violet-400">
+                                            <div class="flex items-center gap-2">
+                                                <i data-lucide="clock" class="w-4 h-4"></i>
+                                                In Progress (${inProgressTasks.length})
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    ${inProgressTasks.map(renderTaskRow).join('')}
+                                </tbody>
+                                ` : ''}
+
+                                ${completedTasks.length > 0 ? `
+                                <tbody class="divide-y divide-gray-800 border-t-2 border-dashed border-gray-700">
+                                    <tr>
+                                        <td colspan="5" class="px-6 py-3 bg-gray-800/40 text-xs font-semibold uppercase text-gray-400">
+                                            <div class="flex items-center gap-2">
+                                                <i data-lucide="check-circle-2" class="w-4 h-4 text-green-500"></i>
+                                                Completed Tasks (${completedTasks.length})
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    ${completedTasks.map(renderTaskRow).join('')}
+                                </tbody>
+                                ` : ''}
                             </table>
-                            
-                            ${completedTasks.length > 0 ? `
-                            <div class="bg-gray-900/80 border-t-2 border-dashed border-gray-800">
-                                <div class="px-6 py-3 bg-gray-800/30 text-xs font-semibold uppercase text-gray-400 flex items-center gap-2">
-                                    <i data-lucide="check-circle-2" class="w-4 h-4 text-green-500"></i>
-                                    Completed Tasks (${completedTasks.length})
-                                </div>
-                                <table class="w-full">
-                                    <tbody class="divide-y divide-gray-800 text-sm">
-                                        ${completedTasks.map(renderTaskRow).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                            ` : ''}
                         </div>
                     </div>`;
             }

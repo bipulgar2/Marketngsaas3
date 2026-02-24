@@ -1372,7 +1372,11 @@ def save_audit_results():
         client = supabase_admin or supabase
         
         # Fetch the on-page audit results from DataForSEO
-        from api.dataforseo_client import get_page_issues
+        from api.dataforseo_client import get_page_issues, get_audit_summary
+        
+        summary_result = get_audit_summary(task_id)
+        summary = summary_result.get('summary', {}) if summary_result.get('success') else {}
+        
         pages_data = get_page_issues(task_id, limit=200)  # Get up to 200 pages
         pages = pages_data.get('pages', []) if pages_data.get('success') else []
         
@@ -1425,8 +1429,21 @@ def save_audit_results():
                 logger.error(f"PageSpeed error: {e}")
         
         # Update with pages, pagespeed, and mark as completed
+        audit_results['summary'] = summary
+        categorized = categorize_audit_issues(pages, summary)
+        audit_results['categorized'] = categorized
         audit_results['pages'] = pages
         audit_results['pagespeed'] = pagespeed
+        
+        # Create tasks based on the new audit results
+        if audit_record.get('campaign_id'):
+            # Delete old pending automated tasks for this campaign to prevent duplicates
+            try:
+                client.table('tasks').delete().eq('campaign_id', audit_record.get('campaign_id')).eq('status', 'pending').execute()
+            except Exception as e:
+                logger.error(f"Failed to delete old tasks: {e}")
+                
+            create_tasks_from_audit(categorized, audit_record.get('campaign_id'), client)
         
         # Save back to Supabase
         client.table('audits').update({

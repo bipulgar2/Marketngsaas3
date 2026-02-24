@@ -682,9 +682,11 @@ def update_task(task_id):
     data = request.json
     user = session['user']
     
+    client = supabase_admin or supabase
+    
     try:
         # First check if user can update this task
-        task = supabase.table('tasks').select('*').eq('id', task_id).single().execute()
+        task = client.table('tasks').select('*').eq('id', task_id).single().execute()
         
         if not task.data:
             return jsonify({'error': 'Task not found'}), 404
@@ -704,7 +706,7 @@ def update_task(task_id):
         if 'assigned_to' in data and user['role'] in ['admin', 'campaign_manager']:
             update_data['assigned_to'] = data['assigned_to']
         
-        response = supabase.table('tasks').update(update_data).eq('id', task_id).execute()
+        response = client.table('tasks').update(update_data).eq('id', task_id).execute()
         
         return jsonify({'task': response.data[0]})
     except Exception as e:

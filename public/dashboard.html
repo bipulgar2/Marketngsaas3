@@ -1384,7 +1384,11 @@
                                             <button onclick="viewAuditResults('${audit.id}')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-700">
                                                 View Results
                                             </button>
-                                            <button onclick="startSlideGeneration('${audit.id}')" class="bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 px-3 py-1.5 rounded-lg text-sm font-medium border border-indigo-500/20 flex items-center gap-2">
+                                            <select id="tmpl-${audit.id}" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5" style="max-width:130px">
+                                                <option value="default">Classic</option>
+                                                <option value="authority_shift">4-Pillar</option>
+                                            </select>
+                                            <button onclick="startSlideGeneration('${audit.id}', document.getElementById('tmpl-${audit.id}').value)" class="bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 px-3 py-1.5 rounded-lg text-sm font-medium border border-indigo-500/20 flex items-center gap-2">
                                                 <i data-lucide="presentation" class="w-4 h-4"></i> Create Slides
                                             </button>
                                         `}
@@ -1576,7 +1580,11 @@
                                                 <button onclick="viewAuditResults('${audit.id}')" class="bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 px-3 py-1.5 rounded-lg text-sm font-medium border border-violet-500/20">
                                                     View Details
                                                 </button>
-                                                <button onclick="startSlideGeneration('${audit.id}')" class="bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 px-3 py-1.5 rounded-lg text-sm font-medium border border-indigo-500/20 flex items-center gap-2">
+                                                <select id="tmpl-${audit.id}" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5" style="max-width:130px">
+                                                    <option value="default">Classic</option>
+                                                    <option value="authority_shift">4-Pillar</option>
+                                                </select>
+                                                <button onclick="startSlideGeneration('${audit.id}', document.getElementById('tmpl-${audit.id}').value)" class="bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 px-3 py-1.5 rounded-lg text-sm font-medium border border-indigo-500/20 flex items-center gap-2">
                                                     <i data-lucide="presentation" class="w-4 h-4"></i> Create Slides
                                                 </button>
                                             `}
@@ -1733,7 +1741,7 @@
         // ==========================================================================
         // SLIDE GENERATION (Hidden Iframe Flow)
         // ==========================================================================
-        function startSlideGeneration(auditId) {
+        function startSlideGeneration(auditId, templateType = 'default') {
             // Show loading modal
             const modal = document.createElement('div');
             modal.id = 'slideGenModal';
@@ -1768,10 +1776,10 @@
             setTimeout(() => updateProgress(60, 'Capturing screenshots...'), 10000);
             setTimeout(() => updateProgress(75, 'Building Google Slides presentation...'), 20000);
 
-            // Create hidden iframe
+            // Create hidden iframe — pass template_type
             const iframe = document.createElement('iframe');
             iframe.id = 'slideGenIframe';
-            iframe.src = `/ audit - dashboard.html ? audit_id = ${auditId}& auto_generate=true`;
+            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}`;
             iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1400px;height:900px;opacity:0;pointer-events:none;';
             document.body.appendChild(iframe);
 

@@ -522,8 +522,13 @@
         <button class="view-tab" onclick="showView('speed')">Website Speed</button>
         <button class="view-tab" onclick="showView('backlinks')">Backlinks</button>
         <button class="view-tab" onclick="showView('readability')">Content Readability</button>
+        <select id="template-type-select"
+            style="margin-left: auto; padding: 8px 12px; border-radius: 8px; border: 1px solid #374151; background: #1f2937; color: #e2e8f0; font-size: 13px;">
+            <option value="default">Classic Template</option>
+            <option value="authority_shift">4-Pillar Authority</option>
+        </select>
         <button id="generate-slides-btn" onclick="generateSlides()" class="btn-success"
-            style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+            style="display: flex; align-items: center; gap: 6px;">
             📊 Generate Slides
         </button>
     </div>
@@ -1666,13 +1671,15 @@
                 };
 
                 // Step 3: Send to API with screenshots and issue counts
+                const templateType = document.getElementById('template-type-select')?.value || 'default';
                 const response = await fetch('/api/deep-audit/generate-slides', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         project_id: projectId,
                         screenshots: screenshots,
-                        issue_counts: issueCounts
+                        issue_counts: issueCounts,
+                        template_type: templateType
                     })
                 });
 
@@ -1869,14 +1876,17 @@
                 dupH3: getCount('heading-count-dup-h3')
             };
 
-            // Step 4: Send to API
+            // Step 4: Send to API (read template_type from URL params for iframe mode)
+            const autoParams = new URLSearchParams(window.location.search);
+            const autoTemplateType = autoParams.get('template_type') || document.getElementById('template-type-select')?.value || 'default';
             const response = await fetch('/api/deep-audit/generate-slides', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     project_id: auditId,
                     screenshots: screenshots,
-                    issue_counts: issueCounts
+                    issue_counts: issueCounts,
+                    template_type: autoTemplateType
                 })
             });
 

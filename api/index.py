@@ -24,7 +24,7 @@ from api.dataforseo_client import (
 from api.utils import create_tasks_from_audit, categorize_audit_issues
 from api.export import generate_audit_excel
 from execution.screenshot_capture import capture_screenshot_with_fallback
-from api.deep_audit_slides import create_deep_audit_slides
+from api.deep_audit_slides import create_deep_audit_slides, create_authority_shift_slides
 from api.google_auth import get_google_credentials
 
 # Setup logging
@@ -1493,6 +1493,7 @@ def generate_deep_audit_slides_endpoint():
         audit_data = data.get('audit_data')
         audit_id = data.get('audit_id') or data.get('project_id')  # autoGenerateSlides sends as project_id
         issue_counts = data.get('issue_counts', {})
+        template_type = data.get('template_type', 'default')  # 'default' or 'authority_shift'
         
         client = supabase_admin or supabase
         
@@ -1638,14 +1639,24 @@ def generate_deep_audit_slides_endpoint():
 
         issue_counts = data.get('issue_counts', None)
 
-        # Generate presentation using create_deep_audit_slides
-        result = create_deep_audit_slides(
-            data=audit_data,
-            domain=domain,
-            creds=creds,
-            screenshots=processed_screenshots,
-            issue_counts=issue_counts
-        )
+        # Generate presentation using the selected template
+        if template_type == 'authority_shift':
+            from api.deep_audit_slides import create_authority_shift_slides
+            result = create_authority_shift_slides(
+                data=audit_data,
+                domain=domain,
+                creds=creds,
+                screenshots=processed_screenshots,
+                issue_counts=issue_counts
+            )
+        else:
+            result = create_deep_audit_slides(
+                data=audit_data,
+                domain=domain,
+                creds=creds,
+                screenshots=processed_screenshots,
+                issue_counts=issue_counts
+            )
         
         if result and result.get('presentation_id'):
             # Save the slide URL back to the audit table so it appears in the agency UI

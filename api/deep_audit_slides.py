@@ -1846,3 +1846,853 @@ def create_basic_slide(sid, title):
          {'createShape': {'objectId': f"{sid}_card", 'shapeType': 'RECTANGLE', 'elementProperties': {'pageObjectId': sid, 'size': {'height': {'magnitude': 350, 'unit': 'PT'}, 'width': {'magnitude': 680, 'unit': 'PT'}}, 'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': 20, 'translateY': 80, 'unit': 'PT'}}}},
          {'updateShapeProperties': {'objectId': f"{sid}_card", 'shapeProperties': {'shapeBackgroundFill': {'solidFill': {'color': {'rgbColor': COLORS['white']}}}}, 'fields': 'shapeBackgroundFill'}}
     ]
+
+
+# =============================================================================
+# AUTHORITY SHIFT™ DIAGNOSTIC TEMPLATE  (4-Pillar SEO Growth Diagnostic)
+# =============================================================================
+# New pink/purple/cream template matching the 19-page PDF design.
+# Each page replicates the visual layout from the reference as closely as
+# possible within Google Slides API constraints.
+# =============================================================================
+
+# --- Color palette matching the PDF template ---
+AC = {  # Authority Colors
+    'pink':     {'red': 255/255, 'green': 107/255, 'blue': 138/255},  # #FF6B8A  – headings
+    'cream':    {'red': 255/255, 'green': 245/255, 'blue': 240/255},  # #FFF5F0  – page bg
+    'lavender': {'red': 216/255, 'green': 200/255, 'blue': 232/255},  # #D8C8E8  – cards / callout
+    'purple':   {'red': 100/255, 'green': 80/255,  'blue': 160/255},  # #6450A0  – accent badges
+    'dark':     {'red': 40/255,  'green': 30/255,  'blue': 60/255},   # #281E3C  – body text
+    'white':    {'red': 1, 'green': 1, 'blue': 1},
+    'light_lav':{'red': 232/255, 'green': 224/255, 'blue': 245/255},  # #E8E0F5  – lighter card
+    'dark_img': {'red': 30/255,  'green': 20/255,  'blue': 50/255},   # #1E1432  – image overlay
+}
+
+# Slide dimensions (standard 10×7.5 inches = 720×540 PT)
+SW, SH = 720, 540
+
+# ---------------------------------------------------------------------------
+# HELPER: background
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# PERMANENT TEMPLATE IMAGES (hosted on Supabase Storage — generated once)
+# ---------------------------------------------------------------------------
+_TEMPLATE_IMGS = {
+    'cover':   'https://kalbykwfjtirrotzphcx.supabase.co/storage/v1/object/public/audit-screenshots/template/cover_abstract.png',
+    'plateau': 'https://kalbykwfjtirrotzphcx.supabase.co/storage/v1/object/public/audit-screenshots/template/plateau_business.png',
+    'pillar1': 'https://kalbykwfjtirrotzphcx.supabase.co/storage/v1/object/public/audit-screenshots/template/pillar1_technical.png',
+    'pillar2': 'https://kalbykwfjtirrotzphcx.supabase.co/storage/v1/object/public/audit-screenshots/template/pillar2_funnel.png',
+    'pillar3': 'https://kalbykwfjtirrotzphcx.supabase.co/storage/v1/object/public/audit-screenshots/template/pillar3_links.png',
+    'pillar4': 'https://kalbykwfjtirrotzphcx.supabase.co/storage/v1/object/public/audit-screenshots/template/pillar4_conversion.png',
+    'cta':     'https://kalbykwfjtirrotzphcx.supabase.co/storage/v1/object/public/audit-screenshots/template/cta_meeting.png',
+}
+
+def _as_bg(sid, color=None):
+    """Set cream background."""
+    c = color or AC['cream']
+    return {'updatePageProperties': {
+        'objectId': sid,
+        'pageProperties': {'pageBackgroundFill': {'solidFill': {'color': {'rgbColor': c}}}},
+        'fields': 'pageBackgroundFill'
+    }}
+
+def _text_box(oid, sid, x, y, w, h, text, size=14, color=None, bold=False, italic=False, align='START', font='Playfair Display'):
+    """Shorthand to create a text-box, insert text, and style it."""
+    c = color or AC['dark']
+    reqs = [
+        {'createShape': {'objectId': oid, 'shapeType': 'TEXT_BOX', 'elementProperties': {
+            'pageObjectId': sid,
+            'size': {'height': {'magnitude': h, 'unit': 'PT'}, 'width': {'magnitude': w, 'unit': 'PT'}},
+            'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': x, 'translateY': y, 'unit': 'PT'}
+        }}},
+        {'insertText': {'objectId': oid, 'text': text}},
+        {'updateTextStyle': {'objectId': oid, 'style': {
+            'fontSize': {'magnitude': size, 'unit': 'PT'},
+            'foregroundColor': {'opaqueColor': {'rgbColor': c}},
+            'bold': bold,
+            'italic': italic,
+            'fontFamily': font,
+        }, 'fields': 'fontSize,foregroundColor,bold,italic,fontFamily'}},
+        {'updateParagraphStyle': {'objectId': oid, 'style': {'alignment': align}, 'fields': 'alignment'}},
+    ]
+    return reqs
+
+def _rect(oid, sid, x, y, w, h, color, corner_radius=0):
+    """Create a filled rectangle (card / bar)."""
+    shape_type = 'ROUND_RECTANGLE' if corner_radius else 'RECTANGLE'
+    return [
+        {'createShape': {'objectId': oid, 'shapeType': shape_type, 'elementProperties': {
+            'pageObjectId': sid,
+            'size': {'height': {'magnitude': h, 'unit': 'PT'}, 'width': {'magnitude': w, 'unit': 'PT'}},
+            'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': x, 'translateY': y, 'unit': 'PT'}
+        }}},
+        {'updateShapeProperties': {'objectId': oid, 'shapeProperties': {
+            'shapeBackgroundFill': {'solidFill': {'color': {'rgbColor': color}}},
+            'outline': {'propertyState': 'NOT_RENDERED'}
+        }, 'fields': 'shapeBackgroundFill,outline'}},
+    ]
+
+def _image(oid, sid, x, y, w, h, url):
+    """Place an image on the slide."""
+    return [{'createImage': {'objectId': oid, 'url': url, 'elementProperties': {
+        'pageObjectId': sid,
+        'size': {'height': {'magnitude': h, 'unit': 'PT'}, 'width': {'magnitude': w, 'unit': 'PT'}},
+        'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': x, 'translateY': y, 'unit': 'PT'}
+    }}}]
+
+
+# ---------------------------------------------------------------------------
+# Page 1  – COVER
+# ---------------------------------------------------------------------------
+def _auth_cover(sid, domain):
+    """The Authority Shift Diagnostic cover slide.
+    Dark left half with abstract image, light right half with title."""
+    reqs = [
+        {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
+        _as_bg(sid, AC['cream']),
+    ]
+    # Left panel: template cover image
+    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, SH, _TEMPLATE_IMGS['cover']))
+
+    # Left side: small badge "THE 4-PILLAR SEO GROWTH DIAGNOSTIC™"
+    reqs.extend(_text_box(f'{sid}_badge', sid, 40, 180, 280, 30,
+                          'THE 4-PILLAR SEO GROWTH DIAGNOSTIC™',
+                          size=9, color=AC['white'], bold=True, font='Arial'))
+
+    # Right side content
+    reqs.extend(_text_box(f'{sid}_title', sid, 390, 120, 300, 100,
+                          'The Authority\nShift™ Diagnostic',
+                          size=36, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_sub', sid, 390, 250, 300, 50,
+                          f'Assessment for {domain}',
+                          size=18, color=AC['dark'], bold=False, font='Arial'))
+    # Decorative separator line
+    reqs.extend(_rect(f'{sid}_line', sid, 390, 310, 200, 2, AC['pink']))
+
+    return reqs
+
+
+# ---------------------------------------------------------------------------
+# Page 2  – Why 87% of SEO Campaigns Plateau
+# ---------------------------------------------------------------------------
+def _auth_page2_plateau(sid):
+    """Static page: Why 87% of SEO Campaigns Plateau."""
+    reqs = [
+        {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
+        _as_bg(sid, AC['cream']),
+    ]
+    # Left panel: plateau image
+    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, SH, _TEMPLATE_IMGS['plateau']))
+    reqs.extend(_text_box(f'{sid}_stat', sid, 40, 80, 280, 80,
+                          '87%', size=72, color=AC['white'], bold=True))
+    reqs.extend(_text_box(f'{sid}_stxt', sid, 40, 170, 280, 60,
+                          'of SEO campaigns plateau\nor fail within 12 months.',
+                          size=16, color=AC['white'], font='Arial'))
+
+    # Right side content
+    reqs.extend(_text_box(f'{sid}_t', sid, 390, 50, 300, 60,
+                          'Why 87% of SEO\nCampaigns Plateau',
+                          size=28, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_b', sid, 390, 130, 300, 120,
+                          'Most SEO strategies are built on surface-level tactics — chasing algorithm updates, building random backlinks, or writing content without strategic intent.\n\nThis diagnostic evaluates your SEO infrastructure across 4 pillars that determine whether your site is architectured for sustained growth — or destined to stall.',
+                          size=12, color=AC['dark'], font='Arial'))
+
+    # Three reason cards
+    reasons = [
+        ('Fragmented Strategy', 'Disconnected tactics across technical, content, and authority.'),
+        ('No Compounding Growth', 'Each effort starts from zero instead of building on the last.'),
+        ('Invisible to Google', 'Poor infrastructure means Google can\'t properly index or rank you.'),
+    ]
+    y_start = 280
+    for i, (title, body) in enumerate(reasons):
+        cy = y_start + i * 78
+        reqs.extend(_rect(f'{sid}_c{i}', sid, 390, cy, 300, 70, AC['light_lav'], corner_radius=5))
+        reqs.extend(_text_box(f'{sid}_ct{i}', sid, 400, cy + 8, 280, 25,
+                              title, size=12, color=AC['dark'], bold=True, font='Arial'))
+        reqs.extend(_text_box(f'{sid}_cb{i}', sid, 400, cy + 32, 280, 35,
+                              body, size=10, color=AC['dark'], font='Arial'))
+
+    return reqs
+
+
+# ---------------------------------------------------------------------------
+# Page 3  – The 4-Pillar SEO Blueprint
+# ---------------------------------------------------------------------------
+def _auth_page3_blueprint(sid):
+    """Static page: The 4-Pillar SEO Growth Diagnostic overview."""
+    reqs = [
+        {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
+        _as_bg(sid, AC['cream']),
+    ]
+    reqs.extend(_text_box(f'{sid}_t', sid, 40, 30, 640, 50,
+                          'The 4-Pillar SEO Growth Diagnostic™',
+                          size=28, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_sub', sid, 40, 80, 640, 35,
+                          'A comprehensive framework that evaluates four interconnected pillars of SEO dominance.',
+                          size=12, color=AC['dark'], font='Arial'))
+
+    pillars = [
+        ('⚙️ PILLAR 1', 'Technical\nInfrastructure', 'The invisible backbone that determines whether Google can properly discover, render, and rank your pages.'),
+        ('📝 PILLAR 2', 'Content Authority\n& Funnel Alignment', 'Evaluates whether your content ecosystem is structured to attract, engage, and convert at every stage.'),
+        ('🔗 PILLAR 3', 'Strategic Link\nAuthority', 'Examines the quality, diversity, and strategic intent behind your backlink profile.'),
+        ('💰 PILLAR 4', 'Conversion\nPower', 'How effectively your site converts visibility into engagement and engagement into conversions.'),
+    ]
+    col_w = 155
+    gap = 10
+    x_start = 30
+    for i, (icon, name, desc) in enumerate(pillars):
+        cx = x_start + i * (col_w + gap)
+        # Card bg
+        reqs.extend(_rect(f'{sid}_p{i}', sid, cx, 130, col_w, 350, AC['light_lav'], corner_radius=8))
+        # Pillar badge
+        reqs.extend(_text_box(f'{sid}_pi{i}', sid, cx + 10, 145, col_w - 20, 25,
+                              icon, size=10, color=AC['purple'], bold=True, font='Arial'))
+        # Pillar name
+        reqs.extend(_text_box(f'{sid}_pn{i}', sid, cx + 10, 180, col_w - 20, 55,
+                              name, size=16, color=AC['pink'], bold=True))
+        # Pillar desc
+        reqs.extend(_text_box(f'{sid}_pd{i}', sid, cx + 10, 250, col_w - 20, 120,
+                              desc, size=10, color=AC['dark'], font='Arial'))
+
+    return reqs
+
+
+# ---------------------------------------------------------------------------
+# Pages 4,8,12,16  – Pillar Intro (split layout: dark image left, text right)
+# ---------------------------------------------------------------------------
+PILLAR_INTROS = {
+    1: {
+        'badge': '⚙️ PILLAR 1',
+        'title': 'Technical\nInfrastructure',
+        'body': 'The first pillar evaluates the invisible backbone of your website — the technical elements that determine whether Google can properly discover, crawl, render, and rank your pages.\n\nA technically sound site loads fast, is fully mobile-optimized, and gives search engines clear signals about what to index and how to prioritize it.',
+    },
+    2: {
+        'badge': '📝 PILLAR 2',
+        'title': 'Content Authority\n& Funnel Alignment',
+        'body': 'The second pillar evaluates whether your content ecosystem is designed to attract, engage, and convert across the full buyer journey — not just rank for keywords.\n\nStrategic content maps to every stage of the funnel, from broad awareness topics that build authority, to conversion-ready pages that drive revenue.',
+    },
+    3: {
+        'badge': '🔗 PILLAR 3',
+        'title': 'Strategic Link\nAuthority',
+        'body': 'The third pillar examines the quality, diversity, and strategic intent behind your backlink profile — the external signals that tell Google how much trust and authority to assign your domain.',
+    },
+    4: {
+        'badge': '💰 PILLAR 4',
+        'title': 'Conversion\nPower',
+        'body': 'The fourth pillar examines how effectively your site converts visibility into engagement and engagement into conversions.\n\nIt relates to the ability of any content across the website to attract an audience, engage them meaningfully, command trust, influence decision-making, and eventually drive results toward established goals and objectives like:\n\n• Capture Contact Details\n• Appointment Booking\n• Transact on site',
+    },
+}
+
+def _auth_pillar_intro(sid, pillar_num):
+    """Pillar intro slide — dark left image, text content right."""
+    info = PILLAR_INTROS[pillar_num]
+    reqs = [
+        {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
+        _as_bg(sid, AC['cream']),
+    ]
+    # Left half: pillar-specific image
+    img_key = f'pillar{pillar_num}'
+    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, SH, _TEMPLATE_IMGS.get(img_key, _TEMPLATE_IMGS['cover'])))
+
+    # Badge on right
+    reqs.extend(_rect(f'{sid}_bb', sid, 390, 200, 100, 25, AC['white'], corner_radius=12))
+    reqs.extend(_text_box(f'{sid}_bl', sid, 395, 202, 90, 22,
+                          info['badge'], size=9, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
+    # Title
+    reqs.extend(_text_box(f'{sid}_t', sid, 390, 240, 300, 80,
+                          info['title'], size=32, color=AC['pink'], bold=True))
+    # Body
+    reqs.extend(_text_box(f'{sid}_b', sid, 390, 335, 300, 180,
+                          info['body'], size=11, color=AC['dark'], font='Arial'))
+    return reqs
+
+
+# ---------------------------------------------------------------------------
+# Pages 5,9,13,17  – Pillar Detail (text + cards layout)
+# ---------------------------------------------------------------------------
+PILLAR_DETAILS = {
+    1: {  # Page 5 – Infrastructure Stability
+        'title': 'Pillar 1: Infrastructure\nStability',
+        'body': 'Your website\'s technical foundation is the single most underrated driver of SEO performance. Without it, content and links are wasted effort.',
+        'cards': [
+            ('Crawl Clarity', 'How efficiently Google discovers and navigates your pages — from robots.txt to internal linking architecture.'),
+            ('Speed & Core Web Vitals', 'Page load performance, interactivity, and visual stability — factors Google directly measures for ranking decisions.'),
+            ('Index Control', 'Whether the right pages are being indexed and the wrong ones excluded — avoiding duplicate content and crawl waste.'),
+        ],
+    },
+    2: {  # Page 9 – Content & Search Alignment
+        'title': 'Pillar 2: Content & Search\nAlignment',
+        'body': 'Content without strategic alignment to the buyer journey is just noise. Great SEO content addresses every stage of the funnel — from awareness to decision.',
+        'cards': [
+            ('Awareness Stage', 'Broad educational content that positions your brand as a trusted resource and attracts top-of-funnel traffic.'),
+            ('Consideration Stage', 'Comparative content, case studies, and solution pages that build trust and move prospects closer to a decision.'),
+            ('Decision Stage', 'Conversion-optimized pages with clear CTAs, social proof, and compelling offers that drive action.'),
+        ],
+    },
+    3: {  # Page 13 – Authority Signal Strength
+        'title': 'Pillar 3: Authority Signal\nStrength',
+        'body': 'Your backlink profile is not just a count of links — it is a map of how the web perceives your authority. The composition, relevance, and trust distribution of those links determines how aggressively Google rewards your rankings.',
+        'cards': [
+            ('Trust Links', 'High-DR editorial placements from authoritative domains that signal credibility to Google.'),
+            ('Relevance Links', 'Topically aligned links from industry-specific sources that reinforce your niche authority.'),
+            ('Power Links', 'High-traffic, high-visibility placements that drive both referral traffic and ranking momentum.'),
+        ],
+    },
+    4: {  # Page 17 – User Engagement Metrics
+        'title': 'User Engagement\nMetrics',
+        'body': 'The effectiveness of your content ensures optimal user engagement which forms the ultimate basis for search engines to rank your content ahead of your competition.',
+        'cards': [
+            ('Attractive & Actionable CTAs', 'Continuous Optimisation of CTAs, across the website to drive interactions.'),
+            ('Value Proposition', 'Introduction & optimization of Value Proposition for maximum engagement.'),
+            ('Brand Positioning & Trust Enhancement', 'Reinforcement of Brand Identity & Credibility enhancement for competitive advantage & Strong Brand Authority'),
+        ],
+    },
+}
+
+def _auth_pillar_detail(sid, pillar_num):
+    """Pillar detail slide — title + body + 2-3 info cards on left, right image area."""
+    info = PILLAR_DETAILS[pillar_num]
+    reqs = [
+        {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
+        _as_bg(sid, AC['cream']),
+    ]
+    # Right panel: pillar-specific image
+    img_key = f'pillar{pillar_num}'
+    reqs.extend(_image(f'{sid}_rp', sid, 420, 0, 300, SH, _TEMPLATE_IMGS.get(img_key, _TEMPLATE_IMGS['cover'])))
+
+    # Title
+    reqs.extend(_text_box(f'{sid}_t', sid, 30, 30, 380, 70,
+                          info['title'], size=26, color=AC['pink'], bold=True))
+    # Body
+    reqs.extend(_text_box(f'{sid}_b', sid, 30, 110, 380, 60,
+                          info['body'], size=11, color=AC['dark'], font='Arial'))
+
+    # Cards
+    cards = info['cards']
+    card_h = 90 if len(cards) <= 2 else 75
+    y_start = 190
+    for i, (card_title, card_body) in enumerate(cards):
+        cy = y_start + i * (card_h + 10)
+        # Card with 2-col layout if 2 cards, or stacked if 3
+        cw = 380 if len(cards) == 3 else 185
+        cx = 30
+        if len(cards) == 3:
+            pass  # full width stacked
+        else:
+            cx = 30 + i * 195
+
+        if len(cards) <= 2:
+            reqs.extend(_rect(f'{sid}_cd{i}', sid, cx, cy, cw, card_h, AC['light_lav'], corner_radius=6))
+            reqs.extend(_text_box(f'{sid}_cdt{i}', sid, cx + 10, cy + 8, cw - 20, 22,
+                                  card_title, size=12, color=AC['dark'], bold=True, font='Arial'))
+            reqs.extend(_text_box(f'{sid}_cdb{i}', sid, cx + 10, cy + 32, cw - 20, card_h - 40,
+                                  card_body, size=10, color=AC['dark'], font='Arial'))
+        else:
+            # 3 cards: first 2 side-by-side, 3rd full width
+            if i < 2:
+                cw2 = 185
+                cx2 = 30 + i * 195
+                reqs.extend(_rect(f'{sid}_cd{i}', sid, cx2, y_start, cw2, card_h, AC['light_lav'], corner_radius=6))
+                reqs.extend(_text_box(f'{sid}_cdt{i}', sid, cx2 + 10, y_start + 8, cw2 - 20, 22,
+                                      card_title, size=12, color=AC['dark'], bold=True, font='Arial'))
+                reqs.extend(_text_box(f'{sid}_cdb{i}', sid, cx2 + 10, y_start + 32, cw2 - 20, card_h - 40,
+                                      card_body, size=10, color=AC['dark'], font='Arial'))
+            else:
+                # Third card full width below
+                cy3 = y_start + card_h + 15
+                reqs.extend(_rect(f'{sid}_cd{i}', sid, 30, cy3, 380, card_h, AC['light_lav'], corner_radius=6))
+                reqs.extend(_text_box(f'{sid}_cdt{i}', sid, 40, cy3 + 8, 360, 22,
+                                      card_title, size=12, color=AC['dark'], bold=True, font='Arial'))
+                reqs.extend(_text_box(f'{sid}_cdb{i}', sid, 40, cy3 + 32, 360, card_h - 40,
+                                      card_body, size=10, color=AC['dark'], font='Arial'))
+    return reqs
+
+
+# ---------------------------------------------------------------------------
+# Pages 7, 11  – Static scare/educational slides (text with 2x2 cards)
+# ---------------------------------------------------------------------------
+SCARE_PAGES = {
+    7: {  # "What This Means for Growth"
+        'title': 'What This Means\nfor Growth',
+        'cards': [
+            ('Invisible to Google?', 'If Google can\'t efficiently crawl and index your site, no amount of content or links will help. You\'re invisible to the algorithm.'),
+            ('Speed Kills Rankings', 'Google uses Core Web Vitals as a direct ranking factor. Slow load times, layout shifts, and poor interactivity push you below competitors.'),
+            ('Wasted Crawl Budget', 'Duplicate pages, broken redirects, and bloated JavaScript consume your crawl budget — leaving your best content undiscovered.'),
+        ],
+        'callout': 'If Google can\'t crawl it, it can\'t rank it. Technical health is the entry ticket to every other SEO win.',
+    },
+    11: {  # "Authority & Positioning Gap"
+        'title': 'Authority &\nPositioning Gap',
+        'cards': [
+            ('Topical Clusters Missing?', 'Without interconnected content clusters, Google cannot identify your site as a topical authority — limiting your ability to rank for competitive head terms.'),
+            ('Weak Internal Linking?', 'Internal links distribute PageRank and signal content hierarchy. A fragmented internal link structure dilutes authority across the entire domain.'),
+            ('Generic Brand Messaging?', 'Undifferentiated messaging fails to create the brand signals that Google increasingly uses to evaluate E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness).'),
+            ('No Authority Positioning?', 'Without a clear point of view, your content blends into the noise — indistinguishable from thousands of competing pages targeting the same keywords.'),
+        ],
+        'callout': 'Google ranks brands. Not blogs. This reinforces indoctrination.',
+    },
+}
+
+def _auth_scare_page(sid, page_num):
+    """Static scare content page with 2x2 (or 3) cards + bottom callout bar."""
+    info = SCARE_PAGES[page_num]
+    reqs = [
+        {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
+        _as_bg(sid, AC['cream']),
+    ]
+    # Title
+    reqs.extend(_text_box(f'{sid}_t', sid, 40, 30, 640, 70,
+                          info['title'], size=30, color=AC['pink'], bold=True))
+
+    cards = info['cards']
+    # Layout: 2 columns
+    col_w = 310
+    row_h = 100
+    gap_x, gap_y = 15, 12
+    x_start, y_start = 40, 110
+    for i, (ct, cb) in enumerate(cards):
+        col = i % 2
+        row = i // 2
+        cx = x_start + col * (col_w + gap_x)
+        cy = y_start + row * (row_h + gap_y)
+        reqs.extend(_rect(f'{sid}_c{i}', sid, cx, cy, col_w, row_h, AC['light_lav'], corner_radius=6))
+        reqs.extend(_text_box(f'{sid}_ct{i}', sid, cx + 12, cy + 10, col_w - 24, 22,
+                              ct, size=13, color=AC['dark'], bold=True, font='Arial'))
+        reqs.extend(_text_box(f'{sid}_cb{i}', sid, cx + 12, cy + 35, col_w - 24, row_h - 45,
+                              cb, size=10, color=AC['dark'], font='Arial'))
+
+    # Bottom callout bar
+    bar_y = 440
+    reqs.extend(_rect(f'{sid}_bar', sid, 40, bar_y, 640, 50, AC['lavender'], corner_radius=6))
+    reqs.extend(_text_box(f'{sid}_bq', sid, 55, bar_y + 10, 610, 35,
+                          info['callout'], size=11, color=AC['dark'], bold=True, font='Arial'))
+
+    return reqs
+
+
+# ---------------------------------------------------------------------------
+# Page 14  – Growth Acceleration Risk (Venn diagram content)
+# ---------------------------------------------------------------------------
+def _auth_page14_venn(sid):
+    """Growth Acceleration Risk — Venn diagram of Trust/Relevance/Power links."""
+    reqs = [
+        {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
+        _as_bg(sid, AC['cream']),
+    ]
+    reqs.extend(_text_box(f'{sid}_t', sid, 40, 30, 640, 45,
+                          'Growth Acceleration Risk', size=30, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_sub', sid, 40, 80, 640, 40,
+                          'A healthy link profile requires balance across three dimensions. Imbalance in any one area limits the compounding effect of your authority-building efforts.',
+                          size=11, color=AC['dark'], font='Arial'))
+
+    # Simulated Venn with three overlapping circles (using shapes)
+    # Trust Links circle (left)
+    reqs.extend(_rect(f'{sid}_v1', sid, 140, 150, 180, 180, AC['light_lav'], corner_radius=90))
+    reqs.extend(_text_box(f'{sid}_v1t', sid, 165, 200, 130, 40,
+                          'TRUST LINKS\nEditorial high-DR\nplacements.',
+                          size=10, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
+    # Relevance Links circle (right)
+    reqs.extend(_rect(f'{sid}_v2', sid, 370, 150, 180, 180, AC['light_lav'], corner_radius=90))
+    reqs.extend(_text_box(f'{sid}_v2t', sid, 395, 200, 130, 40,
+                          'RELEVANCE LINKS\nTopically aligned\nindustry sources.',
+                          size=10, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
+    # Power Links circle (bottom center)
+    reqs.extend(_rect(f'{sid}_v3', sid, 255, 280, 180, 180, AC['lavender'], corner_radius=90))
+    reqs.extend(_text_box(f'{sid}_v3t', sid, 280, 330, 130, 40,
+                          'POWER LINKS\nHigh-traffic\nvisibility.',
+                          size=10, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
+
+    # Center label
+    reqs.extend(_text_box(f'{sid}_center', sid, 295, 250, 100, 25,
+                          'BALANCED\nAUTHORITY',
+                          size=8, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
+
+    # Bottom callout
+    reqs.extend(_rect(f'{sid}_bar', sid, 40, 475, 640, 45, AC['lavender'], corner_radius=6))
+    reqs.extend(_text_box(f'{sid}_bq', sid, 55, 480, 610, 35,
+                          'Current profile shows diluted authority acceleration. The triangle is unbalanced — trust and relevance links are underrepresented relative to the volume of low-power links.',
+                          size=10, color=AC['dark'], bold=True, font='Arial'))
+
+    return reqs
+
+
+# ---------------------------------------------------------------------------
+# Pages 6, 10, 15, 18  – DYNAMIC DATA SLIDES (replaces instruction pages)
+# These use actual audit screenshots and data.
+# ---------------------------------------------------------------------------
+def _auth_data_slide(sid, title, subtitle, screenshots_list, annotation=''):
+    """Generic data slide showing 1-2 screenshots with title.
+    screenshots_list: list of (url, label) tuples."""
+    reqs = [
+        {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
+        _as_bg(sid, AC['cream']),
+    ]
+    # Title
+    reqs.extend(_text_box(f'{sid}_t', sid, 40, 20, 500, 40,
+                          title, size=24, color=AC['pink'], bold=True))
+    if subtitle:
+        reqs.extend(_text_box(f'{sid}_sub', sid, 40, 55, 500, 25,
+                              subtitle, size=11, color=AC['purple'], bold=True, font='Arial'))
+
+    if annotation:
+        reqs.extend(_rect(f'{sid}_ann', sid, 540, 15, 150, 35, AC['lavender'], corner_radius=12))
+        reqs.extend(_text_box(f'{sid}_ant', sid, 548, 20, 135, 28,
+                              annotation, size=10, color=AC['dark'], bold=True, align='CENTER', font='Arial'))
+
+    n = len(screenshots_list)
+    y_top = 85
+    img_h = SH - y_top - 20  # ~435pt
+
+    if n == 1:
+        url, label = screenshots_list[0]
+        if url:
+            reqs.extend(_image(f'{sid}_img0', sid, 30, y_top, 660, img_h, url))
+    elif n >= 2:
+        half_w = 325
+        for i, (url, label) in enumerate(screenshots_list[:2]):
+            ix = 25 + i * (half_w + 10)
+            if url:
+                reqs.extend(_image(f'{sid}_img{i}', sid, ix, y_top, half_w, img_h, url))
+            if label:
+                reqs.extend(_text_box(f'{sid}_lbl{i}', sid, ix, y_top + img_h + 2, half_w, 18,
+                                      label, size=9, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
+
+    return reqs
+
+
+def _auth_data_slide_with_bullets(sid, title, image_url, bullet_items, annotation=''):
+    """Data slide with screenshot on left and bullet summary on right — matches the template's card style."""
+    reqs = [
+        {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
+        _as_bg(sid, AC['cream']),
+    ]
+    # Title
+    reqs.extend(_text_box(f'{sid}_t', sid, 40, 20, 500, 40,
+                          title, size=24, color=AC['pink'], bold=True))
+
+    if annotation:
+        reqs.extend(_rect(f'{sid}_ann', sid, 540, 15, 150, 35, AC['lavender'], corner_radius=12))
+        reqs.extend(_text_box(f'{sid}_ant', sid, 548, 20, 135, 28,
+                              annotation, size=10, color=AC['dark'], bold=True, align='CENTER', font='Arial'))
+
+    # Screenshot on left
+    if image_url:
+        reqs.extend(_image(f'{sid}_img', sid, 25, 75, 420, 430, image_url))
+
+    # Bullet card on right
+    reqs.extend(_rect(f'{sid}_bc', sid, 460, 75, 235, 430, AC['light_lav'], corner_radius=8))
+    reqs.extend(_text_box(f'{sid}_bh', sid, 472, 85, 210, 22,
+                          'ISSUES FOUND', size=13, color=AC['pink'], bold=True, font='Arial'))
+
+    if bullet_items:
+        bullet_text = '\n'.join([f'• {item}' for item in bullet_items])
+        reqs.extend(_text_box(f'{sid}_bt', sid, 472, 115, 210, 370,
+                              bullet_text, size=11, color=AC['dark'], font='Arial'))
+
+    return reqs
+
+
+# ---------------------------------------------------------------------------
+# Page 19  – Strategic Implementation Alignment Call (CTA)
+# ---------------------------------------------------------------------------
+def _auth_cta(sid):
+    """Closing CTA slide — 'Strategic Implementation Alignment Call'."""
+    reqs = [
+        {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
+        _as_bg(sid, AC['cream']),
+    ]
+    # Left side: CTA meeting image
+    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, SH, _TEMPLATE_IMGS['cta']))
+
+    # Right content
+    reqs.extend(_text_box(f'{sid}_t', sid, 390, 50, 300, 80,
+                          'Strategic Implementation\nAlignment Call',
+                          size=26, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_intro', sid, 390, 145, 300, 25,
+                          'We review:', size=12, color=AC['dark'], font='Arial'))
+
+    items = [
+        ('Prioritized Roadmap', 'A sequenced execution plan built around your highest-impact opportunities across all four pillars.'),
+        ('Revenue Impact Forecast', 'A projection of the revenue outcomes tied to each pillar optimization — so every decision is anchored to business results.'),
+        ('4-Pillar Execution Blueprint', 'A complete implementation framework covering Technical Infrastructure, Content Authority, Strategic Link Authority, and Conversion Power Optimization.'),
+    ]
+    y = 185
+    for i, (it, ib) in enumerate(items):
+        reqs.extend(_rect(f'{sid}_ib{i}', sid, 395, y, 22, 22, AC['lavender'], corner_radius=4))
+        reqs.extend(_text_box(f'{sid}_it{i}', sid, 425, y, 265, 22,
+                              it, size=13, color=AC['dark'], bold=True, font='Arial'))
+        reqs.extend(_text_box(f'{sid}_id{i}', sid, 425, y + 24, 265, 45,
+                              ib, size=10, color=AC['dark'], font='Arial'))
+        y += 80
+
+    # Bottom callout
+    reqs.extend(_rect(f'{sid}_cta', sid, 390, 450, 300, 50, AC['lavender'], corner_radius=6))
+    reqs.extend(_text_box(f'{sid}_ctxt', sid, 400, 455, 280, 40,
+                          'SEO without business alignment destroys scale. SEO architected for dominance builds it.',
+                          size=10, color=AC['pink'], bold=True, italic=True, font='Arial'))
+
+    return reqs
+
+
+# ===========================================================================
+# MAIN ORCHESTRATOR
+# ===========================================================================
+def create_authority_shift_slides(data, domain, creds=None, screenshots=None, annotations=None, issue_counts=None):
+    """
+    Creates the 4-Pillar Authority Shift™ Diagnostic presentation.
+    Follows the 19-page PDF template precisely:
+      Static pages for educational/scare content.
+      Instruction pages (6, 10, 15, 18) replaced with dynamic audit data + screenshots.
+    """
+    if not creds:
+        from api.google_auth import get_google_credentials
+        creds = get_google_credentials()
+
+    http = httplib2.Http(disable_ssl_certificate_validation=True)
+    authorized_http = AuthorizedHttp(creds, http=http)
+
+    slides_service = build('slides', 'v1', http=authorized_http)
+    drive_service = build('drive', 'v3', http=authorized_http)
+
+    # Extract data parts (same as existing template)
+    rank_overview = data.get('domain_rank', {})
+    backlinks = data.get('backlinks_summary', {})
+    keywords = data.get('organic_keywords', [])
+    spammy_links = data.get('referring_domains', [])
+    raw_pages = data.get('pages')
+    if isinstance(raw_pages, dict):
+        pages = raw_pages.get('pages', [])
+    elif isinstance(raw_pages, list):
+        pages = raw_pages
+    else:
+        pages = []
+    raw_summary = data.get('summary', {})
+    if isinstance(raw_summary, str):
+        try:
+            raw_summary = json.loads(raw_summary)
+        except:
+            raw_summary = {}
+    summary = raw_summary.get('summary', {}) if isinstance(raw_summary, dict) else {}
+
+    # Traffic/keyword metrics
+    total_traffic = data.get('total_traffic', 0) or 0
+    total_keywords = data.get('total_keywords', 0) or 0
+    if total_traffic == 0 or total_keywords == 0:
+        metrics = rank_overview.get('metrics', {}) if rank_overview else {}
+        organic_metrics = metrics.get('organic') if metrics else {}
+        organic_metrics = organic_metrics if organic_metrics else {}
+        if total_traffic == 0:
+            total_traffic = organic_metrics.get('etv', 0) or 0
+        if total_keywords == 0:
+            total_keywords = organic_metrics.get('count', 0) or 0
+    if total_keywords == 0 and keywords:
+        total_keywords = len(keywords)
+
+    referring_domains = backlinks.get('referring_domains', 0) or 0
+
+    if not screenshots:
+        screenshots = {}
+    if not annotations:
+        annotations = {}
+    if not issue_counts:
+        issue_counts = {}
+
+    # ---- Issue counts (for Pillar 4 data slides) ----
+    # Meta issues
+    title_too_long = issue_counts.get('titleTooLong', 0)
+    missing_desc = issue_counts.get('noDesc', 0)
+    desc_too_long = issue_counts.get('descTooLong', 0)
+    if not issue_counts:
+        for p in pages:
+            meta = p.get('meta', {}) if isinstance(p.get('meta'), dict) else {}
+            title_str = meta.get('title') or p.get('title') or ''
+            desc_str = meta.get('description') or p.get('description') or ''
+            if len(title_str) > 60: title_too_long += 1
+            if not desc_str or len(desc_str) < 5: missing_desc += 1
+            elif len(desc_str) > 160: desc_too_long += 1
+
+    # Heading issues
+    no_h1 = issue_counts.get('noH1', 0)
+    multi_h1 = issue_counts.get('multiH1', 0)
+    no_h2 = issue_counts.get('noH2', 0)
+    if not issue_counts:
+        for p in pages:
+            meta = p.get('meta', {}) if isinstance(p.get('meta'), dict) else {}
+            h1_list = meta.get('h1') or p.get('h1') or []
+            h2_list = meta.get('h2') or p.get('h2') or []
+            h1_cnt = len(h1_list) if isinstance(h1_list, list) else (1 if h1_list else 0)
+            h2_cnt = meta.get('h2_count') or p.get('h2_count') or (len(h2_list) if isinstance(h2_list, list) else 0)
+            if h1_cnt == 0: no_h1 += 1
+            if h1_cnt > 1: multi_h1 += 1
+            if h2_cnt == 0: no_h2 += 1
+
+    # Readability
+    readability_results = data.get('readability_results', [])
+    avg_grade = 0
+    if readability_results:
+        grades = [r.get('flesch_kincaid_grade', 0) for r in readability_results if isinstance(r, dict)]
+        avg_grade = sum(grades) / len(grades) if grades else 0
+
+    # PageSpeed
+    pagespeed_data = data.get('pagespeed', {})
+    if isinstance(pagespeed_data, str):
+        try:
+            pagespeed_data = json.loads(pagespeed_data)
+        except:
+            pagespeed_data = {}
+    scores = pagespeed_data.get('scores', {})
+    performance_score = scores.get('performance', 0) or 0
+
+    # ================================================================
+    # CREATE PRESENTATION
+    # ================================================================
+    presentation = {'title': f"4-Pillar SEO Diagnostic — {domain}"}
+    presentation = slides_service.presentations().create(body=presentation).execute()
+    pid = presentation.get('presentationId')
+
+    requests = []
+
+    # Delete default blank slide
+    if len(presentation.get('slides', [])) > 0:
+        requests.append({'deleteObject': {'objectId': presentation['slides'][0]['objectId']}})
+
+    print(f"[Authority Shift] Generating slides for {domain}...", file=sys.stderr)
+
+    # ---- PAGE 1: Cover ----
+    requests.extend(_auth_cover(generate_id(), domain))
+
+    # ---- PAGE 2: Why 87% Plateau ----
+    requests.extend(_auth_page2_plateau(generate_id()))
+
+    # ---- PAGE 3: 4-Pillar Blueprint Overview ----
+    requests.extend(_auth_page3_blueprint(generate_id()))
+
+    # ================================================================
+    # PILLAR 1: TECHNICAL INFRASTRUCTURE
+    # ================================================================
+
+    # ---- PAGE 4: Pillar 1 Intro ----
+    requests.extend(_auth_pillar_intro(generate_id(), 1))
+
+    # ---- PAGE 5: Pillar 1 Detail ----
+    requests.extend(_auth_pillar_detail(generate_id(), 1))
+
+    # ---- PAGE 6: Pillar 1 Data (replaces instruction page) ----
+    # Screenshots: Website Architecture, Redirects, Schema, Speed, Mobile, Readability
+    # We use what's available from the audit dashboard screenshots
+    if screenshots.get('speed_analysis'):
+        speed_ann = get_speed_annotation(performance_score)
+        requests.extend(_auth_data_slide(generate_id(),
+            'Technical Infrastructure Analysis', 'Page Speed & Core Web Vitals',
+            [(screenshots['speed_analysis'], 'Speed Analysis')],
+            annotation=speed_ann))
+
+    if screenshots.get('content_readability'):
+        read_ann = get_readability_annotation(avg_grade)
+        requests.extend(_auth_data_slide(generate_id(),
+            'Usability & Readability', 'Content Accessibility Analysis',
+            [(screenshots['content_readability'], 'Readability')],
+            annotation=read_ann))
+
+    # ---- PAGE 7: What This Means for Growth ----
+    requests.extend(_auth_scare_page(generate_id(), 7))
+
+    # ================================================================
+    # PILLAR 2: CONTENT AUTHORITY & FUNNEL ALIGNMENT
+    # ================================================================
+
+    # ---- PAGE 8: Pillar 2 Intro ----
+    requests.extend(_auth_pillar_intro(generate_id(), 2))
+
+    # ---- PAGE 9: Pillar 2 Detail ----
+    requests.extend(_auth_pillar_detail(generate_id(), 2))
+
+    # ---- PAGE 10: Pillar 2 Data (replaces instruction page) ----
+    # Screenshots: Organic KW/Traffic, Top Pages, Rankings
+    if screenshots.get('traffic_overview'):
+        traffic_ann = get_traffic_annotation_with_needs_work(total_traffic)
+        requests.extend(_auth_data_slide(generate_id(),
+            'Organic Traffic & Keywords', 'Search Visibility Overview',
+            [(screenshots['traffic_overview'], 'Traffic Overview')],
+            annotation=traffic_ann))
+
+    if screenshots.get('keywords_report'):
+        kw_ann = get_keywords_annotation(total_keywords)
+        requests.extend(_auth_data_slide(generate_id(),
+            'Keyword Rankings', 'Organic Position Distribution',
+            [(screenshots['keywords_report'], 'Keyword Report')],
+            annotation=kw_ann))
+
+    # ---- PAGE 11: Authority & Positioning Gap ----
+    requests.extend(_auth_scare_page(generate_id(), 11))
+
+    # ================================================================
+    # PILLAR 3: STRATEGIC LINK AUTHORITY
+    # ================================================================
+
+    # ---- PAGE 12: Pillar 3 Intro ----
+    requests.extend(_auth_pillar_intro(generate_id(), 3))
+
+    # ---- PAGE 13: Pillar 3 Detail ----
+    requests.extend(_auth_pillar_detail(generate_id(), 3))
+
+    # ---- PAGE 14: Growth Acceleration Risk (Venn) ----
+    requests.extend(_auth_page14_venn(generate_id()))
+
+    # ---- PAGE 15: Pillar 3 Data (replaces instruction page) ----
+    # Screenshots: Backlinks, Spammy Links, Low DA/DR
+    if screenshots.get('backlinks'):
+        bl_ann = get_backlinks_annotation(referring_domains)
+        requests.extend(_auth_data_slide(generate_id(),
+            'Link Profile Breakdown', 'Profile Metrics',
+            [(screenshots['backlinks'], 'Backlink Profile')],
+            annotation=bl_ann))
+
+    # ================================================================
+    # PILLAR 4: CONVERSION POWER
+    # ================================================================
+
+    # ---- PAGE 16: Pillar 4 Intro ----
+    requests.extend(_auth_pillar_intro(generate_id(), 4))
+
+    # ---- PAGE 17: Pillar 4 Detail ----
+    requests.extend(_auth_pillar_detail(generate_id(), 4))
+
+    # ---- PAGE 18: Pillar 4 Data (replaces instruction page) ----
+    # Screenshots: Meta Titles, Descriptions, Heading Tags, Readability
+    if screenshots.get('meta_issues'):
+        meta_bullets = []
+        if title_too_long > 0: meta_bullets.append(f"{title_too_long} pages with titles too long")
+        if missing_desc > 0: meta_bullets.append(f"{missing_desc} pages missing description")
+        if desc_too_long > 0: meta_bullets.append(f"{desc_too_long} pages with description too long")
+        if not meta_bullets: meta_bullets = ["No major meta issues found"]
+
+        requests.extend(_auth_data_slide_with_bullets(generate_id(),
+            'Meta & On-Page Analysis', screenshots['meta_issues'], meta_bullets))
+
+    if screenshots.get('heading_issues'):
+        heading_bullets = []
+        if no_h1 > 0: heading_bullets.append(f"{no_h1} pages missing H1")
+        if multi_h1 > 0: heading_bullets.append(f"{multi_h1} pages with multiple H1s")
+        if no_h2 > 0: heading_bullets.append(f"{no_h2} pages missing H2")
+        if not heading_bullets: heading_bullets = ["No major heading issues found"]
+
+        requests.extend(_auth_data_slide_with_bullets(generate_id(),
+            'Heading Structure Analysis', screenshots['heading_issues'], heading_bullets))
+
+    # ---- PAGE 19: CTA ----
+    requests.extend(_auth_cta(generate_id()))
+
+    # ================================================================
+    # BATCH EXECUTE
+    # ================================================================
+    print(f"[Authority Shift] Sending {len(requests)} requests...", file=sys.stderr)
+    slides_service.presentations().batchUpdate(presentationId=pid, body={'requests': requests}).execute()
+
+    # Set permissions (anyone with link can view)
+    drive_service.permissions().create(fileId=pid, body={'type': 'anyone', 'role': 'reader'}).execute()
+
+    return {
+        "presentation_id": pid,
+        "presentation_url": f"https://docs.google.com/presentation/d/{pid}/edit"
+    }

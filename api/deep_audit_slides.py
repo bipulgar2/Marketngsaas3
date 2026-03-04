@@ -2668,10 +2668,34 @@ def create_authority_shift_slides(data, domain, creds=None, screenshots=None, an
     requests.extend(_auth_cta(generate_id()))
 
     # ================================================================
-    # BATCH EXECUTE
+    # BATCH EXECUTE — chunked to avoid timeout
     # ================================================================
-    print(f"[Authority Shift] Sending {len(requests)} requests...", file=sys.stderr)
-    slides_service.presentations().batchUpdate(presentationId=pid, body={'requests': requests}).execute()
+    # Split requests into per-slide chunks.  Each helper returns a list
+    # starting with a 'createSlide' request, so we split on that boundary.
+    chunks = []
+    current_chunk = []
+    for req in requests:
+        # Detect the start of a new slide
+        if 'createSlide' in req or 'deleteObject' in req:
+            if current_chunk:
+                chunks.append(current_chunk)
+            current_chunk = [req]
+        else:
+            current_chunk.append(req)
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    print(f"[Authority Shift] Sending {len(requests)} requests in {len(chunks)} chunks for {domain}...", file=sys.stderr)
+
+    for idx, chunk in enumerate(chunks):
+        try:
+            slides_service.presentations().batchUpdate(
+                presentationId=pid, body={'requests': chunk}
+            ).execute()
+            print(f"  Chunk {idx+1}/{len(chunks)} done ({len(chunk)} reqs)", file=sys.stderr)
+        except Exception as e:
+            print(f"  Chunk {idx+1}/{len(chunks)} ERROR: {e}", file=sys.stderr)
+            # Continue with remaining chunks even if one fails
 
     # Set permissions (anyone with link can view)
     drive_service.permissions().create(fileId=pid, body={'type': 'anyone', 'role': 'reader'}).execute()

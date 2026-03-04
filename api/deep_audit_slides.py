@@ -1952,22 +1952,22 @@ def _auth_cover(sid, domain):
         _as_bg(sid, AC['cream']),
     ]
     # Left panel: template cover image
-    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, SH, _TEMPLATE_IMGS['cover']))
+    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, 405, _TEMPLATE_IMGS['cover']))
 
-    # Left side: small badge "THE 4-PILLAR SEO GROWTH DIAGNOSTIC™"
-    reqs.extend(_text_box(f'{sid}_badge', sid, 40, 180, 280, 30,
+    # Left side: small badge
+    reqs.extend(_text_box(f'{sid}_badge', sid, 40, 130, 280, 25,
                           'THE 4-PILLAR SEO GROWTH DIAGNOSTIC™',
                           size=9, color=AC['white'], bold=True, font='Arial'))
 
     # Right side content
-    reqs.extend(_text_box(f'{sid}_title', sid, 390, 120, 300, 100,
+    reqs.extend(_text_box(f'{sid}_title', sid, 390, 80, 300, 90,
                           'The Authority\nShift™ Diagnostic',
-                          size=36, color=AC['pink'], bold=True))
-    reqs.extend(_text_box(f'{sid}_sub', sid, 390, 250, 300, 50,
+                          size=32, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_sub', sid, 390, 185, 300, 40,
                           f'Assessment for {domain}',
-                          size=18, color=AC['dark'], bold=False, font='Arial'))
+                          size=16, color=AC['dark'], bold=False, font='Arial'))
     # Decorative separator line
-    reqs.extend(_rect(f'{sid}_line', sid, 390, 310, 200, 2, AC['pink']))
+    reqs.extend(_rect(f'{sid}_line', sid, 390, 235, 200, 2, AC['pink']))
 
     return reqs
 
@@ -1982,20 +1982,20 @@ def _auth_page2_plateau(sid):
         _as_bg(sid, AC['cream']),
     ]
     # Left panel: plateau image
-    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, SH, _TEMPLATE_IMGS['plateau']))
-    reqs.extend(_text_box(f'{sid}_stat', sid, 40, 80, 280, 80,
-                          '87%', size=72, color=AC['white'], bold=True))
-    reqs.extend(_text_box(f'{sid}_stxt', sid, 40, 170, 280, 60,
+    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, 405, _TEMPLATE_IMGS['plateau']))
+    reqs.extend(_text_box(f'{sid}_stat', sid, 40, 50, 280, 70,
+                          '87%', size=60, color=AC['white'], bold=True))
+    reqs.extend(_text_box(f'{sid}_stxt', sid, 40, 125, 280, 45,
                           'of SEO campaigns plateau\nor fail within 12 months.',
-                          size=16, color=AC['white'], font='Arial'))
+                          size=13, color=AC['white'], font='Arial'))
 
     # Right side content
-    reqs.extend(_text_box(f'{sid}_t', sid, 390, 50, 300, 60,
+    reqs.extend(_text_box(f'{sid}_t', sid, 390, 20, 300, 50,
                           'Why 87% of SEO\nCampaigns Plateau',
-                          size=28, color=AC['pink'], bold=True))
-    reqs.extend(_text_box(f'{sid}_b', sid, 390, 130, 300, 120,
+                          size=22, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_b', sid, 390, 75, 300, 100,
                           'Most SEO strategies are built on surface-level tactics — chasing algorithm updates, building random backlinks, or writing content without strategic intent.\n\nThis diagnostic evaluates your SEO infrastructure across 4 pillars that determine whether your site is architectured for sustained growth — or destined to stall.',
-                          size=12, color=AC['dark'], font='Arial'))
+                          size=9, color=AC['dark'], font='Arial'))
 
     # Three reason cards
     reasons = [
@@ -2003,14 +2003,14 @@ def _auth_page2_plateau(sid):
         ('No Compounding Growth', 'Each effort starts from zero instead of building on the last.'),
         ('Invisible to Google', 'Poor infrastructure means Google can\'t properly index or rank you.'),
     ]
-    y_start = 280
+    y_start = 190
     for i, (title, body) in enumerate(reasons):
-        cy = y_start + i * 78
-        reqs.extend(_rect(f'{sid}_c{i}', sid, 390, cy, 300, 70, AC['light_lav'], corner_radius=5))
-        reqs.extend(_text_box(f'{sid}_ct{i}', sid, 400, cy + 8, 280, 25,
-                              title, size=12, color=AC['dark'], bold=True, font='Arial'))
-        reqs.extend(_text_box(f'{sid}_cb{i}', sid, 400, cy + 32, 280, 35,
-                              body, size=10, color=AC['dark'], font='Arial'))
+        cy = y_start + i * 62
+        reqs.extend(_rect(f'{sid}_c{i}', sid, 390, cy, 300, 55, AC['light_lav'], corner_radius=5))
+        reqs.extend(_text_box(f'{sid}_ct{i}', sid, 400, cy + 5, 280, 20,
+                              title, size=10, color=AC['dark'], bold=True, font='Arial'))
+        reqs.extend(_text_box(f'{sid}_cb{i}', sid, 400, cy + 26, 280, 26,
+                              body, size=9, color=AC['dark'], font='Arial'))
 
     return reqs
 
@@ -2024,12 +2024,12 @@ def _auth_page3_blueprint(sid):
         {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
         _as_bg(sid, AC['cream']),
     ]
-    reqs.extend(_text_box(f'{sid}_t', sid, 40, 30, 640, 50,
+    reqs.extend(_text_box(f'{sid}_t', sid, 40, 15, 640, 40,
                           'The 4-Pillar SEO Growth Diagnostic™',
-                          size=28, color=AC['pink'], bold=True))
-    reqs.extend(_text_box(f'{sid}_sub', sid, 40, 80, 640, 35,
+                          size=22, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_sub', sid, 40, 55, 640, 25,
                           'A comprehensive framework that evaluates four interconnected pillars of SEO dominance.',
-                          size=12, color=AC['dark'], font='Arial'))
+                          size=10, color=AC['dark'], font='Arial'))
 
     pillars = [
         ('⚙️ PILLAR 1', 'Technical\nInfrastructure', 'The invisible backbone that determines whether Google can properly discover, render, and rank your pages.'),
@@ -2043,16 +2043,16 @@ def _auth_page3_blueprint(sid):
     for i, (icon, name, desc) in enumerate(pillars):
         cx = x_start + i * (col_w + gap)
         # Card bg
-        reqs.extend(_rect(f'{sid}_p{i}', sid, cx, 130, col_w, 350, AC['light_lav'], corner_radius=8))
+        reqs.extend(_rect(f'{sid}_p{i}', sid, cx, 90, col_w, 295, AC['light_lav'], corner_radius=8))
         # Pillar badge
-        reqs.extend(_text_box(f'{sid}_pi{i}', sid, cx + 10, 145, col_w - 20, 25,
-                              icon, size=10, color=AC['purple'], bold=True, font='Arial'))
+        reqs.extend(_text_box(f'{sid}_pi{i}', sid, cx + 10, 100, col_w - 20, 20,
+                              icon, size=9, color=AC['purple'], bold=True, font='Arial'))
         # Pillar name
-        reqs.extend(_text_box(f'{sid}_pn{i}', sid, cx + 10, 180, col_w - 20, 55,
-                              name, size=16, color=AC['pink'], bold=True))
+        reqs.extend(_text_box(f'{sid}_pn{i}', sid, cx + 10, 125, col_w - 20, 45,
+                              name, size=14, color=AC['pink'], bold=True))
         # Pillar desc
-        reqs.extend(_text_box(f'{sid}_pd{i}', sid, cx + 10, 250, col_w - 20, 120,
-                              desc, size=10, color=AC['dark'], font='Arial'))
+        reqs.extend(_text_box(f'{sid}_pd{i}', sid, cx + 10, 180, col_w - 20, 180,
+                              desc, size=9, color=AC['dark'], font='Arial'))
 
     return reqs
 
@@ -2092,18 +2092,18 @@ def _auth_pillar_intro(sid, pillar_num):
     ]
     # Left half: pillar-specific image
     img_key = f'pillar{pillar_num}'
-    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, SH, _TEMPLATE_IMGS.get(img_key, _TEMPLATE_IMGS['cover'])))
+    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, 405, _TEMPLATE_IMGS.get(img_key, _TEMPLATE_IMGS['cover'])))
 
     # Badge on right
-    reqs.extend(_rect(f'{sid}_bb', sid, 390, 200, 100, 25, AC['white'], corner_radius=12))
-    reqs.extend(_text_box(f'{sid}_bl', sid, 395, 202, 90, 22,
-                          info['badge'], size=9, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
+    reqs.extend(_rect(f'{sid}_bb', sid, 390, 60, 100, 22, AC['white'], corner_radius=12))
+    reqs.extend(_text_box(f'{sid}_bl', sid, 395, 62, 90, 18,
+                          info['badge'], size=8, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
     # Title
-    reqs.extend(_text_box(f'{sid}_t', sid, 390, 240, 300, 80,
-                          info['title'], size=32, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_t', sid, 390, 90, 300, 65,
+                          info['title'], size=26, color=AC['pink'], bold=True))
     # Body
-    reqs.extend(_text_box(f'{sid}_b', sid, 390, 335, 300, 180,
-                          info['body'], size=11, color=AC['dark'], font='Arial'))
+    reqs.extend(_text_box(f'{sid}_b', sid, 390, 165, 300, 220,
+                          info['body'], size=10, color=AC['dark'], font='Arial'))
     return reqs
 
 
@@ -2158,53 +2158,35 @@ def _auth_pillar_detail(sid, pillar_num):
     ]
     # Right panel: pillar-specific image
     img_key = f'pillar{pillar_num}'
-    reqs.extend(_image(f'{sid}_rp', sid, 420, 0, 300, SH, _TEMPLATE_IMGS.get(img_key, _TEMPLATE_IMGS['cover'])))
+    reqs.extend(_image(f'{sid}_rp', sid, 420, 0, 300, 405, _TEMPLATE_IMGS.get(img_key, _TEMPLATE_IMGS['cover'])))
 
     # Title
-    reqs.extend(_text_box(f'{sid}_t', sid, 30, 30, 380, 70,
-                          info['title'], size=26, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_t', sid, 30, 15, 380, 55,
+                          info['title'], size=20, color=AC['pink'], bold=True))
     # Body
-    reqs.extend(_text_box(f'{sid}_b', sid, 30, 110, 380, 60,
-                          info['body'], size=11, color=AC['dark'], font='Arial'))
+    reqs.extend(_text_box(f'{sid}_b', sid, 30, 75, 380, 55,
+                          info['body'], size=9, color=AC['dark'], font='Arial'))
 
-    # Cards
+    # Cards — always 2 side-by-side on top + 1 full width below
     cards = info['cards']
-    card_h = 90 if len(cards) <= 2 else 75
-    y_start = 190
+    card_h = 65
+    y_start = 140
     for i, (card_title, card_body) in enumerate(cards):
-        cy = y_start + i * (card_h + 10)
-        # Card with 2-col layout if 2 cards, or stacked if 3
-        cw = 380 if len(cards) == 3 else 185
-        cx = 30
-        if len(cards) == 3:
-            pass  # full width stacked
+        if i < 2:
+            cw2 = 185
+            cx2 = 30 + i * 195
+            reqs.extend(_rect(f'{sid}_cd{i}', sid, cx2, y_start, cw2, card_h, AC['light_lav'], corner_radius=6))
+            reqs.extend(_text_box(f'{sid}_cdt{i}', sid, cx2 + 8, y_start + 5, cw2 - 16, 18,
+                                  card_title, size=10, color=AC['dark'], bold=True, font='Arial'))
+            reqs.extend(_text_box(f'{sid}_cdb{i}', sid, cx2 + 8, y_start + 25, cw2 - 16, card_h - 30,
+                                  card_body, size=8, color=AC['dark'], font='Arial'))
         else:
-            cx = 30 + i * 195
-
-        if len(cards) <= 2:
-            reqs.extend(_rect(f'{sid}_cd{i}', sid, cx, cy, cw, card_h, AC['light_lav'], corner_radius=6))
-            reqs.extend(_text_box(f'{sid}_cdt{i}', sid, cx + 10, cy + 8, cw - 20, 22,
-                                  card_title, size=12, color=AC['dark'], bold=True, font='Arial'))
-            reqs.extend(_text_box(f'{sid}_cdb{i}', sid, cx + 10, cy + 32, cw - 20, card_h - 40,
-                                  card_body, size=10, color=AC['dark'], font='Arial'))
-        else:
-            # 3 cards: first 2 side-by-side, 3rd full width
-            if i < 2:
-                cw2 = 185
-                cx2 = 30 + i * 195
-                reqs.extend(_rect(f'{sid}_cd{i}', sid, cx2, y_start, cw2, card_h, AC['light_lav'], corner_radius=6))
-                reqs.extend(_text_box(f'{sid}_cdt{i}', sid, cx2 + 10, y_start + 8, cw2 - 20, 22,
-                                      card_title, size=12, color=AC['dark'], bold=True, font='Arial'))
-                reqs.extend(_text_box(f'{sid}_cdb{i}', sid, cx2 + 10, y_start + 32, cw2 - 20, card_h - 40,
-                                      card_body, size=10, color=AC['dark'], font='Arial'))
-            else:
-                # Third card full width below
-                cy3 = y_start + card_h + 15
-                reqs.extend(_rect(f'{sid}_cd{i}', sid, 30, cy3, 380, card_h, AC['light_lav'], corner_radius=6))
-                reqs.extend(_text_box(f'{sid}_cdt{i}', sid, 40, cy3 + 8, 360, 22,
-                                      card_title, size=12, color=AC['dark'], bold=True, font='Arial'))
-                reqs.extend(_text_box(f'{sid}_cdb{i}', sid, 40, cy3 + 32, 360, card_h - 40,
-                                      card_body, size=10, color=AC['dark'], font='Arial'))
+            cy3 = y_start + card_h + 10
+            reqs.extend(_rect(f'{sid}_cd{i}', sid, 30, cy3, 380, card_h, AC['light_lav'], corner_radius=6))
+            reqs.extend(_text_box(f'{sid}_cdt{i}', sid, 38, cy3 + 5, 360, 18,
+                                  card_title, size=10, color=AC['dark'], bold=True, font='Arial'))
+            reqs.extend(_text_box(f'{sid}_cdb{i}', sid, 38, cy3 + 25, 360, card_h - 30,
+                                  card_body, size=8, color=AC['dark'], font='Arial'))
     return reqs
 
 
@@ -2241,31 +2223,33 @@ def _auth_scare_page(sid, page_num):
         _as_bg(sid, AC['cream']),
     ]
     # Title
-    reqs.extend(_text_box(f'{sid}_t', sid, 40, 30, 640, 70,
-                          info['title'], size=30, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_t', sid, 40, 10, 640, 50,
+                          info['title'], size=22, color=AC['pink'], bold=True))
 
     cards = info['cards']
     # Layout: 2 columns
     col_w = 310
-    row_h = 100
-    gap_x, gap_y = 15, 12
-    x_start, y_start = 40, 110
+    row_h = 75
+    gap_x, gap_y = 15, 10
+    x_start, y_start = 40, 65
     for i, (ct, cb) in enumerate(cards):
         col = i % 2
         row = i // 2
         cx = x_start + col * (col_w + gap_x)
         cy = y_start + row * (row_h + gap_y)
         reqs.extend(_rect(f'{sid}_c{i}', sid, cx, cy, col_w, row_h, AC['light_lav'], corner_radius=6))
-        reqs.extend(_text_box(f'{sid}_ct{i}', sid, cx + 12, cy + 10, col_w - 24, 22,
-                              ct, size=13, color=AC['dark'], bold=True, font='Arial'))
-        reqs.extend(_text_box(f'{sid}_cb{i}', sid, cx + 12, cy + 35, col_w - 24, row_h - 45,
-                              cb, size=10, color=AC['dark'], font='Arial'))
+        reqs.extend(_text_box(f'{sid}_ct{i}', sid, cx + 10, cy + 5, col_w - 20, 18,
+                              ct, size=10, color=AC['dark'], bold=True, font='Arial'))
+        reqs.extend(_text_box(f'{sid}_cb{i}', sid, cx + 10, cy + 25, col_w - 20, row_h - 30,
+                              cb, size=8, color=AC['dark'], font='Arial'))
 
-    # Bottom callout bar
-    bar_y = 440
-    reqs.extend(_rect(f'{sid}_bar', sid, 40, bar_y, 640, 50, AC['lavender'], corner_radius=6))
-    reqs.extend(_text_box(f'{sid}_bq', sid, 55, bar_y + 10, 610, 35,
-                          info['callout'], size=11, color=AC['dark'], bold=True, font='Arial'))
+    # Bottom callout bar — max y for 2 rows: 65 + 2*(75+10) = 235
+    num_rows = (len(cards) + 1) // 2
+    bar_y = y_start + num_rows * (row_h + gap_y) + 5
+    bar_y = min(bar_y, 355)  # ensure it fits within 405
+    reqs.extend(_rect(f'{sid}_bar', sid, 40, bar_y, 640, 40, AC['lavender'], corner_radius=6))
+    reqs.extend(_text_box(f'{sid}_bq', sid, 50, bar_y + 8, 620, 28,
+                          info['callout'], size=9, color=AC['dark'], bold=True, font='Arial'))
 
     return reqs
 
@@ -2279,39 +2263,39 @@ def _auth_page14_venn(sid):
         {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
         _as_bg(sid, AC['cream']),
     ]
-    reqs.extend(_text_box(f'{sid}_t', sid, 40, 30, 640, 45,
-                          'Growth Acceleration Risk', size=30, color=AC['pink'], bold=True))
-    reqs.extend(_text_box(f'{sid}_sub', sid, 40, 80, 640, 40,
+    reqs.extend(_text_box(f'{sid}_t', sid, 40, 10, 640, 35,
+                          'Growth Acceleration Risk', size=22, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_sub', sid, 40, 48, 640, 30,
                           'A healthy link profile requires balance across three dimensions. Imbalance in any one area limits the compounding effect of your authority-building efforts.',
-                          size=11, color=AC['dark'], font='Arial'))
+                          size=9, color=AC['dark'], font='Arial'))
 
-    # Simulated Venn with three overlapping circles (using shapes)
+    # Simulated Venn with three overlapping circles
     # Trust Links circle (left)
-    reqs.extend(_rect(f'{sid}_v1', sid, 140, 150, 180, 180, AC['light_lav'], corner_radius=90))
-    reqs.extend(_text_box(f'{sid}_v1t', sid, 165, 200, 130, 40,
+    reqs.extend(_rect(f'{sid}_v1', sid, 150, 90, 140, 140, AC['light_lav'], corner_radius=70))
+    reqs.extend(_text_box(f'{sid}_v1t', sid, 168, 130, 104, 35,
                           'TRUST LINKS\nEditorial high-DR\nplacements.',
-                          size=10, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
+                          size=8, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
     # Relevance Links circle (right)
-    reqs.extend(_rect(f'{sid}_v2', sid, 370, 150, 180, 180, AC['light_lav'], corner_radius=90))
-    reqs.extend(_text_box(f'{sid}_v2t', sid, 395, 200, 130, 40,
+    reqs.extend(_rect(f'{sid}_v2', sid, 380, 90, 140, 140, AC['light_lav'], corner_radius=70))
+    reqs.extend(_text_box(f'{sid}_v2t', sid, 398, 130, 104, 35,
                           'RELEVANCE LINKS\nTopically aligned\nindustry sources.',
-                          size=10, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
+                          size=8, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
     # Power Links circle (bottom center)
-    reqs.extend(_rect(f'{sid}_v3', sid, 255, 280, 180, 180, AC['lavender'], corner_radius=90))
-    reqs.extend(_text_box(f'{sid}_v3t', sid, 280, 330, 130, 40,
+    reqs.extend(_rect(f'{sid}_v3', sid, 265, 190, 140, 140, AC['lavender'], corner_radius=70))
+    reqs.extend(_text_box(f'{sid}_v3t', sid, 283, 230, 104, 35,
                           'POWER LINKS\nHigh-traffic\nvisibility.',
-                          size=10, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
-
-    # Center label
-    reqs.extend(_text_box(f'{sid}_center', sid, 295, 250, 100, 25,
-                          'BALANCED\nAUTHORITY',
                           size=8, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
 
+    # Center label
+    reqs.extend(_text_box(f'{sid}_center', sid, 303, 185, 65, 20,
+                          'BALANCED\nAUTHORITY',
+                          size=6, color=AC['purple'], bold=True, align='CENTER', font='Arial'))
+
     # Bottom callout
-    reqs.extend(_rect(f'{sid}_bar', sid, 40, 475, 640, 45, AC['lavender'], corner_radius=6))
-    reqs.extend(_text_box(f'{sid}_bq', sid, 55, 480, 610, 35,
+    reqs.extend(_rect(f'{sid}_bar', sid, 40, 350, 640, 40, AC['lavender'], corner_radius=6))
+    reqs.extend(_text_box(f'{sid}_bq', sid, 50, 355, 620, 30,
                           'Current profile shows diluted authority acceleration. The triangle is unbalanced — trust and relevance links are underrepresented relative to the volume of low-power links.',
-                          size=10, color=AC['dark'], bold=True, font='Arial'))
+                          size=8, color=AC['dark'], bold=True, font='Arial'))
 
     return reqs
 
@@ -2341,7 +2325,7 @@ def _auth_data_slide(sid, title, subtitle, screenshots_list, annotation=''):
 
     n = len(screenshots_list)
     y_top = 85
-    img_h = SH - y_top - 20  # ~435pt
+    img_h = 405 - y_top - 15  # ~305pt (widescreen)
 
     if n == 1:
         url, label = screenshots_list[0]
@@ -2377,17 +2361,17 @@ def _auth_data_slide_with_bullets(sid, title, image_url, bullet_items, annotatio
 
     # Screenshot on left
     if image_url:
-        reqs.extend(_image(f'{sid}_img', sid, 25, 75, 420, 430, image_url))
+        reqs.extend(_image(f'{sid}_img', sid, 25, 70, 420, 315, image_url))
 
     # Bullet card on right
-    reqs.extend(_rect(f'{sid}_bc', sid, 460, 75, 235, 430, AC['light_lav'], corner_radius=8))
-    reqs.extend(_text_box(f'{sid}_bh', sid, 472, 85, 210, 22,
-                          'ISSUES FOUND', size=13, color=AC['pink'], bold=True, font='Arial'))
+    reqs.extend(_rect(f'{sid}_bc', sid, 460, 70, 235, 315, AC['light_lav'], corner_radius=8))
+    reqs.extend(_text_box(f'{sid}_bh', sid, 472, 78, 210, 18,
+                          'ISSUES FOUND', size=11, color=AC['pink'], bold=True, font='Arial'))
 
     if bullet_items:
         bullet_text = '\n'.join([f'• {item}' for item in bullet_items])
-        reqs.extend(_text_box(f'{sid}_bt', sid, 472, 115, 210, 370,
-                              bullet_text, size=11, color=AC['dark'], font='Arial'))
+        reqs.extend(_text_box(f'{sid}_bt', sid, 472, 100, 210, 270,
+                              bullet_text, size=9, color=AC['dark'], font='Arial'))
 
     return reqs
 
@@ -2402,34 +2386,34 @@ def _auth_cta(sid):
         _as_bg(sid, AC['cream']),
     ]
     # Left side: CTA meeting image
-    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, SH, _TEMPLATE_IMGS['cta']))
+    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, 405, _TEMPLATE_IMGS['cta']))
 
     # Right content
-    reqs.extend(_text_box(f'{sid}_t', sid, 390, 50, 300, 80,
+    reqs.extend(_text_box(f'{sid}_t', sid, 390, 20, 300, 60,
                           'Strategic Implementation\nAlignment Call',
-                          size=26, color=AC['pink'], bold=True))
-    reqs.extend(_text_box(f'{sid}_intro', sid, 390, 145, 300, 25,
-                          'We review:', size=12, color=AC['dark'], font='Arial'))
+                          size=20, color=AC['pink'], bold=True))
+    reqs.extend(_text_box(f'{sid}_intro', sid, 390, 85, 300, 20,
+                          'We review:', size=10, color=AC['dark'], font='Arial'))
 
     items = [
         ('Prioritized Roadmap', 'A sequenced execution plan built around your highest-impact opportunities across all four pillars.'),
         ('Revenue Impact Forecast', 'A projection of the revenue outcomes tied to each pillar optimization — so every decision is anchored to business results.'),
         ('4-Pillar Execution Blueprint', 'A complete implementation framework covering Technical Infrastructure, Content Authority, Strategic Link Authority, and Conversion Power Optimization.'),
     ]
-    y = 185
+    y = 110
     for i, (it, ib) in enumerate(items):
-        reqs.extend(_rect(f'{sid}_ib{i}', sid, 395, y, 22, 22, AC['lavender'], corner_radius=4))
-        reqs.extend(_text_box(f'{sid}_it{i}', sid, 425, y, 265, 22,
-                              it, size=13, color=AC['dark'], bold=True, font='Arial'))
-        reqs.extend(_text_box(f'{sid}_id{i}', sid, 425, y + 24, 265, 45,
-                              ib, size=10, color=AC['dark'], font='Arial'))
-        y += 80
+        reqs.extend(_rect(f'{sid}_ib{i}', sid, 395, y, 18, 18, AC['lavender'], corner_radius=4))
+        reqs.extend(_text_box(f'{sid}_it{i}', sid, 420, y, 270, 18,
+                              it, size=10, color=AC['dark'], bold=True, font='Arial'))
+        reqs.extend(_text_box(f'{sid}_id{i}', sid, 420, y + 20, 270, 40,
+                              ib, size=8, color=AC['dark'], font='Arial'))
+        y += 65
 
     # Bottom callout
-    reqs.extend(_rect(f'{sid}_cta', sid, 390, 450, 300, 50, AC['lavender'], corner_radius=6))
-    reqs.extend(_text_box(f'{sid}_ctxt', sid, 400, 455, 280, 40,
+    reqs.extend(_rect(f'{sid}_cta', sid, 390, 350, 300, 40, AC['lavender'], corner_radius=6))
+    reqs.extend(_text_box(f'{sid}_ctxt', sid, 400, 355, 280, 30,
                           'SEO without business alignment destroys scale. SEO architected for dominance builds it.',
-                          size=10, color=AC['pink'], bold=True, italic=True, font='Arial'))
+                          size=9, color=AC['pink'], bold=True, italic=True, font='Arial'))
 
     return reqs
 

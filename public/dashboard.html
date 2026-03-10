@@ -1983,38 +1983,35 @@
                 `;
 
 
-                    // Add a row for each competitor audit
-                    audits.forEach(audit => {
+                    // Add a row for each competitor audit (async to fetch stats per audit)
+                    for (const audit of audits) {
                         const isCrawling = audit.status === 'crawling' || audit.status === 'running';
                         const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
                         const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
                         const displayDomain = audit.results?.competitor_domain || 'Unknown Competitor';
 
-                        const compResults = audit.results || {};
-                        let trf = compResults.total_traffic ? Math.round(compResults.total_traffic).toLocaleString() : '-';
-                        let kwds = compResults.total_keywords ? compResults.total_keywords.toLocaleString() : '-';
-
-                        // Top 10 keywords for competitor
-                        const compKws = (compResults.keywords || []).slice(0, 10);
-                        let compTop10Html = '-';
-                        if (compKws.length > 0) {
-                            const getRank = (item) => (item.ranked_serp_element?.serp_item?.rank_absolute) || 999;
-                            const sorted = [...compKws].sort((a, b) => getRank(a) - getRank(b)).slice(0, 10);
-                            compTop10Html = sorted.map(k => {
-                                const kw = k.keyword_data?.keyword || '';
-                                const rank = getRank(k);
-                                const vol = k.keyword_data?.keyword_info?.search_volume || 0;
-                                return `<div class="flex items-center gap-2 text-xs">
-                                    <span class="bg-emerald-600/20 text-emerald-400 font-mono px-1.5 py-0.5 rounded">#${rank}</span>
-                                    <span class="text-white truncate max-w-[200px]" title="${kw}">${kw}</span>
-                                    <span class="text-gray-500 ml-auto">${vol.toLocaleString()} vol</span>
-                                </div>`;
-                            }).join('');
-                        } else if (audit.status === 'completed') {
-                            compTop10Html = '<span class="text-gray-500 text-xs">No keyword data in audit</span>';
-                        } else if (isCrawling) {
-                            compTop10Html = '<span class="text-yellow-400/70 text-xs">Crawling...</span>';
-                        }
+                        // Fetch stats from projects table via the endpoint (reads organic_keywords)
+                        let trf = '-', kwds = '-', compTop10Html = '-';
+                        try {
+                            const compStats = await fetch(`/api/client/stats?audit_id=${audit.id}`);
+                            const compData = await compStats.json();
+                            if (compData.success) {
+                                trf = compData.total_traffic ? Math.round(compData.total_traffic).toLocaleString() : '-';
+                                kwds = compData.total_keywords ? compData.total_keywords.toLocaleString() : '-';
+                                if (compData.top10_keywords?.length > 0) {
+                                    compTop10Html = compData.top10_keywords.map(k =>
+                                        `<div class="flex items-center gap-2 text-xs">
+                                            <span class="bg-emerald-600/20 text-emerald-400 font-mono px-1.5 py-0.5 rounded">#${k.rank}</span>
+                                            <span class="text-white truncate max-w-[200px]" title="${k.keyword}">${k.keyword}</span>
+                                            <span class="text-gray-500 ml-auto">${(k.volume || 0).toLocaleString()} vol</span>
+                                        </div>`
+                                    ).join('');
+                                } else if (audit.status === 'completed') {
+                                    compTop10Html = '<span class="text-gray-500 text-xs">No keyword data stored</span>';
+                                }
+                            }
+                        } catch (e) { /* non-fatal */ }
+                        if (isCrawling) compTop10Html = '<span class="text-yellow-400/70 text-xs">Crawling...</span>';
 
                         const actionsHtml = isCrawling ?
                             `<button onclick="checkAuditStatus('${audit.id}')" class="${statusColor} hover:text-white flex items-center justify-end w-full gap-1 text-xs">
@@ -2036,7 +2033,7 @@
                                 <td class="px-6 py-4 text-right">${actionsHtml}</td>
                             </tr>
                         `;
-                    });
+                    }
 
                     tableHTML += `
                                     </tbody>

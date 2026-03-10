@@ -1165,43 +1165,57 @@ def analyze_competitors():
 @login_required
 @permission_required('view_all_campaigns')
 def get_client_stats():
-    """Return traffic, keyword count, and top 10 ranked keywords for a campaign domain."""
+    """Return traffic, keyword count, and top 10 ranked keywords.
+    
+    Params:
+      campaign_id: required — reads the most recent technical audit for this campaign
+      audit_id: optional — if provided, reads from the projects record for this specific audit
+                (used for competitor rows which each have their own audit)
+    """
     campaign_id = request.args.get('campaign_id')
-    if not campaign_id:
-        return jsonify({'error': 'campaign_id required'}), 400
+    audit_id = request.args.get('audit_id')
 
     db = supabase_admin or supabase
-    try:
-        # Get the most recent project record for this campaign (written at audit creation time)
-        proj_res = db.table('projects').select('full_audit_data') \
-            .eq('audit_id', db.table('audits').select('id') \
-            .eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(1)) \
-            .limit(1).execute()
-    except Exception:
-        proj_res = None
+    keywords_raw, total_kw, total_traffic = [], 0, 0
 
-    # Fallback: query audits table directly
     try:
-        audit_res = db.table('audits').select('results') \
-            .eq('campaign_id', campaign_id).eq('type', 'technical') \
-            .order('created_at', desc=True).limit(1).execute()
-        audit_data = (audit_res.data or [{}])[0].get('results') or {}
-        keywords_raw = audit_data.get('keywords', [])
-        total_kw = audit_data.get('total_keywords', len(keywords_raw))
-        total_traffic = audit_data.get('total_traffic', 0)
-    except Exception:
-        keywords_raw, total_kw, total_traffic = [], 0, 0
+        if audit_id:
+            # Competitor row: find the project linked to this specific audit
+            proj_res = db.table('projects').select('full_audit_data') \
+                .eq('audit_id', audit_id).limit(1).execute()
+        else:
+            # Client row: find the project linked to the latest technical audit for this campaign
+            if not campaign_id:
+                return jsonify({'error': 'campaign_id or audit_id required'}), 400
+            # Get the latest technical audit id
+            aud_res = db.table('audits').select('id') \
+                .eq('campaign_id', campaign_id).eq('type', 'technical') \
+                .order('created_at', desc=True).limit(1).execute()
+            latest_audit_id = (aud_res.data or [{}])[0].get('id')
+            if not latest_audit_id:
+                return jsonify({'success': True, 'total_keywords': 0, 'total_traffic': 0, 'top10_keywords': []})
+            proj_res = db.table('projects').select('full_audit_data') \
+                .eq('audit_id', latest_audit_id).limit(1).execute()
 
-    # Sort by rank and pick top 10
+        proj = (proj_res.data or [{}])[0].get('full_audit_data') or {}
+        # Keywords are stored as organic_keywords in projects.full_audit_data
+        keywords_raw = proj.get('organic_keywords') or proj.get('keywords', [])
+        total_kw = proj.get('total_keywords', len(keywords_raw))
+        total_traffic = proj.get('total_traffic', 0)
+    except Exception as e:
+        logger.error(f"get_client_stats error: {e}")
+
+    # Sort by rank_absolute and pick top 10
     def rank_of(item):
-        return (item.get('ranked_serp_element') or {}).get('serp_item', {}).get('rank_absolute') or 9999
+        r = (item.get('ranked_serp_element') or {}).get('serp_item', {}).get('rank_absolute')
+        return r if r else 9999
 
     sorted_kws = sorted(keywords_raw, key=rank_of)[:10]
     top10 = []
     for item in sorted_kws:
         kw = (item.get('keyword_data') or {}).get('keyword', '')
         rank = rank_of(item)
-        vol = (item.get('keyword_data') or {}).get('keyword_info', {}).get('search_volume', 0)
+        vol = (item.get('keyword_data') or {}).get('keyword_info', {}).get('search_volume', 0) or 0
         if kw:
             top10.append({'keyword': kw, 'rank': rank, 'volume': vol})
 

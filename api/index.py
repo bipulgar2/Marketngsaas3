@@ -8,6 +8,8 @@ import sys
 
 # Add local libs to path (for openpyxl)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'libs')))
+# Add project root to path so "api" module is found
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import logging
 from datetime import datetime
 from flask import Flask, jsonify, request, render_template, redirect, url_for, session, send_file

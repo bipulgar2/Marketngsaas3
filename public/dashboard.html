@@ -1506,13 +1506,175 @@
                 </button>
                     `;
 
-            if (currentSideTab !== 'overview') {
+            if (currentSideTab === 'content-gap') {
+                contentArea.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Running gap analysis...
+                    </div>
+                `;
+                lucide.createIcons();
+
+                try {
+                    // Get all competitors connected to campaign (or pick a default one)
+                    const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=competitor`);
+                    const data = await response.json();
+                    const audits = data.audits || [];
+
+                    if (audits.length === 0) {
+                        contentArea.innerHTML = `
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                                <i data-lucide="swords" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                                <h3 class="text-lg font-semibold text-white mb-2">No Competitors Added</h3>
+                                <p class="text-gray-400">Add a competitor in the Overview tab to run a content gap analysis.</p>
+                            </div>
+                        `;
+                        lucide.createIcons();
+                        return;
+                    }
+
+                    // Run gap analysis against the most recent competitor for now
+                    const compDomain = audits[0].results?.competitor_domain;
+                    if (!compDomain) {
+                        contentArea.innerHTML = `<div class="p-8 text-center"><p>Competitor domain not found in audit results.</p></div>`;
+                        return;
+                    }
+
+                    // Fetch gap analysis
+                    const gapResponse = await fetch(`/api/competitors/gap-analysis?campaign_id=${currentClient.id}&competitor_domain=${compDomain}`);
+                    const gapData = await gapResponse.json();
+
+                    if (!gapData.success) {
+                        throw new Error(gapData.error || "Gap analysis failed");
+                    }
+
+                    contentArea.innerHTML = `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                            <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-white">Content Gap Analysis</h3>
+                                    <p class="text-sm text-gray-400">Comparing ${gapData.target_domain} vs ${gapData.competitor_domain}</p>
+                                </div>
+                                <div class="bg-violet-600/20 text-violet-400 px-3 py-1 rounded-full text-sm font-medium border border-violet-500/20">
+                                    ${gapData.gap_count} Missing Keywords
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm text-gray-400">
+                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-300">
+                                        <tr>
+                                            <th class="px-6 py-4 font-medium">Keyword</th>
+                                            <th class="px-6 py-4 font-medium text-right">Search Volume</th>
+                                            <th class="px-6 py-4 font-medium text-right">Traffic</th>
+                                            <th class="px-6 py-4 font-medium text-right">Comp. Rank</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-800">
+                                        ${gapData.gap_keywords && gapData.gap_keywords.length > 0 ? gapData.gap_keywords.map(kw => {
+                        const kData = kw.keyword_data || {};
+                        const info = kData.keyword_info || {};
+                        const serp = kw.ranked_serp_element?.serp_item || {};
+                        return `
+                                            <tr class="hover:bg-gray-800/50 transition-colors">
+                                                <td class="px-6 py-4 font-medium text-white">${kData.keyword || 'Unknown'}</td>
+                                                <td class="px-6 py-4 text-right">${(info.search_volume || 0).toLocaleString()}</td>
+                                                <td class="px-6 py-4 text-right">${Math.round(serp.etv || 0).toLocaleString()}</td>
+                                                <td class="px-6 py-4 text-right font-mono text-emerald-400">#${serp.rank_absolute || '-'}</td>
+                                            </tr>
+                                            `;
+                    }).join('') : '<tr><td colspan="4" class="px-6 py-8 text-center">No keyword gaps found! You are outranking them.</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                } catch (error) {
+                    contentArea.innerHTML = `
+                        <div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl"> 
+                            Error loading gap analysis: ${error.message}
+                        </div> 
+                    `;
+                }
+                lucide.createIcons();
+                return;
+            }
+
+            if (currentSideTab === 'strategy') {
+                contentArea.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Generating strategy recommendations...
+                    </div>
+                `;
+                lucide.createIcons();
+
+                try {
+                    // Try to get the latest competitor audit
+                    const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=competitor`);
+                    const data = await response.json();
+                    const audits = data.audits || [];
+
+                    if (audits.length === 0) {
+                        contentArea.innerHTML = `
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                                <i data-lucide="lightbulb" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                                <h3 class="text-lg font-semibold text-white mb-2">No Competitors Added</h3>
+                                <p class="text-gray-400">Add a competitor in the Overview tab first to get strategy recommendations.</p>
+                            </div>
+                        `;
+                        lucide.createIcons();
+                        return;
+                    }
+
+                    const compDomain = audits[0].results?.competitor_domain;
+                    if (!compDomain) throw new Error("Competitor domain not found.");
+
+                    // Fetch strategy recommendations
+                    const stratResponse = await fetch(`/api/competitors/strategy?campaign_id=${currentClient.id}&competitor_domain=${compDomain}`);
+                    const stratData = await stratResponse.json();
+
+                    if (!stratData.success) {
+                        throw new Error(stratData.error || "Strategy generation failed");
+                    }
+
+                    contentArea.innerHTML = `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
+                            <div class="p-6 border-b border-gray-800">
+                                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                                    <i data-lucide="zap" class="w-5 h-5 text-yellow-400"></i>
+                                    Strategy Recommendations
+                                </h3>
+                                <p class="text-gray-400">How to beat <span class="text-white font-medium">${stratData.competitor_domain}</span> based on current keyword gaps.</p>
+                            </div>
+                            <div class="p-6">
+                                <div class="prose prose-invert max-w-none text-gray-300">
+                                    ${stratData.recommendations_html || 'No recommendations could be generated.'}
+                                </div>
+                            </div>
+                            <div class="p-4 bg-gray-800 border-t border-gray-700 flex justify-end gap-3">
+                                <button class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                    Convert to Tasks
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } catch (error) {
+                    contentArea.innerHTML = `
+                        <div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl"> 
+                            Error loading capabilities: ${error.message}
+                        </div> 
+                    `;
+                }
+                lucide.createIcons();
+                return;
+            }
+
+            if (currentSideTab !== 'overview' && currentSideTab !== 'content-gap' && currentSideTab !== 'strategy') {
                 contentArea.innerHTML = `
                     <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
                         <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
                         <h3 class="text-lg font-semibold text-white mb-2">${currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
-                        <p class="text-gray-400">Deep gap analysis and content library features coming in Phase 3.</p>
-                    </div> `;
+                        <p class="text-gray-400">Features for this section are coming in Phase 3.</p>
+                    </div> 
+                `;
                 lucide.createIcons();
                 return;
             }
@@ -1663,77 +1825,133 @@
                     `;
                 } else {
                     contentArea.innerHTML = `
-                    <div class="grid gap-4">
-                        ${audits.map(audit => {
+                    // Target domain metrics (from last competitor analysis in settings, if available)
+                    let targetStats = currentClient.settings?.last_competitor_analysis?.target;
+                    
+                    // If not there, we'll try to get it from the latest technical audit, or show placeholders
+                    let tgtTraffic = "-", tgtKeywords = "-", tgtTop10 = "-";
+                    if (targetStats) {
+                         tgtTraffic = targetStats.total_traffic ? Math.round(targetStats.total_traffic).toLocaleString() : "-";
+                         tgtKeywords = targetStats.total_keywords ? targetStats.total_keywords.toLocaleString() : "-";
+                         tgtTop10 = targetStats.top_10_keywords ? targetStats.top_10_keywords.toLocaleString() : "-";
+                    }
+
+                    let tableHTML = `
+                        < div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6" >
+                            <div class="p-4 border-b border-gray-800">
+                                <h3 class="text-lg font-semibold text-white">Side-by-Side Comparison</h3>
+                            </div>
+                            <div class="overflow-x-auto p-4">
+                                <table class="w-full text-left text-sm text-gray-400">
+                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-300">
+                                        <tr>
+                                            <th class="px-6 py-4 font-medium">Domain</th>
+                                            <th class="px-6 py-4 font-medium text-right">Traffic</th>
+                                            <th class="px-6 py-4 font-medium text-right">Ranked Keywords</th>
+                                            <th class="px-6 py-4 font-medium text-right">Top 10 Rankings</th>
+                                            <th class="px-6 py-4 font-medium text-right">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-800">
+                                        <!-- Target Domain -->
+                                        <tr class="bg-violet-900/10 hover:bg-violet-900/20 transition-colors">
+                                            <td class="px-6 py-4 font-bold text-violet-400">
+                                                ${currentClient.domain} (You)
+                                            </td>
+                                            <td class="px-6 py-4 text-right font-medium text-white">${tgtTraffic}</td>
+                                            <td class="px-6 py-4 text-right font-medium text-white">${tgtKeywords}</td>
+                                            <td class="px-6 py-4 text-right font-medium text-white">${tgtTop10}</td>
+                                            <td class="px-6 py-4 text-right"><span class="bg-violet-600/20 text-violet-400 px-2 py-1 rounded-lg text-xs">Client</span></td>
+                                        </tr>
+                    `;
+
+                    // Add a row for each competitor audit
+                    audits.forEach(audit => {
                         const isCrawling = audit.status === 'crawling' || audit.status === 'running';
                         const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
                         const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
                         const displayDomain = audit.results?.competitor_domain || 'Unknown Competitor';
-
-                        return `
-                                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
-                                        <div class="flex items-center gap-4">
-                                            <div class="p-2 bg-gray-800 rounded-lg">
-                                                <i data-lucide="${statusIcon}" class="w-6 h-6 ${statusColor} ${isCrawling ? 'animate-spin' : ''}"></i>
-                                            </div>
-                                            <div>
-                                                <h4 class="font-medium text-white">${displayDomain}</h4>
-                                                <div class="flex items-center gap-3 text-sm text-gray-400 mt-1">
-                                                    <span>${new Date(audit.created_at).toLocaleString()}</span>
-                                                    <span>•</span>
-                                                    <span class="${statusColor} capitalize">${audit.status}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center gap-3">
-                                            ${isCrawling ? `
-                                                <button onclick="checkAuditStatus('${audit.id}')" class="text-gray-400 hover:text-white flex items-center gap-1 text-sm bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700">
-                                                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> Check Status
-                                                </button>
-                                            ` : `
-                                                <button onclick="viewAuditResults('${audit.id}')" class="bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 px-3 py-1.5 rounded-lg text-sm font-medium border border-violet-500/20">
-                                                    View Detailed Setup
-                                                </button>
-                                            `}
-                                        </div>
-                                    </div>
-                                `;
-                    }).join('')
+                        
+                        let trf = "-", kwds = "-", top10 = "-";
+                        if (audit.status === 'completed' && audit.results && audit.results.domain_rank) {
+                             const dr = audit.results.domain_rank;
+                             trf = dr.total_traffic ? Math.round(dr.total_traffic).toLocaleString() : "-";
+                             kwds = dr.total_keywords ? dr.total_keywords.toLocaleString() : "-";
+                             top10 = dr.top_10_keywords ? dr.top_10_keywords.toLocaleString() : "-";
                         }
+                        
+                        const actionsHtml = isCrawling ? 
+                            `<button onclick="checkAuditStatus('${audit.id}')" class="${statusColor} hover:text-white flex items-center justify-end w-full gap-1 text-xs">
+                                <i data-lucide="refresh-cw" class="w-3 h-3"></i> Check Status
+                            </button>` 
+                            : 
+                            `<div class="flex items-center justify-end gap-2">
+                                <span class="${statusColor} capitalize text-xs flex items-center gap-1">
+                                    <i data-lucide="${statusIcon}" class="w-3 h-3"></i> ${audit.status}
+                                </span>
+                             </div>`;
+
+                        tableHTML += `
+                            <tr class="hover:bg-gray-800/50 transition-colors">
+                                <td class="px-6 py-4 font-medium text-white">${displayDomain}</td>
+                                <td class="px-6 py-4 text-right">${trf}</td>
+                                <td class="px-6 py-4 text-right">${kwds}</td>
+                                <td class="px-6 py-4 text-right">${top10}</td>
+                                <td class="px-6 py-4 text-right">${actionsHtml}</td>
+                            </tr>
+                        `;
+                    });
+
+                    tableHTML += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div >
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                                <h4 class="text-white font-medium mb-2 flex items-center gap-2">
+                                    <i data-lucide="target" class="w-4 h-4 text-violet-400"></i> Next Step: Gap Analysis
+                                </h4>
+                                <p class="text-gray-400 text-sm mb-4">Click "Content Gap" on the left menu to discover high-value keywords your competitors rank for, but you do not.</p>
+                                <button onclick="selectSideTab('competitors', 'content-gap')" class="bg-violet-600/20 text-violet-400 hover:bg-violet-600/40 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-violet-500/20">
+                                    View Content Gap
+                                </button>
+                            </div>
                         </div>
                     `;
+                    contentArea.innerHTML = tableHTML;
                 }
 
                 // Add the modal HTML to contentArea at the end so it's always ready
                 contentArea.innerHTML += `
-                    <div id="addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-                            <h3 class="text-lg font-bold text-white mb-2">Analyze Competitor</h3>
-                            <p class="text-sm text-gray-400 mb-4">Enter a competitor's domain. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
+                        < div id = "addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm" >
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+                                <h3 class="text-lg font-bold text-white mb-2">Analyze Competitor</h3>
+                                <p class="text-sm text-gray-400 mb-4">Enter a competitor's domain. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
 
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Competitor Domain</label>
-                            <input type="text" id="competitorDomainInput" placeholder="competitor.com" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Competitor Domain</label>
+                                <input type="text" id="competitorDomainInput" placeholder="competitor.com" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
 
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Pages to Crawl (Max Pages)</label>
-                                <select id="competitorPageLimitInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">
-                                    <option value="10">10 pages</option>
-                                    <option value="20">20 pages</option>
-                                    <option value="50">50 pages</option>
-                                    <option value="100">100 pages</option>
-                                    <option value="200" selected>200 pages</option>
-                                    <option value="10000">Full website</option>
-                                </select>
+                                    <label class="block text-sm font-medium text-gray-300 mb-2">Pages to Crawl (Max Pages)</label>
+                                    <select id="competitorPageLimitInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">
+                                        <option value="10">10 pages</option>
+                                        <option value="20">20 pages</option>
+                                        <option value="50">50 pages</option>
+                                        <option value="100">100 pages</option>
+                                        <option value="200" selected>200 pages</option>
+                                        <option value="10000">Full website</option>
+                                    </select>
 
-                                <div class="flex justify-end gap-3">
-                                    <button onclick="document.getElementById('addCompetitorModal').classList.add('hidden')" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
-                                    <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
-                                </div>
-                        </div>
-                    </div>
-                    `;
+                                    <div class="flex justify-end gap-3">
+                                        <button onclick="document.getElementById('addCompetitorModal').classList.add('hidden')" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
+                                        <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
+                                    </div>
+                            </div>
+                        </div >
+                        `;
 
             } catch (error) {
-                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl"> Error loading competitors: ${error.message}</div> `;
+                contentArea.innerHTML = `< div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl" > Error loading competitors: ${ error.message }</div > `;
             }
             lucide.createIcons();
         }
@@ -1747,7 +1965,7 @@
             modal.id = 'slideGenModal';
             modal.className = 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm';
             modal.innerHTML = `
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                        < div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center" >
                     <div class="mb-6">
                         <div class="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                     </div>
@@ -1757,8 +1975,8 @@
                         <div id="slideGenProgress" class="bg-indigo-500 h-2 rounded-full transition-all duration-500" style="width: 10%"></div>
                     </div>
                     <p class="text-gray-500 text-xs">This may take 1-2 minutes. Do not close this window.</p>
-                </div>
-                    `;
+                </div >
+                        `;
             document.body.appendChild(modal);
             lucide.createIcons();
 
@@ -1779,7 +1997,7 @@
             // Create hidden iframe — pass template_type
             const iframe = document.createElement('iframe');
             iframe.id = 'slideGenIframe';
-            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}`;
+            iframe.src = `/ audit - dashboard.html ? audit_id = ${ auditId }& auto_generate=true & template_type=${ templateType } `;
             iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1400px;height:900px;opacity:0;pointer-events:none;';
             document.body.appendChild(iframe);
 
@@ -1791,21 +2009,21 @@
                     updateProgress(100, 'Presentation ready!');
 
                     // Save the slides_url to the audit record
-                    fetch(`/api/audits/${auditId}/slides-url`, {
-                        method: 'POST',
+                    fetch(`/ api / audits / ${ auditId }/slides-url`, {
+                    method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ slides_url: event.data.presentation_url })
-                    }).catch(e => console.warn('Could not save slides URL:', e));
+                    body: JSON.stringify({ slides_url: event.data.presentation_url })
+                }).catch (e => console.warn('Could not save slides URL:', e));
 
-                    setTimeout(() => {
-                        // Remove iframe and modal
-                        const iframeEl = document.getElementById('slideGenIframe');
-                        if (iframeEl) iframeEl.remove();
+                setTimeout(() => {
+                    // Remove iframe and modal
+                    const iframeEl = document.getElementById('slideGenIframe');
+                    if (iframeEl) iframeEl.remove();
 
-                        // Replace modal content with success
-                        const modalEl = document.getElementById('slideGenModal');
-                        if (modalEl) {
-                            modalEl.innerHTML = `
+                    // Replace modal content with success
+                    const modalEl = document.getElementById('slideGenModal');
+                    if (modalEl) {
+                        modalEl.innerHTML = `
                                 <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
                                     <div class="text-5xl mb-4">✅</div>
                                     <h3 class="text-xl font-bold text-white mb-2">Presentation Ready!</h3>
@@ -1820,19 +2038,19 @@
                                     </div>
                                 </div>
                             `;
-                            lucide.createIcons();
-                        }
-                    }, 1000);
+                        lucide.createIcons();
+                    }
+                }, 1000);
 
-                } else if (event.data?.type === 'slides-error') {
-                    window.removeEventListener('message', messageHandler);
+            } else if (event.data?.type === 'slides-error') {
+                window.removeEventListener('message', messageHandler);
 
-                    const iframeEl = document.getElementById('slideGenIframe');
-                    if (iframeEl) iframeEl.remove();
+                const iframeEl = document.getElementById('slideGenIframe');
+                if (iframeEl) iframeEl.remove();
 
-                    const modalEl = document.getElementById('slideGenModal');
-                    if (modalEl) {
-                        modalEl.innerHTML = `
+                const modalEl = document.getElementById('slideGenModal');
+                if (modalEl) {
+                    modalEl.innerHTML = `
                             <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
                                 <div class="text-5xl mb-4">❌</div>
                                 <h3 class="text-xl font-bold text-white mb-2">Generation Failed</h3>
@@ -1842,21 +2060,21 @@
                                 </button>
                             </div>
                         `;
-                    }
                 }
-            };
-            window.addEventListener('message', messageHandler);
+            }
+        };
+        window.addEventListener('message', messageHandler);
 
-            // Timeout after 3 minutes
-            setTimeout(() => {
-                const iframeEl = document.getElementById('slideGenIframe');
-                if (iframeEl) {
-                    iframeEl.remove();
-                    window.removeEventListener('message', messageHandler);
+        // Timeout after 3 minutes
+        setTimeout(() => {
+            const iframeEl = document.getElementById('slideGenIframe');
+            if (iframeEl) {
+                iframeEl.remove();
+                window.removeEventListener('message', messageHandler);
 
-                    const modalEl = document.getElementById('slideGenModal');
-                    if (modalEl) {
-                        modalEl.innerHTML = `
+                const modalEl = document.getElementById('slideGenModal');
+                if (modalEl) {
+                    modalEl.innerHTML = `
                             <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
                                 <div class="text-5xl mb-4">⏰</div>
                                 <h3 class="text-xl font-bold text-white mb-2">Generation Timed Out</h3>
@@ -1866,9 +2084,9 @@
                                 </button>
                             </div>
                         `;
-                    }
                 }
-            }, 300000); // 5 min timeout (PageSpeed can take ~90s for heavy sites)
+            }
+        }, 300000); // 5 min timeout (PageSpeed can take ~90s for heavy sites)
         }
 
         async function handleAddCompetitorSubmit() {

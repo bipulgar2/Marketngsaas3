@@ -1151,6 +1151,103 @@ def analyze_competitors():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/competitors/gap-analysis', methods=['GET'])
+@login_required
+@permission_required('view_all_campaigns')
+def analyze_competitor_gap():
+    """Perform a Keyword Gap Analysis between the client domain and a competitor."""
+    campaign_id = request.args.get('campaign_id')
+    competitor_domain = request.args.get('competitor_domain')
+    
+    if not campaign_id or not competitor_domain:
+        return jsonify({'error': 'Campaign ID and Competitor Domain are required'}), 400
+        
+    client = supabase_admin or supabase
+    
+    try:
+        # Get target campaign
+        campaign_res = client.table('campaigns').select('*').eq('id', campaign_id).single().execute()
+        campaign = campaign_res.data
+        if not campaign:
+            return jsonify({'error': 'Campaign not found'}), 404
+            
+        target_domain = campaign['domain']
+        
+        # We need get_keyword_gap which computes the set difference locally
+        from api.dataforseo_client import get_keyword_gap
+        gap_results = get_keyword_gap(target_domain, competitor_domain)
+        
+        return jsonify(gap_results)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/competitors/strategy', methods=['GET'])
+@login_required
+@permission_required('view_all_campaigns')
+def get_competitor_strategy():
+    """Generate strategic content recommendations based on the gap analysis."""
+    campaign_id = request.args.get('campaign_id')
+    competitor_domain = request.args.get('competitor_domain')
+    
+    if not campaign_id or not competitor_domain:
+        return jsonify({'error': 'Campaign ID and Competitor Domain are required'}), 400
+        
+    client = supabase_admin or supabase
+    
+    try:
+        # Get target campaign
+        campaign_res = client.table('campaigns').select('*').eq('id', campaign_id).single().execute()
+        campaign = campaign_res.data
+        if not campaign:
+            return jsonify({'error': 'Campaign not found'}), 404
+            
+        target_domain = campaign['domain']
+        
+        # We need get_keyword_gap which computes the set difference locally
+        from api.dataforseo_client import get_keyword_gap
+        gap_results = get_keyword_gap(target_domain, competitor_domain)
+        
+        # If there's an error in gap analysis
+        if not gap_results.get('success'):
+            return jsonify({'error': gap_results.get('error', 'Gap analysis failed')}), 500
+            
+        gap_keywords = gap_results.get('gap_keywords', [])
+        
+        # Format the top 5 gap keywords for the strategy recommendation
+        top_gaps = []
+        for kw in gap_keywords[:5]:
+            word = kw.get('keyword_data', {}).get('keyword', 'Unknown')
+            vol = kw.get('keyword_data', {}).get('keyword_info', {}).get('search_volume', 0)
+            top_gaps.append(f"<li><strong>{word}</strong> (Volume: {vol})</li>")
+            
+        gaps_html = "\n".join(top_gaps) if top_gaps else "<li>No significant content gaps found!</li>"
+        
+        # Normally you would pass this through an LLM to generate real recommendations.
+        # For now, we will return a formatted HTML strategy based on the gap data.
+        strategy_html = f"""
+        <h4>1. Attack High-Value Gaps</h4>
+        <p>Your competitor <strong>{competitor_domain}</strong> is currently outranking you for several key terms. We recommend prioritizing new pillar content targeting these exact phrases:</p>
+        <ul>
+            {gaps_html}
+        </ul>
+        
+        <h4>2. The 30% Better Rule (Skyscraper)</h4>
+        <p>Review the top-ranking pages for the keywords above. Produce content that is at least 30% longer, more comprehensive, and features custom graphics or unique data that {competitor_domain} lacks.</p>
+        
+        <h4>3. Internal Link Architecture</h4>
+        <p>Once the new content is published, route authority to it by adding 3-5 internal links from your strongest existing pages (like your homepage or main service pages) using exact-match anchor text.</p>
+        """
+        
+        return jsonify({
+            'success': True,
+            'target_domain': target_domain,
+            'competitor_domain': competitor_domain,
+            'recommendations_html': strategy_html
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # =============================================================================
 # DEBUG / RESCUE ROUTES

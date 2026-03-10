@@ -1519,6 +1519,58 @@ def fetch_domain_metrics(domain: str) -> Dict[str, Any]:
         print(f"DEBUG domain_metrics: Exception - {e}", flush=True)
         return {"success": False, "error": str(e)}
 
+def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 1000, location_code: int = 2840) -> Dict[str, Any]:
+    """
+    Fetch keywords for both domains and compute the "they rank, you don't" gap.
+    Used for Competitor Content Gap analysis.
+    We fetch both lists independently and compare in-memory because the /domain_intersection 
+    endpoint requires an additional unused subscription.
+    
+    Args:
+        target_domain: The client's domain
+        competitor_domain: The competitor's domain
+        limit: Max keywords to fetch per domain
+        location_code: Location code
+    """
+    print(f"DEBUG: Computing keyword gap for {target_domain} vs {competitor_domain}", file=sys.stderr)
+    
+    # Using existing get_organic_keywords function which fetches full DataForSEO format
+    target_kws_raw = get_organic_keywords(target_domain, limit, location_code)
+    comp_kws_raw = get_organic_keywords(competitor_domain, limit, location_code)
+    
+    # Extract just the keyword strings for fast set comparison
+    target_kw_set = set()
+    for item in target_kws_raw:
+        kw = item.get('keyword_data', {}).get('keyword')
+        if kw:
+            target_kw_set.add(kw.lower())
+            
+    # Find keywords the competitor has, but target does NOT have
+    gap_keywords = []
+    
+    for item in comp_kws_raw:
+        kw = item.get('keyword_data', {}).get('keyword')
+        if kw and kw.lower() not in target_kw_set:
+            gap_keywords.append(item)
+            
+    # Sort the gap keywords by search_volume descending to show the highest value gaps first
+    gap_keywords.sort(
+        key=lambda x: x.get('keyword_data', {}).get('keyword_info', {}).get('search_volume', 0), 
+        reverse=True
+    )
+    
+    print(f"DEBUG: Gap analysis complete. Found {len(gap_keywords)} missing keywords.", file=sys.stderr)
+    
+    return {
+        "success": True,
+        "target_domain": target_domain,
+        "competitor_domain": competitor_domain,
+        "target_keywords_count": len(target_kw_set),
+        "competitor_keywords_count": len(comp_kws_raw),
+        "gap_count": len(gap_keywords),
+        "gap_keywords": gap_keywords[:500] # Return top 500 to save bandwidth
+    }
+
 
 def fetch_ranked_keywords(domain: str, limit: int = 1000) -> Dict[str, Any]:
     """

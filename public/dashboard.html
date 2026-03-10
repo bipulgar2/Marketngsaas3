@@ -368,6 +368,14 @@
             loadContent();
         }
 
+        function selectSideTab(topTabId, sideTabId) {
+            currentTopTab = topTabId;
+            currentSideTab = sideTabId;
+            buildTopTabs();
+            buildSideTabs();
+            loadContent();
+        }
+
         // =========================================================================
         // CLIENT SELECTOR
         // =========================================================================
@@ -1669,7 +1677,7 @@
                     if (!gapData.success) {
                         throw new Error(gapData.error || "Gap analysis failed");
                     }
-                    
+
                     const mutual = gapData.mutual_domains || [];
                     const clientOnly = gapData.target_only_domains || [];
                     const compOnly = gapData.competitor_only_domains || [];
@@ -1705,7 +1713,7 @@
                                                 <td class="px-4 py-3 text-white">${d.referring_domain}</td>
                                                 <td class="px-4 py-3 text-right text-emerald-400">${d.target_backlinks}</td>
                                                 <td class="px-4 py-3 text-right text-violet-400">${d.competitor_backlinks}</td>
-                                                <td class="px-4 py-3 text-right">${d.target_backlinks - d.competitor_backlinks > 0 ? '+'+(d.target_backlinks - d.competitor_backlinks) : (d.target_backlinks - d.competitor_backlinks)}</td>
+                                                <td class="px-4 py-3 text-right">${d.target_backlinks - d.competitor_backlinks > 0 ? '+' + (d.target_backlinks - d.competitor_backlinks) : (d.target_backlinks - d.competitor_backlinks)}</td>
                                             </tr>
                                         `).join('') : '<tr><td colspan="4" class="px-4 py-8 text-center">No mutual referring domains.</td></tr>'}
                                     </tbody>

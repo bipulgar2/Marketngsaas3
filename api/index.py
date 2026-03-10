@@ -936,13 +936,17 @@ def get_audit(audit_id):
                     create_tasks_from_audit(categorized, audit['campaign_id'], client)
                     
                     # 5. Update Audit Record
+                    existing_results = audit.get('results') or {}
+                    new_results = existing_results.copy()
+                    new_results.update({
+                        'summary': summary.get('summary', {}),
+                        'categorized': categorized,
+                        'pages': pages
+                    })
+                    
                     update_data = {
                         'status': 'completed',
-                        'results': {
-                            'summary': summary.get('summary', {}),
-                            'categorized': categorized,
-                            'pages': pages
-                        }
+                        'results': new_results
                     }
                     
                     update_res = client.table('audits').update(update_data).eq('id', audit_id).execute()

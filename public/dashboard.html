@@ -1933,45 +1933,55 @@
                         </div>
                     `;
                 } else {
-                    // Target domain metrics (from last competitor analysis in settings, if available)
-                    let targetStats = currentClient.settings?.last_competitor_analysis?.target;
-
-                    // If not there, we'll try to get it from the latest technical audit, or show placeholders
-                    let tgtTraffic = "-", tgtKeywords = "-", tgtTop10 = "-";
-                    if (targetStats) {
-                        tgtTraffic = targetStats.total_traffic ? Math.round(targetStats.total_traffic).toLocaleString() : "-";
-                        tgtKeywords = targetStats.total_keywords ? targetStats.total_keywords.toLocaleString() : "-";
-                        tgtTop10 = targetStats.top_10_keywords ? targetStats.top_10_keywords.toLocaleString() : "-";
-                    }
+                    // Fetch live client stats from the most recent technical audit
+                    let tgtTraffic = "-", tgtKeywords = "-", tgtTop10Html = "-";
+                    try {
+                        const statsResp = await fetch(`/api/client/stats?campaign_id=${currentClient.id}`);
+                        const statsData = await statsResp.json();
+                        if (statsData.success) {
+                            tgtTraffic = statsData.total_traffic ? Math.round(statsData.total_traffic).toLocaleString() : '-';
+                            tgtKeywords = statsData.total_keywords ? statsData.total_keywords.toLocaleString() : '-';
+                            if (statsData.top10_keywords && statsData.top10_keywords.length > 0) {
+                                tgtTop10Html = statsData.top10_keywords.map(k =>
+                                    `<div class="flex items-center gap-2 text-xs">
+                                        <span class="bg-violet-600/20 text-violet-400 font-mono px-1.5 py-0.5 rounded">#${k.rank}</span>
+                                        <span class="text-white truncate max-w-[200px]" title="${k.keyword}">${k.keyword}</span>
+                                        <span class="text-gray-500 ml-auto">${(k.volume || 0).toLocaleString()} vol</span>
+                                    </div>`
+                                ).join('');
+                            } else {
+                                tgtTop10Html = '<span class="text-gray-500 text-xs">Run an audit to populate</span>';
+                            }
+                        }
+                    } catch (e) { /* non-fatal */ }
 
                     let tableHTML = `
-                        < div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6" >
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
                             <div class="p-4 border-b border-gray-800">
                                 <h3 class="text-lg font-semibold text-white">Side-by-Side Comparison</h3>
                             </div>
-                            <div class="overflow-x-auto p-4">
+                            <div class="overflow-x-auto">
                                 <table class="w-full text-left text-sm text-gray-400">
                                     <thead class="text-xs uppercase bg-gray-800/50 text-gray-300">
                                         <tr>
                                             <th class="px-6 py-4 font-medium">Domain</th>
                                             <th class="px-6 py-4 font-medium text-right">Traffic</th>
-                                            <th class="px-6 py-4 font-medium text-right">Ranked Keywords</th>
-                                            <th class="px-6 py-4 font-medium text-right">Top 10 Rankings</th>
+                                            <th class="px-6 py-4 font-medium text-right">Total KW</th>
+                                            <th class="px-6 py-4 font-medium">Top 10 Ranked KW</th>
                                             <th class="px-6 py-4 font-medium text-right">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-800">
                                         <!-- Target Domain -->
                                         <tr class="bg-violet-900/10 hover:bg-violet-900/20 transition-colors">
-                                            <td class="px-6 py-4 font-bold text-violet-400">
-                                                ${currentClient.domain} (You)
-                                            </td>
+                                            <td class="px-6 py-4 font-bold text-violet-400">${currentClient.domain} (You)</td>
                                             <td class="px-6 py-4 text-right font-medium text-white">${tgtTraffic}</td>
                                             <td class="px-6 py-4 text-right font-medium text-white">${tgtKeywords}</td>
-                                            <td class="px-6 py-4 text-right font-medium text-white">${tgtTop10}</td>
+                                            <td class="px-6 py-4 space-y-1.5 min-w-[280px]">${tgtTop10Html}</td>
                                             <td class="px-6 py-4 text-right"><span class="bg-violet-600/20 text-violet-400 px-2 py-1 rounded-lg text-xs">Client</span></td>
                                         </tr>
-                    `;
+                `;
+
 
                     // Add a row for each competitor audit
                     audits.forEach(audit => {
@@ -1980,12 +1990,30 @@
                         const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
                         const displayDomain = audit.results?.competitor_domain || 'Unknown Competitor';
 
-                        let trf = "-", kwds = "-", top10 = "-";
-                        if (audit.status === 'completed' && audit.results && audit.results.domain_rank) {
-                            const dr = audit.results.domain_rank;
-                            trf = dr.total_traffic ? Math.round(dr.total_traffic).toLocaleString() : "-";
-                            kwds = dr.total_keywords ? dr.total_keywords.toLocaleString() : "-";
-                            top10 = dr.top_10_keywords ? dr.top_10_keywords.toLocaleString() : "-";
+                        const compResults = audit.results || {};
+                        let trf = compResults.total_traffic ? Math.round(compResults.total_traffic).toLocaleString() : '-';
+                        let kwds = compResults.total_keywords ? compResults.total_keywords.toLocaleString() : '-';
+
+                        // Top 10 keywords for competitor
+                        const compKws = (compResults.keywords || []).slice(0, 10);
+                        let compTop10Html = '-';
+                        if (compKws.length > 0) {
+                            const getRank = (item) => (item.ranked_serp_element?.serp_item?.rank_absolute) || 999;
+                            const sorted = [...compKws].sort((a, b) => getRank(a) - getRank(b)).slice(0, 10);
+                            compTop10Html = sorted.map(k => {
+                                const kw = k.keyword_data?.keyword || '';
+                                const rank = getRank(k);
+                                const vol = k.keyword_data?.keyword_info?.search_volume || 0;
+                                return `<div class="flex items-center gap-2 text-xs">
+                                    <span class="bg-emerald-600/20 text-emerald-400 font-mono px-1.5 py-0.5 rounded">#${rank}</span>
+                                    <span class="text-white truncate max-w-[200px]" title="${kw}">${kw}</span>
+                                    <span class="text-gray-500 ml-auto">${vol.toLocaleString()} vol</span>
+                                </div>`;
+                            }).join('');
+                        } else if (audit.status === 'completed') {
+                            compTop10Html = '<span class="text-gray-500 text-xs">No keyword data in audit</span>';
+                        } else if (isCrawling) {
+                            compTop10Html = '<span class="text-yellow-400/70 text-xs">Crawling...</span>';
                         }
 
                         const actionsHtml = isCrawling ?
@@ -2004,7 +2032,7 @@
                                 <td class="px-6 py-4 font-medium text-white">${displayDomain}</td>
                                 <td class="px-6 py-4 text-right">${trf}</td>
                                 <td class="px-6 py-4 text-right">${kwds}</td>
-                                <td class="px-6 py-4 text-right">${top10}</td>
+                                <td class="px-6 py-4 space-y-1.5">${compTop10Html}</td>
                                 <td class="px-6 py-4 text-right">${actionsHtml}</td>
                             </tr>
                         `;

@@ -1161,6 +1161,58 @@ def analyze_competitors():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/client/stats', methods=['GET'])
+@login_required
+@permission_required('view_all_campaigns')
+def get_client_stats():
+    """Return traffic, keyword count, and top 10 ranked keywords for a campaign domain."""
+    campaign_id = request.args.get('campaign_id')
+    if not campaign_id:
+        return jsonify({'error': 'campaign_id required'}), 400
+
+    db = supabase_admin or supabase
+    try:
+        # Get the most recent project record for this campaign (written at audit creation time)
+        proj_res = db.table('projects').select('full_audit_data') \
+            .eq('audit_id', db.table('audits').select('id') \
+            .eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(1)) \
+            .limit(1).execute()
+    except Exception:
+        proj_res = None
+
+    # Fallback: query audits table directly
+    try:
+        audit_res = db.table('audits').select('results') \
+            .eq('campaign_id', campaign_id).eq('type', 'technical') \
+            .order('created_at', desc=True).limit(1).execute()
+        audit_data = (audit_res.data or [{}])[0].get('results') or {}
+        keywords_raw = audit_data.get('keywords', [])
+        total_kw = audit_data.get('total_keywords', len(keywords_raw))
+        total_traffic = audit_data.get('total_traffic', 0)
+    except Exception:
+        keywords_raw, total_kw, total_traffic = [], 0, 0
+
+    # Sort by rank and pick top 10
+    def rank_of(item):
+        return (item.get('ranked_serp_element') or {}).get('serp_item', {}).get('rank_absolute') or 9999
+
+    sorted_kws = sorted(keywords_raw, key=rank_of)[:10]
+    top10 = []
+    for item in sorted_kws:
+        kw = (item.get('keyword_data') or {}).get('keyword', '')
+        rank = rank_of(item)
+        vol = (item.get('keyword_data') or {}).get('keyword_info', {}).get('search_volume', 0)
+        if kw:
+            top10.append({'keyword': kw, 'rank': rank, 'volume': vol})
+
+    return jsonify({
+        'success': True,
+        'total_keywords': total_kw,
+        'total_traffic': total_traffic,
+        'top10_keywords': top10
+    })
+
+
 @app.route('/api/client/backlinks', methods=['GET'])
 @login_required
 @permission_required('view_all_campaigns')

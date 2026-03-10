@@ -1542,7 +1542,11 @@
                     const compDomain = audits[0].results?.competitor_domain;
                     if (!compDomain) throw new Error("Competitor domain not found in audit results.");
 
-                    const gapResponse = await fetch(`/api/competitors/gap-analysis?campaign_id=${currentClient.id}&competitor_domain=${compDomain}`);
+                    // Default to window properties or defaults
+                    const minVol = window.cgMinVol || 10;
+                    const maxRank = window.cgMaxRank || 100;
+
+                    const gapResponse = await fetch(`/api/competitors/gap-analysis?campaign_id=${currentClient.id}&competitor_domain=${compDomain}&min_volume=${minVol}&max_rank=${maxRank}`);
                     const gapData = await gapResponse.json();
 
                     if (!gapData.success) {
@@ -1562,10 +1566,25 @@
                                     <h3 class="text-lg font-semibold text-white">Content Gap Analysis</h3>
                                     <p class="text-sm text-gray-400">Comparing ${gapData.target_domain} vs ${gapData.competitor_domain}</p>
                                 </div>
-                                <div class="flex bg-gray-800 p-1 rounded-lg">
-                                    <button onclick="document.querySelectorAll('.cg-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('cg-tab-mutual').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:bg-violet-600 outline-none transition-colors">Mutual (${mutual.length})</button>
-                                    <button onclick="document.querySelectorAll('.cg-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('cg-tab-client').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">You Only (${clientOnly.length})</button>
-                                    <button onclick="document.querySelectorAll('.cg-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('cg-tab-comp').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">Missing (${compOnly.length})</button>
+                                <div class="flex flex-col md:flex-row gap-3 items-center">
+                                    <div class="flex items-center gap-2 bg-gray-800 p-1.5 rounded-lg border border-gray-700">
+                                        <div class="flex items-center gap-1">
+                                            <label class="text-xs text-gray-400 px-1">Min Vol:</label>
+                                            <input type="number" id="cg-min-vol" value="${window.cgMinVol || 10}" class="bg-gray-900 border border-gray-700 text-white text-xs rounded px-2 w-20 h-7 outline-none focus:border-violet-500">
+                                        </div>
+                                        <div class="flex items-center gap-1">
+                                            <label class="text-xs text-gray-400 px-1">Max Rank:</label>
+                                            <input type="number" id="cg-max-rank" value="${window.cgMaxRank || 100}" class="bg-gray-900 border border-gray-700 text-white text-xs rounded px-2 w-20 h-7 outline-none focus:border-violet-500">
+                                        </div>
+                                        <button onclick="window.cgMinVol = document.getElementById('cg-min-vol').value; window.cgMaxRank = document.getElementById('cg-max-rank').value; loadCompetitorContent()" class="bg-violet-600 hover:bg-violet-500 text-white w-7 h-7 flex items-center justify-center rounded transition-colors ml-1">
+                                            <i data-lucide="filter" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </div>
+                                    <div class="flex bg-gray-800 p-1 rounded-lg">
+                                        <button onclick="document.querySelectorAll('.cg-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('cg-tab-mutual').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:bg-violet-600 outline-none transition-colors">Mutual (${mutual.length})</button>
+                                        <button onclick="document.querySelectorAll('.cg-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('cg-tab-client').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">You Only (${clientOnly.length})</button>
+                                        <button onclick="document.querySelectorAll('.cg-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('cg-tab-comp').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">Missing (${compOnly.length})</button>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -1673,7 +1692,9 @@
                     const compDomain = audits[0].results?.competitor_domain;
                     if (!compDomain) throw new Error("Competitor domain not found.");
 
-                    const gapResponse = await fetch(`/api/competitors/backlinks-gap?campaign_id=${currentClient.id}&competitor_domain=${compDomain}`);
+                    const minBl = window.bgMinBl || 1;
+
+                    const gapResponse = await fetch(`/api/competitors/backlinks-gap?campaign_id=${currentClient.id}&competitor_domain=${compDomain}&min_backlinks=${minBl}`);
                     const gapData = await gapResponse.json();
 
                     if (!gapData.success) {
@@ -1693,10 +1714,21 @@
                                     <h3 class="text-lg font-semibold text-white">Backlink Gap Analysis</h3>
                                     <p class="text-sm text-gray-400">Comparing ${gapData.target_domain} vs ${gapData.competitor_domain}</p>
                                 </div>
-                                <div class="flex bg-gray-800 p-1 rounded-lg">
-                                    <button onclick="document.querySelectorAll('.bl-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('bl-tab-mutual').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:bg-violet-600 outline-none transition-colors">Mutual (${mutual.length})</button>
-                                    <button onclick="document.querySelectorAll('.bl-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('bl-tab-client').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">You Only (${clientOnly.length})</button>
-                                    <button onclick="document.querySelectorAll('.bl-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('bl-tab-comp').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">Missing (${compOnly.length})</button>
+                                <div class="flex flex-col md:flex-row gap-3 items-center">
+                                    <div class="flex items-center gap-2 bg-gray-800 p-1.5 rounded-lg border border-gray-700">
+                                        <div class="flex items-center gap-1">
+                                            <label class="text-xs text-gray-400 px-1">Min Backlinks:</label>
+                                            <input type="number" id="bg-min-bl" value="${window.bgMinBl || 1}" class="bg-gray-900 border border-gray-700 text-white text-xs rounded px-2 w-16 h-7 outline-none focus:border-violet-500">
+                                        </div>
+                                        <button onclick="window.bgMinBl = document.getElementById('bg-min-bl').value; loadCompetitorContent()" class="bg-violet-600 hover:bg-violet-500 text-white w-7 h-7 flex items-center justify-center rounded transition-colors ml-1">
+                                            <i data-lucide="filter" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </div>
+                                    <div class="flex bg-gray-800 p-1 rounded-lg">
+                                        <button onclick="document.querySelectorAll('.bl-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('bl-tab-mutual').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:bg-violet-600 outline-none transition-colors">Mutual (${mutual.length})</button>
+                                        <button onclick="document.querySelectorAll('.bl-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('bl-tab-client').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">You Only (${clientOnly.length})</button>
+                                        <button onclick="document.querySelectorAll('.bl-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('bl-tab-comp').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">Missing (${compOnly.length})</button>
+                                    </div>
                                 </div>
                             </div>
                             

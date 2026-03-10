@@ -1077,27 +1077,29 @@ def get_backlinks_summary(domain: str) -> Dict[str, Any]:
         return {}
 
 
-def get_organic_keywords(domain: str, limit: int = 1000, location_code: int = 2356) -> List[Dict[str, Any]]:
+def get_organic_keywords(domain: str, limit: int = 10000, location_code: int = 2840, filters: list = None) -> List[Dict[str, Any]]:
     """
-    Get organic keywords from DataForSEO Labs (up to 1000 for comprehensive audit).
+    Get organic keywords from DataForSEO Labs.
     
     Args:
         domain: The domain to analyze
-        limit: Number of keywords to return (default 1000 for full audits)
-        location_code: 2356 = India, 2840 = US
-    
-    Returns:
-        List of keyword objects in FULL DataForSEO format (with keyword_data, ranked_serp_element)
+        limit: Number of keywords to return (default 10,000)
+        location_code: 2840 = US (default)
+        filters: Optional list of filters (e.g. [["keyword_info.search_volume", ">", 100]])
     """
     try:
         endpoint = f"{DATAFORSEO_API_URL}/dataforseo_labs/google/ranked_keywords/live"
-        payload = [{
+        payload_item = {
             "target": domain,
             "location_code": location_code,
             "language_code": "en",
             "limit": limit,
-            "include_serp_info": True  # Required to get keyword_difficulty
-        }]
+            "include_serp_info": True
+        }
+        if filters:
+            payload_item["filters"] = filters
+            
+        payload = [payload_item]
         
         print(f"DEBUG: Fetching organic keywords for {domain} (location={location_code}, limit={limit})", file=sys.stderr)
         
@@ -1126,15 +1128,19 @@ def get_organic_keywords(domain: str, limit: int = 1000, location_code: int = 23
         return []
 
 
-def get_referring_domains(domain: str, limit: int = 1000, order_by: list = ["rank,desc"]) -> List[Dict[str, Any]]:
+def get_referring_domains(domain: str, limit: int = 10000, order_by: list = ["rank,desc"], filters: list = None) -> List[Dict[str, Any]]:
     """Get referring domains. Default order is high rank first."""
     try:
         endpoint = f"{DATAFORSEO_API_URL}/backlinks/referring_domains/live"
-        payload = [{
+        payload_item = {
             "target": domain,
             "limit": limit,
             "order_by": order_by
-        }]
+        }
+        if filters:
+            payload_item["filters"] = filters
+            
+        payload = [payload_item]
         
         response = requests.post(
             endpoint,
@@ -1519,7 +1525,7 @@ def fetch_domain_metrics(domain: str) -> Dict[str, Any]:
         print(f"DEBUG domain_metrics: Exception - {e}", flush=True)
         return {"success": False, "error": str(e)}
 
-def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 1000, location_code: int = 2840) -> Dict[str, Any]:
+def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 10000, location_code: int = 2840, filters: list = None) -> Dict[str, Any]:
     """
     Fetch keywords for both domains and compute the true gap analysis:
     - Mutual keywords (both rank)
@@ -1531,12 +1537,13 @@ def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 100
         competitor_domain: The competitor's domain
         limit: Max keywords to fetch per domain
         location_code: Location code
+        filters: Array of filters for search volume, ranks, etc.
     """
-    print(f"DEBUG: Computing true keyword gap for {target_domain} vs {competitor_domain}", file=sys.stderr)
+    print(f"DEBUG: Computing true keyword gap for {target_domain} vs {competitor_domain} with filters: {filters}", file=sys.stderr)
     
     # Using existing get_organic_keywords function which fetches full DataForSEO format
-    target_kws_raw = get_organic_keywords(target_domain, limit, location_code)
-    comp_kws_raw = get_organic_keywords(competitor_domain, limit, location_code)
+    target_kws_raw = get_organic_keywords(target_domain, limit, location_code, filters)
+    comp_kws_raw = get_organic_keywords(competitor_domain, limit, location_code, filters)
     
     # Extract into dictionaries for fast lookup of ranks and data
     target_dict = {}
@@ -1826,15 +1833,14 @@ def get_referring_domains(domain: str, limit: int = 1000) -> list:
         print(f"DEBUG get_referring_domains: Exception - {e}", file=sys.stderr)
         return []
 
-def get_backlinks_gap(target_domain: str, competitor_domain: str, limit: int = 1000) -> dict:
+def get_backlinks_gap(target_domain: str, competitor_domain: str, limit: int = 10000, filters: list = None) -> Dict[str, Any]:
     """
-    Fetch referring domains for both domains and compute the backlink gap.
-    Returns Mutual, Target-Only, and Competitor-Only domains.
+    Fetch referring domains for both sites and compute the gap analysis.
     """
-    print(f"DEBUG: Computing backlinks gap for {target_domain} vs {competitor_domain}", file=sys.stderr)
+    print(f"DEBUG: Computing backlinks gap for {target_domain} vs {competitor_domain} with filters: {filters}", file=sys.stderr)
     
-    target_domains_raw = get_referring_domains(target_domain, limit)
-    comp_domains_raw = get_referring_domains(competitor_domain, limit)
+    target_domains_raw = get_referring_domains(target_domain, limit, ["rank,desc"], filters)
+    comp_domains_raw = get_referring_domains(competitor_domain, limit, ["rank,desc"], filters)
     
     target_dict = {}
     for item in target_domains_raw:

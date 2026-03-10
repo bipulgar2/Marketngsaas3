@@ -1164,6 +1164,8 @@ def analyze_competitor_gap():
     """Perform a Keyword Gap Analysis between the client domain and a competitor."""
     campaign_id = request.args.get('campaign_id')
     competitor_domain = request.args.get('competitor_domain')
+    min_volume = request.args.get('min_volume', type=int)
+    max_rank = request.args.get('max_rank', type=int)
     
     if not campaign_id or not competitor_domain:
         return jsonify({'error': 'Campaign ID and Competitor Domain are required'}), 400
@@ -1179,9 +1181,20 @@ def analyze_competitor_gap():
             
         target_domain = campaign['domain']
         
+        # Build DataForSEO filters array if provided
+        filters = []
+        if min_volume is not None:
+            filters.append(["keyword_info.search_volume", ">=", min_volume])
+        if max_rank is not None:
+            if filters: filters.append("and")
+            filters.append(["ranked_serp_element.serp_item.rank_absolute", "<=", max_rank])
+            
+        if not filters:
+            filters = None
+        
         # We need get_keyword_gap which computes the set difference locally
         from api.dataforseo_client import get_keyword_gap
-        gap_results = get_keyword_gap(target_domain, competitor_domain)
+        gap_results = get_keyword_gap(target_domain, competitor_domain, filters=filters)
         
         return jsonify(gap_results)
         
@@ -1195,6 +1208,7 @@ def analyze_backlinks_gap():
     """Perform a Backlink Gap Analysis between the client domain and a competitor."""
     campaign_id = request.args.get('campaign_id')
     competitor_domain = request.args.get('competitor_domain')
+    min_backlinks = request.args.get('min_backlinks', type=int)
     
     if not campaign_id or not competitor_domain:
         return jsonify({'error': 'Campaign ID and Competitor Domain are required'}), 400
@@ -1210,8 +1224,16 @@ def analyze_backlinks_gap():
             
         target_domain = campaign['domain']
         
+        # Build DataForSEO filters array if provided
+        filters = []
+        if min_backlinks is not None:
+            filters.append(["backlinks", ">=", min_backlinks])
+            
+        if not filters:
+            filters = None
+        
         from api.dataforseo_client import get_backlinks_gap
-        gap_results = get_backlinks_gap(target_domain, competitor_domain)
+        gap_results = get_backlinks_gap(target_domain, competitor_domain, filters=filters)
         
         return jsonify(gap_results)
         

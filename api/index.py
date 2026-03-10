@@ -1157,6 +1157,38 @@ def analyze_competitors():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/client/backlinks', methods=['GET'])
+@login_required
+@permission_required('view_all_campaigns')
+def get_client_backlinks():
+    """Fetch live backlink profile (summary + referring domains) for the client campaign."""
+    campaign_id = request.args.get('campaign_id')
+    if not campaign_id:
+        return jsonify({'error': 'campaign_id is required'}), 400
+
+    client = supabase_admin or supabase
+    try:
+        campaign_res = client.table('campaigns').select('domain').eq('id', campaign_id).single().execute()
+        campaign = campaign_res.data
+        if not campaign:
+            return jsonify({'error': 'Campaign not found'}), 404
+
+        domain = campaign['domain']
+
+        from api.dataforseo_client import fetch_backlinks_summary, get_referring_domains
+        summary = fetch_backlinks_summary(domain)
+        referring_domains = get_referring_domains(domain, limit=500)
+
+        return jsonify({
+            'success': True,
+            'domain': domain,
+            'summary': summary,
+            'referring_domains': referring_domains
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/competitors/gap-analysis', methods=['GET'])
 @login_required
 @permission_required('view_all_campaigns')

@@ -1824,16 +1824,15 @@
                         </div>
                     `;
                 } else {
-                    contentArea.innerHTML = `
                     // Target domain metrics (from last competitor analysis in settings, if available)
                     let targetStats = currentClient.settings?.last_competitor_analysis?.target;
-                    
+
                     // If not there, we'll try to get it from the latest technical audit, or show placeholders
                     let tgtTraffic = "-", tgtKeywords = "-", tgtTop10 = "-";
                     if (targetStats) {
-                         tgtTraffic = targetStats.total_traffic ? Math.round(targetStats.total_traffic).toLocaleString() : "-";
-                         tgtKeywords = targetStats.total_keywords ? targetStats.total_keywords.toLocaleString() : "-";
-                         tgtTop10 = targetStats.top_10_keywords ? targetStats.top_10_keywords.toLocaleString() : "-";
+                        tgtTraffic = targetStats.total_traffic ? Math.round(targetStats.total_traffic).toLocaleString() : "-";
+                        tgtKeywords = targetStats.total_keywords ? targetStats.total_keywords.toLocaleString() : "-";
+                        tgtTop10 = targetStats.top_10_keywords ? targetStats.top_10_keywords.toLocaleString() : "-";
                     }
 
                     let tableHTML = `
@@ -1871,20 +1870,20 @@
                         const statusColor = isCrawling ? 'text-yellow-400' : (audit.status === 'completed' ? 'text-emerald-400' : 'text-red-400');
                         const statusIcon = isCrawling ? 'loader-2' : (audit.status === 'completed' ? 'check-circle' : 'alert-circle');
                         const displayDomain = audit.results?.competitor_domain || 'Unknown Competitor';
-                        
+
                         let trf = "-", kwds = "-", top10 = "-";
                         if (audit.status === 'completed' && audit.results && audit.results.domain_rank) {
-                             const dr = audit.results.domain_rank;
-                             trf = dr.total_traffic ? Math.round(dr.total_traffic).toLocaleString() : "-";
-                             kwds = dr.total_keywords ? dr.total_keywords.toLocaleString() : "-";
-                             top10 = dr.top_10_keywords ? dr.top_10_keywords.toLocaleString() : "-";
+                            const dr = audit.results.domain_rank;
+                            trf = dr.total_traffic ? Math.round(dr.total_traffic).toLocaleString() : "-";
+                            kwds = dr.total_keywords ? dr.total_keywords.toLocaleString() : "-";
+                            top10 = dr.top_10_keywords ? dr.top_10_keywords.toLocaleString() : "-";
                         }
-                        
-                        const actionsHtml = isCrawling ? 
+
+                        const actionsHtml = isCrawling ?
                             `<button onclick="checkAuditStatus('${audit.id}')" class="${statusColor} hover:text-white flex items-center justify-end w-full gap-1 text-xs">
                                 <i data-lucide="refresh-cw" class="w-3 h-3"></i> Check Status
-                            </button>` 
-                            : 
+                            </button>`
+                            :
                             `<div class="flex items-center justify-end gap-2">
                                 <span class="${statusColor} capitalize text-xs flex items-center gap-1">
                                     <i data-lucide="${statusIcon}" class="w-3 h-3"></i> ${audit.status}
@@ -1951,7 +1950,7 @@
                         `;
 
             } catch (error) {
-                contentArea.innerHTML = `< div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl" > Error loading competitors: ${ error.message }</div > `;
+                contentArea.innerHTML = `< div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl" > Error loading competitors: ${error.message}</div > `;
             }
             lucide.createIcons();
         }
@@ -1997,7 +1996,7 @@
             // Create hidden iframe — pass template_type
             const iframe = document.createElement('iframe');
             iframe.id = 'slideGenIframe';
-            iframe.src = `/ audit - dashboard.html ? audit_id = ${ auditId }& auto_generate=true & template_type=${ templateType } `;
+            iframe.src = `/ audit - dashboard.html ? audit_id = ${auditId}& auto_generate=true & template_type=${templateType} `;
             iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1400px;height:900px;opacity:0;pointer-events:none;';
             document.body.appendChild(iframe);
 
@@ -2009,21 +2008,21 @@
                     updateProgress(100, 'Presentation ready!');
 
                     // Save the slides_url to the audit record
-                    fetch(`/ api / audits / ${ auditId }/slides-url`, {
-                    method: 'POST',
+                    fetch(`/ api / audits / ${auditId}/slides-url`, {
+                        method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ slides_url: event.data.presentation_url })
-                }).catch (e => console.warn('Could not save slides URL:', e));
+                        body: JSON.stringify({ slides_url: event.data.presentation_url })
+                    }).catch(e => console.warn('Could not save slides URL:', e));
 
-                setTimeout(() => {
-                    // Remove iframe and modal
-                    const iframeEl = document.getElementById('slideGenIframe');
-                    if (iframeEl) iframeEl.remove();
+                    setTimeout(() => {
+                        // Remove iframe and modal
+                        const iframeEl = document.getElementById('slideGenIframe');
+                        if (iframeEl) iframeEl.remove();
 
-                    // Replace modal content with success
-                    const modalEl = document.getElementById('slideGenModal');
-                    if (modalEl) {
-                        modalEl.innerHTML = `
+                        // Replace modal content with success
+                        const modalEl = document.getElementById('slideGenModal');
+                        if (modalEl) {
+                            modalEl.innerHTML = `
                                 <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
                                     <div class="text-5xl mb-4">✅</div>
                                     <h3 class="text-xl font-bold text-white mb-2">Presentation Ready!</h3>
@@ -2038,19 +2037,19 @@
                                     </div>
                                 </div>
                             `;
-                        lucide.createIcons();
-                    }
-                }, 1000);
+                            lucide.createIcons();
+                        }
+                    }, 1000);
 
-            } else if (event.data?.type === 'slides-error') {
-                window.removeEventListener('message', messageHandler);
+                } else if (event.data?.type === 'slides-error') {
+                    window.removeEventListener('message', messageHandler);
 
-                const iframeEl = document.getElementById('slideGenIframe');
-                if (iframeEl) iframeEl.remove();
+                    const iframeEl = document.getElementById('slideGenIframe');
+                    if (iframeEl) iframeEl.remove();
 
-                const modalEl = document.getElementById('slideGenModal');
-                if (modalEl) {
-                    modalEl.innerHTML = `
+                    const modalEl = document.getElementById('slideGenModal');
+                    if (modalEl) {
+                        modalEl.innerHTML = `
                             <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
                                 <div class="text-5xl mb-4">❌</div>
                                 <h3 class="text-xl font-bold text-white mb-2">Generation Failed</h3>
@@ -2060,21 +2059,21 @@
                                 </button>
                             </div>
                         `;
+                    }
                 }
-            }
-        };
-        window.addEventListener('message', messageHandler);
+            };
+            window.addEventListener('message', messageHandler);
 
-        // Timeout after 3 minutes
-        setTimeout(() => {
-            const iframeEl = document.getElementById('slideGenIframe');
-            if (iframeEl) {
-                iframeEl.remove();
-                window.removeEventListener('message', messageHandler);
+            // Timeout after 3 minutes
+            setTimeout(() => {
+                const iframeEl = document.getElementById('slideGenIframe');
+                if (iframeEl) {
+                    iframeEl.remove();
+                    window.removeEventListener('message', messageHandler);
 
-                const modalEl = document.getElementById('slideGenModal');
-                if (modalEl) {
-                    modalEl.innerHTML = `
+                    const modalEl = document.getElementById('slideGenModal');
+                    if (modalEl) {
+                        modalEl.innerHTML = `
                             <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
                                 <div class="text-5xl mb-4">⏰</div>
                                 <h3 class="text-xl font-bold text-white mb-2">Generation Timed Out</h3>
@@ -2084,9 +2083,9 @@
                                 </button>
                             </div>
                         `;
+                    }
                 }
-            }
-        }, 300000); // 5 min timeout (PageSpeed can take ~90s for heavy sites)
+            }, 300000); // 5 min timeout (PageSpeed can take ~90s for heavy sites)
         }
 
         async function handleAddCompetitorSubmit() {

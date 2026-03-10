@@ -1416,7 +1416,7 @@
             if (!isCompetitor) {
                 loadAuditContent();
             } else {
-                loadCompetitorsContent();
+                loadCompetitorContent();
             }
 
             try {
@@ -1442,7 +1442,7 @@
                 if (!isCompetitor) {
                     await loadAuditContent();
                 } else {
-                    await loadCompetitorsContent();
+                    await loadCompetitorContent();
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
@@ -1766,9 +1766,20 @@
                             <h3 class="text-lg font-bold text-white mb-2">Analyze Competitor</h3>
                             <p class="text-sm text-gray-400 mb-4">Enter a competitor's domain. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
 
-                            <input type="text" id="competitorDomainInput" placeholder="competitor.com" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Competitor Domain</label>
+                            <input type="text" id="competitorDomainInput" placeholder="competitor.com" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
 
-                                <div class="flex justify-end gap-3">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Pages to Crawl (Max Pages)</label>
+                            <select id="competitorPageLimitInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">
+                                <option value="10">10 pages</option>
+                                <option value="20">20 pages</option>
+                                <option value="50">50 pages</option>
+                                <option value="100">100 pages</option>
+                                <option value="200" selected>200 pages</option>
+                                <option value="10000">Full website</option>
+                            </select>
+
+                            <div class="flex justify-end gap-3">
                                     <button onclick="document.getElementById('addCompetitorModal').classList.add('hidden')" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
                                     <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
                                 </div>
@@ -1782,7 +1793,7 @@
             lucide.createIcons();
         }
 
-        async function loadCompetitorsContent() {
+        async function loadCompetitorContent() {
             if (!currentClient) return;
             const contentArea = document.getElementById('contentArea');
             const pageActions = document.getElementById('pageActions');

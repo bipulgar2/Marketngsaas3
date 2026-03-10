@@ -16,6 +16,32 @@ load_dotenv()
 # API Configuration
 DATAFORSEO_API_URL = "https://api.dataforseo.com/v3"
 
+# DataForSEO location codes — maps ISO country codes to API location_code integers
+LOCATION_CODE_MAP = {
+    "US": 2840,   # United States
+    "UK": 2826,   # United Kingdom (alias)
+    "GB": 2826,   # United Kingdom
+    "IN": 2356,   # India
+    "AU": 2036,   # Australia
+    "CA": 2124,   # Canada
+    "DE": 2276,   # Germany
+    "FR": 2250,   # France
+    "SG": 2702,   # Singapore
+    "AE": 2784,   # United Arab Emirates
+    "NZ": 2554,   # New Zealand
+    "PK": 2586,   # Pakistan
+    "ZA": 2710,   # South Africa
+    "NG": 2566,   # Nigeria
+    "PH": 2608,   # Philippines
+    "MY": 2458,   # Malaysia
+}
+
+def location_code_for(country: str, default: int = 2840) -> int:
+    """Convert an ISO country code string (e.g. 'IN') to a DataForSEO location_code integer."""
+    if not country:
+        return default
+    return LOCATION_CODE_MAP.get(country.upper(), default)
+
 
 def get_auth_header() -> Dict[str, str]:
     """Get authorization header for DataForSEO API."""
@@ -1527,7 +1553,7 @@ def fetch_domain_metrics(domain: str) -> Dict[str, Any]:
         print(f"DEBUG domain_metrics: Exception - {e}", flush=True)
         return {"success": False, "error": str(e)}
 
-def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 1000, location_code: int = 2840, filters: list = None) -> Dict[str, Any]:
+def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 1000, location_code: int = 2840, filters: list = None, competitor_location_code: int = None) -> Dict[str, Any]:
     """
     Fetch keywords for both domains and compute the true gap analysis:
     - Mutual keywords (both rank)
@@ -1538,14 +1564,16 @@ def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 100
         target_domain: The client's domain
         competitor_domain: The competitor's domain
         limit: Max keywords to fetch per domain
-        location_code: Location code
+        location_code: DataForSEO location_code for the client domain (default US=2840)
+        competitor_location_code: DataForSEO location_code for the competitor domain (defaults to same as client)
         filters: Array of filters for search volume, ranks, etc.
     """
-    print(f"DEBUG: Computing true keyword gap for {target_domain} vs {competitor_domain} with filters: {filters}", file=sys.stderr)
+    comp_loc = competitor_location_code if competitor_location_code is not None else location_code
+    print(f"DEBUG: Computing true keyword gap for {target_domain} (loc={location_code}) vs {competitor_domain} (loc={comp_loc}) with filters: {filters}", file=sys.stderr)
     
-    # Using existing get_organic_keywords function which fetches full DataForSEO format
+    # Fetch each domain from its own country's search index
     target_kws_raw = get_organic_keywords(target_domain, limit, location_code, filters)
-    comp_kws_raw = get_organic_keywords(competitor_domain, limit, location_code, filters)
+    comp_kws_raw = get_organic_keywords(competitor_domain, limit, comp_loc, filters)
     
     # Extract into dictionaries for fast lookup of ranks and data
     target_dict = {}
@@ -1641,13 +1669,14 @@ def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 100
     }
 
 
-def fetch_ranked_keywords(domain: str, limit: int = 1000) -> Dict[str, Any]:
+def fetch_ranked_keywords(domain: str, limit: int = 1000, location_code: int = 2840) -> Dict[str, Any]:
     """
     Fetch ranked keywords for a domain from DataForSEO SERP API.
     
     Args:
         domain: The domain to analyze
         limit: Max keywords
+        location_code: DataForSEO location_code (default 2840 = US)
         
     Returns:
         Dict with keywords in FULL DataForSEO format (for dashboard compatibility)
@@ -1657,7 +1686,7 @@ def fetch_ranked_keywords(domain: str, limit: int = 1000) -> Dict[str, Any]:
     
     payload = [{
         "target": domain,
-        "location_code": 2356,  # India (was 2840 US)
+        "location_code": location_code,
         "language_code": "en",
         "limit": limit,
         "include_serp_info": True  # Required to get keyword_difficulty

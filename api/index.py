@@ -859,9 +859,13 @@ def create_audit():
         # ---- DUAL WRITE: Also create a projects record for audit-dashboard.html ----
         try:
             # Fetch keywords + backlinks in parallel with crawl (same as audit-app)
-            from api.dataforseo_client import fetch_ranked_keywords, fetch_backlinks_summary, get_referring_domains
+            from api.dataforseo_client import fetch_ranked_keywords, fetch_backlinks_summary, get_referring_domains, location_code_for
             
-            keywords_data = fetch_ranked_keywords(target_domain)
+            # Resolve campaign country to DataForSEO location_code
+            saved_location = (campaign.data.get('settings') or {}).get('location', 'US')
+            audit_location_code = location_code_for(saved_location)
+            
+            keywords_data = fetch_ranked_keywords(target_domain, location_code=audit_location_code)
             keywords = keywords_data.get('keywords', []) if isinstance(keywords_data, dict) else []
             keywords_total_count = keywords_data.get('total_count', len(keywords))
             keywords_estimated_traffic = keywords_data.get('estimated_traffic', 0)
@@ -1198,38 +1202,50 @@ def analyze_competitor_gap():
     competitor_domain = request.args.get('competitor_domain')
     min_volume = request.args.get('min_volume', type=int)
     max_rank = request.args.get('max_rank', type=int)
-    
+    # Country params — ISO code e.g. "IN", "US", "GB"
+    client_country = request.args.get('location', 'US')
+    competitor_country = request.args.get('competitor_location', client_country)
+
     if not campaign_id or not competitor_domain:
         return jsonify({'error': 'Campaign ID and Competitor Domain are required'}), 400
-        
-    client = supabase_admin or supabase
-    
+
+    db_client = supabase_admin or supabase
+
     try:
         # Get target campaign
-        campaign_res = client.table('campaigns').select('*').eq('id', campaign_id).single().execute()
+        campaign_res = db_client.table('campaigns').select('*').eq('id', campaign_id).single().execute()
         campaign = campaign_res.data
         if not campaign:
             return jsonify({'error': 'Campaign not found'}), 404
-            
+
         target_domain = campaign['domain']
-        
-        # Build DataForSEO filters array if provided
+
+        # Resolve location codes — prefer campaign's saved setting over the query param
+        from api.dataforseo_client import get_keyword_gap, location_code_for
+        saved_location = (campaign.get('settings') or {}).get('location', client_country)
+        target_loc = location_code_for(saved_location)
+        comp_loc = location_code_for(competitor_country)
+
+        # Build in-memory filter list
         filters = []
         if min_volume is not None:
             filters.append(["keyword_info.search_volume", ">=", min_volume])
         if max_rank is not None:
             if filters: filters.append("and")
             filters.append(["ranked_serp_element.serp_item.rank_absolute", "<=", max_rank])
-            
+
         if not filters:
             filters = None
-        
-        # We need get_keyword_gap which computes the set difference locally
-        from api.dataforseo_client import get_keyword_gap
-        gap_results = get_keyword_gap(target_domain, competitor_domain, filters=filters)
-        
+
+        gap_results = get_keyword_gap(
+            target_domain, competitor_domain,
+            filters=filters,
+            location_code=target_loc,
+            competitor_location_code=comp_loc
+        )
+
         return jsonify(gap_results)
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

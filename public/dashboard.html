@@ -1086,10 +1086,21 @@
                             <div>
                                 <label class="block text-sm text-gray-400 mb-1">Location</label>
                                 <select name="location" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
-                                    <option value="US">United States</option>
-                                    <option value="UK">United Kingdom</option>
-                                    <option value="IN">India</option>
-                                    <option value="AU">Australia</option>
+                                    <option value="US">🇺🇸 United States</option>
+                                    <option value="GB">🇬🇧 United Kingdom</option>
+                                    <option value="IN">🇮🇳 India</option>
+                                    <option value="AU">🇦🇺 Australia</option>
+                                    <option value="CA">🇨🇦 Canada</option>
+                                    <option value="DE">🇩🇪 Germany</option>
+                                    <option value="FR">🇫🇷 France</option>
+                                    <option value="SG">🇸🇬 Singapore</option>
+                                    <option value="AE">🇦🇪 UAE</option>
+                                    <option value="NZ">🇳🇿 New Zealand</option>
+                                    <option value="PK">🇵🇰 Pakistan</option>
+                                    <option value="ZA">🇿🇦 South Africa</option>
+                                    <option value="NG">🇳🇬 Nigeria</option>
+                                    <option value="PH">🇵🇭 Philippines</option>
+                                    <option value="MY">🇲🇾 Malaysia</option>
                                 </select>
                             </div>
                         </div>
@@ -1548,7 +1559,9 @@
                     const minVol = window.cgMinVol || 10;
                     const maxRank = window.cgMaxRank || 100;
 
-                    const gapResponse = await fetch(`/api/competitors/gap-analysis?campaign_id=${currentClient.id}&competitor_domain=${compDomain}&min_volume=${minVol}&max_rank=${maxRank}`);
+                    const clientLocation = currentClient?.settings?.location || 'US';
+                    const compCountry = window.lastCompetitorCountry || clientLocation;
+                    const gapResponse = await fetch(`/api/competitors/gap-analysis?campaign_id=${currentClient.id}&competitor_domain=${compDomain}&min_volume=${minVol}&max_rank=${maxRank}&location=${clientLocation}&competitor_location=${compCountry}`);
                     const gapData = await gapResponse.json();
 
                     if (!gapData.success) {
@@ -2027,6 +2040,25 @@
                             <label class="block text-sm font-medium text-gray-300 mb-2">Competitor Domain</label>
                             <input type="text" id="competitorDomainInput" placeholder="competitor.com" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
 
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Competitor Country</label>
+                            <select id="competitorCountryInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
+                                <option value="US">🇺🇸 United States</option>
+                                <option value="GB">🇬🇧 United Kingdom</option>
+                                <option value="IN">🇮🇳 India</option>
+                                <option value="AU">🇦🇺 Australia</option>
+                                <option value="CA">🇨🇦 Canada</option>
+                                <option value="DE">🇩🇪 Germany</option>
+                                <option value="FR">🇫🇷 France</option>
+                                <option value="SG">🇸🇬 Singapore</option>
+                                <option value="AE">🇦🇪 UAE</option>
+                                <option value="NZ">🇳🇿 New Zealand</option>
+                                <option value="PK">🇵🇰 Pakistan</option>
+                                <option value="ZA">🇿🇦 South Africa</option>
+                                <option value="NG">🇳🇬 Nigeria</option>
+                                <option value="PH">🇵🇭 Philippines</option>
+                                <option value="MY">🇲🇾 Malaysia</option>
+                            </select>
+
                             <label class="block text-sm font-medium text-gray-300 mb-2">Pages to Crawl (Max Pages)</label>
                             <select id="competitorPageLimitInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">
                                 <option value="10">10 pages</option>
@@ -2200,6 +2232,8 @@
             }
 
             document.getElementById('addCompetitorModal').classList.add('hidden');
+            // Store competitor country for gap analysis calls
+            window.lastCompetitorCountry = (document.getElementById('competitorCountryInput')?.value) || (currentClient?.settings?.location) || 'US';
 
             // Re-use runAudit logic and pass flags
             await runAudit(true, domain, maxPages);

@@ -1077,7 +1077,7 @@ def get_backlinks_summary(domain: str) -> Dict[str, Any]:
         return {}
 
 
-def get_organic_keywords(domain: str, limit: int = 10000, location_code: int = 2840, filters: list = None) -> List[Dict[str, Any]]:
+def get_organic_keywords(domain: str, limit: int = 1000, location_code: int = 2840, filters: list = None) -> List[Dict[str, Any]]:
     """
     Get organic keywords from DataForSEO Labs.
     
@@ -1129,7 +1129,7 @@ def get_organic_keywords(domain: str, limit: int = 10000, location_code: int = 2
         return []
 
 
-def get_referring_domains(domain: str, limit: int = 10000, order_by: list = ["rank,desc"], filters: list = None) -> List[Dict[str, Any]]:
+def get_referring_domains(domain: str, limit: int = 1000, order_by: list = ["rank,desc"], filters: list = None) -> List[Dict[str, Any]]:
     """Get referring domains. Default order is high rank first."""
     try:
         endpoint = f"{DATAFORSEO_API_URL}/backlinks/referring_domains/live"
@@ -1527,7 +1527,7 @@ def fetch_domain_metrics(domain: str) -> Dict[str, Any]:
         print(f"DEBUG domain_metrics: Exception - {e}", flush=True)
         return {"success": False, "error": str(e)}
 
-def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 10000, location_code: int = 2840, filters: list = None) -> Dict[str, Any]:
+def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 1000, location_code: int = 2840, filters: list = None) -> Dict[str, Any]:
     """
     Fetch keywords for both domains and compute the true gap analysis:
     - Mutual keywords (both rank)
@@ -1828,7 +1828,7 @@ if __name__ == '__main__':
     # Test the client (requires credentials in env)
     print("DataForSEO Client loaded. Set DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD to use.")
 
-def get_backlinks_gap(target_domain: str, competitor_domain: str, limit: int = 10000, filters: list = None) -> Dict[str, Any]:
+def get_backlinks_gap(target_domain: str, competitor_domain: str, limit: int = 1000, filters: list = None) -> Dict[str, Any]:
     """
     Fetch referring domains for both sites and compute the gap analysis.
     """

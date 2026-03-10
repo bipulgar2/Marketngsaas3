@@ -1584,10 +1584,12 @@ def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 100
             sv = item.get('keyword_data', {}).get('keyword_info', {}).get('search_volume', 0) or 0
             if sv < min_volume:
                 return False
+                
         if max_rank is not None:
             rank = item.get('ranked_serp_element', {}).get('serp_item', {}).get('rank_absolute') or 999
             if rank > max_rank:
                 return False
+                
         return True
 
     # 1. Mutual Keywords (Combine data to show both ranks)

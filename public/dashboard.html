@@ -1553,6 +1553,8 @@
                     const clientOnly = gapData.target_only_keywords || [];
                     const compOnly = gapData.competitor_only_keywords || [];
 
+                    if (currentSideTab !== 'content-gap') return;
+
                     contentArea.innerHTML = `
                         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col h-full">
                             <div class="p-4 border-b border-gray-800 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -1682,6 +1684,8 @@
                     const clientOnly = gapData.target_only_domains || [];
                     const compOnly = gapData.competitor_only_domains || [];
 
+                    if (currentSideTab !== 'backlink-gap') return;
+
                     contentArea.innerHTML = `
                         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col h-full">
                             <div class="p-4 border-b border-gray-800 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -1804,6 +1808,8 @@
                     if (!stratData.success) {
                         throw new Error(stratData.error || "Strategy generation failed");
                     }
+
+                    if (currentSideTab !== 'strategy') return;
 
                     contentArea.innerHTML = `
                         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">

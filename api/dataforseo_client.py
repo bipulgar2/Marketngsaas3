@@ -1521,10 +1521,10 @@ def fetch_domain_metrics(domain: str) -> Dict[str, Any]:
 
 def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 1000, location_code: int = 2840) -> Dict[str, Any]:
     """
-    Fetch keywords for both domains and compute the "they rank, you don't" gap.
-    Used for Competitor Content Gap analysis.
-    We fetch both lists independently and compare in-memory because the /domain_intersection 
-    endpoint requires an additional unused subscription.
+    Fetch keywords for both domains and compute the true gap analysis:
+    - Mutual keywords (both rank)
+    - Target only keywords
+    - Competitor only keywords
     
     Args:
         target_domain: The client's domain
@@ -1532,43 +1532,78 @@ def get_keyword_gap(target_domain: str, competitor_domain: str, limit: int = 100
         limit: Max keywords to fetch per domain
         location_code: Location code
     """
-    print(f"DEBUG: Computing keyword gap for {target_domain} vs {competitor_domain}", file=sys.stderr)
+    print(f"DEBUG: Computing true keyword gap for {target_domain} vs {competitor_domain}", file=sys.stderr)
     
     # Using existing get_organic_keywords function which fetches full DataForSEO format
     target_kws_raw = get_organic_keywords(target_domain, limit, location_code)
     comp_kws_raw = get_organic_keywords(competitor_domain, limit, location_code)
     
-    # Extract just the keyword strings for fast set comparison
-    target_kw_set = set()
+    # Extract into dictionaries for fast lookup of ranks and data
+    target_dict = {}
     for item in target_kws_raw:
         kw = item.get('keyword_data', {}).get('keyword')
         if kw:
-            target_kw_set.add(kw.lower())
+            # Store the whole item so we have rank, search volume, etc
+            target_dict[kw.lower()] = item
             
-    # Find keywords the competitor has, but target does NOT have
-    gap_keywords = []
-    
+    comp_dict = {}
     for item in comp_kws_raw:
         kw = item.get('keyword_data', {}).get('keyword')
-        if kw and kw.lower() not in target_kw_set:
-            gap_keywords.append(item)
+        if kw:
+            comp_dict[kw.lower()] = item
             
-    # Sort the gap keywords by search_volume descending to show the highest value gaps first
-    gap_keywords.sort(
-        key=lambda x: x.get('keyword_data', {}).get('keyword_info', {}).get('search_volume', 0), 
-        reverse=True
-    )
+    target_keys = set(target_dict.keys())
+    comp_keys = set(comp_dict.keys())
     
-    print(f"DEBUG: Gap analysis complete. Found {len(gap_keywords)} missing keywords.", file=sys.stderr)
+    mutual_keys = target_keys.intersection(comp_keys)
+    target_only_keys = target_keys - comp_keys
+    comp_only_keys = comp_keys - target_keys
+    
+    # 1. Mutual Keywords (Combine data to show both ranks)
+    mutual_keywords = []
+    for kw in mutual_keys:
+        target_item = target_dict[kw]
+        comp_item = comp_dict[kw]
+        
+        # We'll base the structure on the target_item, but add a specific field for comp rank
+        combined = dict(target_item)
+        
+        comp_rank = comp_item.get('ranked_serp_element', {}).get('serp_item', {}).get('rank_absolute')
+        target_rank = target_item.get('ranked_serp_element', {}).get('serp_item', {}).get('rank_absolute')
+        
+        combined['competitor_rank'] = comp_rank
+        combined['target_rank'] = target_rank
+        
+        mutual_keywords.append(combined)
+        
+    # 2. Target Only
+    target_only_keywords = [target_dict[kw] for kw in target_only_keys]
+    
+    # 3. Competitor Only
+    comp_only_keywords = [comp_dict[kw] for kw in comp_only_keys]
+            
+    # Sort all lists by search volume descending
+    def sort_by_sv(item):
+        return item.get('keyword_data', {}).get('keyword_info', {}).get('search_volume', 0) or 0
+        
+    mutual_keywords.sort(key=sort_by_sv, reverse=True)
+    target_only_keywords.sort(key=sort_by_sv, reverse=True)
+    comp_only_keywords.sort(key=sort_by_sv, reverse=True)
+    
+    print(f"DEBUG: True Gap analysis complete. Mutual: {len(mutual_keywords)}, Target Only: {len(target_only_keywords)}, Comp Only: {len(comp_only_keywords)}", file=sys.stderr)
     
     return {
         "success": True,
         "target_domain": target_domain,
         "competitor_domain": competitor_domain,
-        "target_keywords_count": len(target_kw_set),
-        "competitor_keywords_count": len(comp_kws_raw),
-        "gap_count": len(gap_keywords),
-        "gap_keywords": gap_keywords[:500] # Return top 500 to save bandwidth
+        "target_keywords_count": len(target_keys),
+        "competitor_keywords_count": len(comp_keys),
+        "mutual_keywords": mutual_keywords[:500],
+        "target_only_keywords": target_only_keywords[:500],
+        "competitor_only_keywords": comp_only_keywords[:500],
+        # Keep backward compatibility for any old dashboard code before it updates
+        "gap_keywords": comp_only_keywords[:500],
+        "gap_count": len(comp_only_keys)
     }
 
 
@@ -1760,3 +1795,98 @@ capture_screenshot_via_dataforseo = fetch_dataforseo_screenshot
 if __name__ == '__main__':
     # Test the client (requires credentials in env)
     print("DataForSEO Client loaded. Set DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD to use.")
+
+def get_referring_domains(domain: str, limit: int = 1000) -> list:
+    """
+    Fetch referring domains for a domain from DataForSEO Backlinks API.
+    """
+    endpoint = f"{DATAFORSEO_API_URL}/v3/backlinks/referring_domains/live"
+    
+    payload = [{
+        "target": domain,
+        "limit": limit,
+        "order_by": ["backlinks DESC"]
+    }]
+    
+    try:
+        import requests
+        response = requests.post(
+            endpoint,
+            headers={**get_auth_header(), "Content-Type": "application/json"},
+            json=payload,
+            timeout=30
+        )
+        data = response.json()
+        
+        if data.get('tasks') and data['tasks'][0].get('result'):
+            return data['tasks'][0]['result'][0].get('items', [])
+        return []
+        
+    except Exception as e:
+        print(f"DEBUG get_referring_domains: Exception - {e}", file=sys.stderr)
+        return []
+
+def get_backlinks_gap(target_domain: str, competitor_domain: str, limit: int = 1000) -> dict:
+    """
+    Fetch referring domains for both domains and compute the backlink gap.
+    Returns Mutual, Target-Only, and Competitor-Only domains.
+    """
+    print(f"DEBUG: Computing backlinks gap for {target_domain} vs {competitor_domain}", file=sys.stderr)
+    
+    target_domains_raw = get_referring_domains(target_domain, limit)
+    comp_domains_raw = get_referring_domains(competitor_domain, limit)
+    
+    target_dict = {}
+    for item in target_domains_raw:
+        dom = item.get('referring_domain')
+        if dom:
+            target_dict[dom.lower()] = item
+            
+    comp_dict = {}
+    for item in comp_domains_raw:
+        dom = item.get('referring_domain')
+        if dom:
+            comp_dict[dom.lower()] = item
+            
+    target_keys = set(target_dict.keys())
+    comp_keys = set(comp_dict.keys())
+    
+    mutual_keys = target_keys.intersection(comp_keys)
+    target_only_keys = target_keys - comp_keys
+    comp_only_keys = comp_keys - target_keys
+    
+    # 1. Mutual
+    mutual_domains = []
+    for dom in mutual_keys:
+        target_item = target_dict[dom]
+        comp_item = comp_dict[dom]
+        combined = dict(target_item)
+        combined['competitor_backlinks'] = comp_item.get('backlinks', 0)
+        combined['target_backlinks'] = target_item.get('backlinks', 0)
+        mutual_domains.append(combined)
+        
+    # 2. Target Only
+    target_only_domains = [target_dict[dom] for dom in target_only_keys]
+    
+    # 3. Competitor Only
+    comp_only_domains = [comp_dict[dom] for dom in comp_only_keys]
+    
+    # Sort all lists by backlinks descending
+    def sort_by_bl(item):
+        return item.get('backlinks', 0) or 0
+        
+    mutual_domains.sort(key=sort_by_bl, reverse=True)
+    target_only_domains.sort(key=sort_by_bl, reverse=True)
+    comp_only_domains.sort(key=sort_by_bl, reverse=True)
+    
+    return {
+        "success": True,
+        "target_domain": target_domain,
+        "competitor_domain": competitor_domain,
+        "target_domains_count": len(target_keys),
+        "competitor_domains_count": len(comp_keys),
+        "mutual_domains": mutual_domains[:500],
+        "target_only_domains": target_only_domains[:500],
+        "competitor_only_domains": comp_only_domains[:500],
+        "gap_count": len(comp_only_keys)
+    }

@@ -1184,6 +1184,36 @@ def analyze_competitor_gap():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/competitors/backlinks-gap', methods=['GET'])
+@login_required
+@permission_required('view_all_campaigns')
+def analyze_backlinks_gap():
+    """Perform a Backlink Gap Analysis between the client domain and a competitor."""
+    campaign_id = request.args.get('campaign_id')
+    competitor_domain = request.args.get('competitor_domain')
+    
+    if not campaign_id or not competitor_domain:
+        return jsonify({'error': 'Campaign ID and Competitor Domain are required'}), 400
+        
+    client = supabase_admin or supabase
+    
+    try:
+        # Get target campaign
+        campaign_res = client.table('campaigns').select('*').eq('id', campaign_id).single().execute()
+        campaign = campaign_res.data
+        if not campaign:
+            return jsonify({'error': 'Campaign not found'}), 404
+            
+        target_domain = campaign['domain']
+        
+        from api.dataforseo_client import get_backlinks_gap
+        gap_results = get_backlinks_gap(target_domain, competitor_domain)
+        
+        return jsonify(gap_results)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/competitors/strategy', methods=['GET'])
 @login_required
 @permission_required('view_all_campaigns')

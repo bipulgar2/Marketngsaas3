@@ -1515,7 +1515,6 @@
                 lucide.createIcons();
 
                 try {
-                    // Get all competitors connected to campaign (or pick a default one)
                     const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=competitor`);
                     const data = await response.json();
                     const audits = data.audits || [];
@@ -1532,14 +1531,9 @@
                         return;
                     }
 
-                    // Run gap analysis against the most recent competitor for now
                     const compDomain = audits[0].results?.competitor_domain;
-                    if (!compDomain) {
-                        contentArea.innerHTML = `<div class="p-8 text-center"><p>Competitor domain not found in audit results.</p></div>`;
-                        return;
-                    }
+                    if (!compDomain) throw new Error("Competitor domain not found in audit results.");
 
-                    // Fetch gap analysis
                     const gapResponse = await fetch(`/api/competitors/gap-analysis?campaign_id=${currentClient.id}&competitor_domain=${compDomain}`);
                     const gapData = await gapResponse.json();
 
@@ -1547,52 +1541,220 @@
                         throw new Error(gapData.error || "Gap analysis failed");
                     }
 
+                    const mutual = gapData.mutual_keywords || [];
+                    const clientOnly = gapData.target_only_keywords || [];
+                    const compOnly = gapData.competitor_only_keywords || [];
+
                     contentArea.innerHTML = `
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                            <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col h-full">
+                            <div class="p-4 border-b border-gray-800 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
                                 <div>
                                     <h3 class="text-lg font-semibold text-white">Content Gap Analysis</h3>
                                     <p class="text-sm text-gray-400">Comparing ${gapData.target_domain} vs ${gapData.competitor_domain}</p>
                                 </div>
-                                <div class="bg-violet-600/20 text-violet-400 px-3 py-1 rounded-full text-sm font-medium border border-violet-500/20">
-                                    ${gapData.gap_count} Missing Keywords
+                                <div class="flex bg-gray-800 p-1 rounded-lg">
+                                    <button onclick="document.querySelectorAll('.cg-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('cg-tab-mutual').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:bg-violet-600 outline-none transition-colors">Mutual (${mutual.length})</button>
+                                    <button onclick="document.querySelectorAll('.cg-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('cg-tab-client').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">You Only (${clientOnly.length})</button>
+                                    <button onclick="document.querySelectorAll('.cg-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('cg-tab-comp').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">Missing (${compOnly.length})</button>
                                 </div>
                             </div>
-                            <div class="overflow-x-auto">
+                            
+                            <!-- Mutual Tab -->
+                            <div id="cg-tab-mutual" class="cg-tab-content overflow-y-auto max-h-[600px] p-4 font-normal">
                                 <table class="w-full text-left text-sm text-gray-400">
-                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-300">
+                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-300 sticky top-0">
                                         <tr>
-                                            <th class="px-6 py-4 font-medium">Keyword</th>
-                                            <th class="px-6 py-4 font-medium text-right">Search Volume</th>
-                                            <th class="px-6 py-4 font-medium text-right">Traffic</th>
-                                            <th class="px-6 py-4 font-medium text-right">Comp. Rank</th>
+                                            <th class="px-4 py-3 font-medium">Keyword</th>
+                                            <th class="px-4 py-3 font-medium text-right">Volume</th>
+                                            <th class="px-4 py-3 font-medium text-right">Your Rank</th>
+                                            <th class="px-4 py-3 font-medium text-right">Their Rank</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-800">
-                                        ${gapData.gap_keywords && gapData.gap_keywords.length > 0 ? gapData.gap_keywords.map(kw => {
-                        const kData = kw.keyword_data || {};
-                        const info = kData.keyword_info || {};
-                        const serp = kw.ranked_serp_element?.serp_item || {};
-                        return `
+                                        ${mutual.length > 0 ? mutual.map(kw => `
                                             <tr class="hover:bg-gray-800/50 transition-colors">
-                                                <td class="px-6 py-4 font-medium text-white">${kData.keyword || 'Unknown'}</td>
-                                                <td class="px-6 py-4 text-right">${(info.search_volume || 0).toLocaleString()}</td>
-                                                <td class="px-6 py-4 text-right">${Math.round(serp.etv || 0).toLocaleString()}</td>
-                                                <td class="px-6 py-4 text-right font-mono text-emerald-400">#${serp.rank_absolute || '-'}</td>
+                                                <td class="px-4 py-3 font-medium text-white">${kw.keyword_data?.keyword || 'Unknown'}</td>
+                                                <td class="px-4 py-3 text-right">${(kw.keyword_data?.keyword_info?.search_volume || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 text-right font-mono ${kw.target_rank < kw.competitor_rank ? 'text-emerald-400 font-bold' : 'text-gray-400'}">#${kw.target_rank || '-'}</td>
+                                                <td class="px-4 py-3 text-right font-mono ${kw.competitor_rank < kw.target_rank ? 'text-violet-400 font-bold' : 'text-gray-400'}">#${kw.competitor_rank || '-'}</td>
                                             </tr>
-                                            `;
-                    }).join('') : '<tr><td colspan="4" class="px-6 py-8 text-center">No keyword gaps found! You are outranking them.</td></tr>'}
+                                        `).join('') : '<tr><td colspan="4" class="px-4 py-8 text-center">No mutual keywords found.</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Client Only Tab -->
+                            <div id="cg-tab-client" class="cg-tab-content hidden overflow-y-auto max-h-[600px] p-4 font-normal">
+                                <table class="w-full text-left text-sm text-gray-400">
+                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-300 sticky top-0">
+                                        <tr>
+                                            <th class="px-4 py-3 font-medium">Keyword</th>
+                                            <th class="px-4 py-3 font-medium text-right">Volume</th>
+                                            <th class="px-4 py-3 font-medium text-right">Rank</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-800">
+                                        ${clientOnly.length > 0 ? clientOnly.map(kw => `
+                                            <tr class="hover:bg-gray-800/50 transition-colors">
+                                                <td class="px-4 py-3 font-medium text-white">${kw.keyword_data?.keyword || 'Unknown'}</td>
+                                                <td class="px-4 py-3 text-right">${(kw.keyword_data?.keyword_info?.search_volume || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 text-right font-mono text-emerald-400">#${kw.ranked_serp_element?.serp_item?.rank_absolute || '-'}</td>
+                                            </tr>
+                                        `).join('') : '<tr><td colspan="3" class="px-4 py-8 text-center">No exclusive keywords found.</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Competitor Only Tab -->
+                            <div id="cg-tab-comp" class="cg-tab-content hidden overflow-y-auto max-h-[600px] p-4 font-normal">
+                                <table class="w-full text-left text-sm text-gray-400">
+                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-300 sticky top-0">
+                                        <tr>
+                                            <th class="px-4 py-3 font-medium">Keyword</th>
+                                            <th class="px-4 py-3 font-medium text-right">Volume</th>
+                                            <th class="px-4 py-3 font-medium text-right">Rank</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-800">
+                                        ${compOnly.length > 0 ? compOnly.map(kw => `
+                                            <tr class="hover:bg-gray-800/50 transition-colors">
+                                                <td class="px-4 py-3 font-medium text-white">${kw.keyword_data?.keyword || 'Unknown'}</td>
+                                                <td class="px-4 py-3 text-right">${(kw.keyword_data?.keyword_info?.search_volume || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 text-right font-mono text-violet-400">#${kw.ranked_serp_element?.serp_item?.rank_absolute || '-'}</td>
+                                            </tr>
+                                        `).join('') : '<tr><td colspan="3" class="px-4 py-8 text-center">No missing keywords found! Gap is zero.</td></tr>'}
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                     `;
                 } catch (error) {
+                    contentArea.innerHTML = `<div class="text-red-400 p-8 text-center">Error loading gap analysis: ${error.message}</div>`;
+                }
+                lucide.createIcons();
+                return;
+            }
+
+            if (currentSideTab === 'backlink-gap') {
+                contentArea.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Running backlink gap analysis...
+                    </div>
+                `;
+                lucide.createIcons();
+
+                try {
+                    const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=competitor`);
+                    const data = await response.json();
+                    const audits = data.audits || [];
+
+                    if (audits.length === 0) {
+                        contentArea.innerHTML = `
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                                <i data-lucide="link" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                                <h3 class="text-lg font-semibold text-white mb-2">No Competitors Added</h3>
+                                <p class="text-gray-400">Add a competitor in the Overview tab to run a backlink gap analysis.</p>
+                            </div>
+                        `;
+                        lucide.createIcons();
+                        return;
+                    }
+
+                    const compDomain = audits[0].results?.competitor_domain;
+                    if (!compDomain) throw new Error("Competitor domain not found.");
+
+                    const gapResponse = await fetch(`/api/competitors/backlinks-gap?campaign_id=${currentClient.id}&competitor_domain=${compDomain}`);
+                    const gapData = await gapResponse.json();
+
+                    if (!gapData.success) {
+                        throw new Error(gapData.error || "Gap analysis failed");
+                    }
+                    
+                    const mutual = gapData.mutual_domains || [];
+                    const clientOnly = gapData.target_only_domains || [];
+                    const compOnly = gapData.competitor_only_domains || [];
+
                     contentArea.innerHTML = `
-                        <div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl"> 
-                            Error loading gap analysis: ${error.message}
-                        </div> 
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col h-full">
+                            <div class="p-4 border-b border-gray-800 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-white">Backlink Gap Analysis</h3>
+                                    <p class="text-sm text-gray-400">Comparing ${gapData.target_domain} vs ${gapData.competitor_domain}</p>
+                                </div>
+                                <div class="flex bg-gray-800 p-1 rounded-lg">
+                                    <button onclick="document.querySelectorAll('.bl-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('bl-tab-mutual').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-gray-700 hover:bg-gray-600 focus:bg-violet-600 outline-none transition-colors">Mutual (${mutual.length})</button>
+                                    <button onclick="document.querySelectorAll('.bl-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('bl-tab-client').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">You Only (${clientOnly.length})</button>
+                                    <button onclick="document.querySelectorAll('.bl-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('bl-tab-comp').classList.remove('hidden');" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white focus:bg-violet-600 focus:text-white outline-none transition-colors">Missing (${compOnly.length})</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Mutual Tab -->
+                            <div id="bl-tab-mutual" class="bl-tab-content overflow-y-auto max-h-[600px] p-4 font-normal">
+                                <table class="w-full text-left text-sm text-gray-400">
+                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-300">
+                                        <tr>
+                                            <th class="px-4 py-3 font-medium">Referring Domain</th>
+                                            <th class="px-4 py-3 font-medium text-right">Your Backlinks</th>
+                                            <th class="px-4 py-3 font-medium text-right">Their Backlinks</th>
+                                            <th class="px-4 py-3 font-medium text-right">Diff</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-800">
+                                        ${mutual.length > 0 ? mutual.map(d => `
+                                            <tr class="hover:bg-gray-800/50 transition-colors">
+                                                <td class="px-4 py-3 text-white">${d.referring_domain}</td>
+                                                <td class="px-4 py-3 text-right text-emerald-400">${d.target_backlinks}</td>
+                                                <td class="px-4 py-3 text-right text-violet-400">${d.competitor_backlinks}</td>
+                                                <td class="px-4 py-3 text-right">${d.target_backlinks - d.competitor_backlinks > 0 ? '+'+(d.target_backlinks - d.competitor_backlinks) : (d.target_backlinks - d.competitor_backlinks)}</td>
+                                            </tr>
+                                        `).join('') : '<tr><td colspan="4" class="px-4 py-8 text-center">No mutual referring domains.</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Client Only Tab -->
+                            <div id="bl-tab-client" class="bl-tab-content hidden overflow-y-auto max-h-[600px] p-4 font-normal">
+                                <table class="w-full text-left text-sm text-gray-400">
+                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-300">
+                                        <tr>
+                                            <th class="px-4 py-3 font-medium">Referring Domain</th>
+                                            <th class="px-4 py-3 font-medium text-right">Backlinks</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-800">
+                                        ${clientOnly.length > 0 ? clientOnly.map(d => `
+                                            <tr class="hover:bg-gray-800/50 transition-colors">
+                                                <td class="px-4 py-3 text-white">${d.referring_domain}</td>
+                                                <td class="px-4 py-3 text-right text-emerald-400">${d.backlinks}</td>
+                                            </tr>
+                                        `).join('') : '<tr><td colspan="2" class="px-4 py-8 text-center">No exclusive domains found.</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Competitor Only (Missing) Tab -->
+                            <div id="bl-tab-comp" class="bl-tab-content hidden overflow-y-auto max-h-[600px] p-4 font-normal">
+                                <table class="w-full text-left text-sm text-gray-400">
+                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-300">
+                                        <tr>
+                                            <th class="px-4 py-3 font-medium">Referring Domain</th>
+                                            <th class="px-4 py-3 font-medium text-right">Backlinks</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-800">
+                                        ${compOnly.length > 0 ? compOnly.map(d => `
+                                            <tr class="hover:bg-gray-800/50 transition-colors">
+                                                <td class="px-4 py-3 text-white">${d.referring_domain}</td>
+                                                <td class="px-4 py-3 text-right text-violet-400">${d.backlinks}</td>
+                                            </tr>
+                                        `).join('') : '<tr><td colspan="2" class="px-4 py-8 text-center">No missing domains gap!</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     `;
+                } catch (error) {
+                    contentArea.innerHTML = `<div class="text-red-400 p-8 text-center">Error: ${error.message}</div>`;
                 }
                 lucide.createIcons();
                 return;
@@ -1667,7 +1829,7 @@
                 return;
             }
 
-            if (currentSideTab !== 'overview' && currentSideTab !== 'content-gap' && currentSideTab !== 'strategy') {
+            if (currentSideTab !== 'overview' && currentSideTab !== 'content-gap' && currentSideTab !== 'backlink-gap' && currentSideTab !== 'strategy') {
                 contentArea.innerHTML = `
                     <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
                         <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>

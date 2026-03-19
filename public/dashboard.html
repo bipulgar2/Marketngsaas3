@@ -2148,7 +2148,7 @@
             // Create hidden iframe — pass template_type
             const iframe = document.createElement('iframe');
             iframe.id = 'slideGenIframe';
-            iframe.src = `/ audit - dashboard.html ? audit_id = ${auditId}& auto_generate=true & template_type=${templateType} `;
+            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}`;
             iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1400px;height:900px;opacity:0;pointer-events:none;';
             document.body.appendChild(iframe);
 

@@ -1259,7 +1259,69 @@ def get_client_backlinks():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/competitors/gap-analysis', methods=['GET'])
+@app.route('/api/refresh-backlinks', methods=['POST'])
+def refresh_backlinks():
+    """Fetch live backlinks from DataForSEO for a project/audit and persist to projects table.
+    
+    Called by the 'Refresh Backlinks' button in audit-dashboard.html.
+    Accepts: { project_id: <audit_id or project_id> }
+    Returns: { success, referring_domains: [], backlinks_summary: {} }
+    """
+    data = request.get_json() or {}
+    entity_id = data.get('project_id')
+    if not entity_id:
+        return jsonify({'error': 'project_id required'}), 400
+
+    db = supabase_admin or supabase
+    try:
+        from api.dataforseo_client import fetch_backlinks_summary, get_referring_domains
+
+        # Find the project record — could be an audit_id or a project uuid
+        proj_res = db.table('projects').select('id, full_audit_data').eq('audit_id', entity_id).limit(1).execute()
+        if not proj_res.data:
+            proj_res = db.table('projects').select('id, full_audit_data').eq('id', entity_id).limit(1).execute()
+
+        if not proj_res.data:
+            return jsonify({'error': 'Project not found for given id'}), 404
+
+        proj = proj_res.data[0]
+        proj_id = proj['id']
+        fad = proj.get('full_audit_data') or {}
+        domain = fad.get('domain', '')
+
+        if not domain:
+            # Try to get domain from audits table via audit_id
+            aud_res = db.table('audits').select('results, campaigns(domain)').eq('id', entity_id).limit(1).execute()
+            if aud_res.data:
+                aud = aud_res.data[0]
+                domain = (aud.get('campaigns') or {}).get('domain') or (aud.get('results') or {}).get('competitor_domain', '')
+
+        if not domain:
+            return jsonify({'error': 'Could not determine domain for this project'}), 400
+
+        logger.info(f"Refreshing backlinks for domain: {domain}")
+
+        summary = fetch_backlinks_summary(domain)
+        referring_domains = get_referring_domains(domain, limit=500)
+
+        # Persist back to projects table
+        fad['backlinks_summary'] = summary
+        fad['referring_domains'] = referring_domains
+        db.table('projects').update({'full_audit_data': fad}).eq('id', proj_id).execute()
+
+        return jsonify({
+            'success': True,
+            'domain': domain,
+            'backlinks_summary': summary,
+            'referring_domains': referring_domains
+        })
+
+    except Exception as e:
+        logger.error(f"refresh_backlinks error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+
 @login_required
 @permission_required('view_all_campaigns')
 def analyze_competitor_gap():

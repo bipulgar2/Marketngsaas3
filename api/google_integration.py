@@ -287,7 +287,7 @@ def get_google_properties():
 
 @google_integration_bp.route('/api/google/metrics', methods=['POST'])
 def get_google_metrics():
-    """Fetches live metrics from GSC and GA4 for specific properties."""
+    """Fetches comprehensive metrics from GSC and GA4 for the analytics dashboard."""
     if 'user' not in session:
         return jsonify({'error': 'Authentication required'}), 401
         
@@ -300,8 +300,6 @@ def get_google_metrics():
         data = request.json or {}
         gsc_property = data.get('gsc_property')
         ga4_property = data.get('ga4_property')
-        start_date = data.get('start_date', '30daysAgo')
-        end_date = data.get('end_date', 'today')
         
         if not gsc_property and not ga4_property:
             return jsonify({'error': 'Must provide gsc_property or ga4_property'}), 400
@@ -315,7 +313,7 @@ def get_google_metrics():
         if not refresh_token:
             return jsonify({'error': 'No refresh token available'}), 400
             
-        # Reconstruct credentials (client_id and secret needed)
+        # Reconstruct credentials
         client_config = get_client_config()
         creds = Credentials(
             None,
@@ -326,63 +324,300 @@ def get_google_metrics():
         )
         
         results = {'gsc': None, 'ga4': None}
+
+        # =====================================================================
+        # Compute date ranges: current 30 days vs previous 30 days
+        # =====================================================================
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        current_end = today.isoformat()
+        current_start = (today - timedelta(days=29)).isoformat()
+        prev_end = (today - timedelta(days=30)).isoformat()
+        prev_start = (today - timedelta(days=59)).isoformat()
         
-        # 1. Fetch GSC Metrics
+        # =====================================================================
+        # 1. GSC — Full Data Fetch
+        # =====================================================================
         if gsc_property:
             try:
                 gsc_service = build('searchconsole', 'v1', credentials=creds)
-                request_body = {
-                    'startDate': start_date,
-                    'endDate': end_date,
-                    'dimensions': ['date']
-                }
-                response = gsc_service.searchanalytics().query(siteUrl=gsc_property, body=request_body).execute()
                 
-                rows = response.get('rows', [])
-                total_clicks = sum(row['clicks'] for row in rows)
-                total_impressions = sum(row['impressions'] for row in rows)
-                avg_position = sum(row['position'] for row in rows) / len(rows) if rows else 0
-                avg_ctr = sum(row['ctr'] for row in rows) / len(rows) if rows else 0
+                def _gsc_query(dimensions, start, end, row_limit=5000):
+                    """Helper to run a GSC query."""
+                    body = {
+                        'startDate': start,
+                        'endDate': end,
+                        'dimensions': dimensions,
+                        'rowLimit': row_limit
+                    }
+                    resp = gsc_service.searchanalytics().query(siteUrl=gsc_property, body=body).execute()
+                    return resp.get('rows', [])
                 
+                # a) Time-series (current period)
+                ts_rows = _gsc_query(['date'], current_start, current_end)
+                timeseries = []
+                for row in ts_rows:
+                    timeseries.append({
+                        'date': row['keys'][0],
+                        'clicks': row['clicks'],
+                        'impressions': row['impressions'],
+                        'ctr': row['ctr'],
+                        'position': row['position']
+                    })
+                
+                # b) Time-series (previous period)    
+                prev_ts_rows = _gsc_query(['date'], prev_start, prev_end)
+                prev_timeseries = []
+                for row in prev_ts_rows:
+                    prev_timeseries.append({
+                        'date': row['keys'][0],
+                        'clicks': row['clicks'],
+                        'impressions': row['impressions'],
+                        'ctr': row['ctr'],
+                        'position': row['position']
+                    })
+                
+                # c) Totals (current)
+                total_clicks = sum(r['clicks'] for r in timeseries)
+                total_impressions = sum(r['impressions'] for r in timeseries)
+                avg_ctr = sum(r['ctr'] for r in timeseries) / len(timeseries) if timeseries else 0
+                avg_position = sum(r['position'] for r in timeseries) / len(timeseries) if timeseries else 0
+                
+                # d) Totals (previous) for comparison
+                prev_clicks = sum(r['clicks'] for r in prev_timeseries)
+                prev_impressions = sum(r['impressions'] for r in prev_timeseries)
+                prev_ctr = sum(r['ctr'] for r in prev_ts_rows) / len(prev_ts_rows) if prev_ts_rows else 0
+                prev_position = sum(r['position'] for r in prev_ts_rows) / len(prev_ts_rows) if prev_ts_rows else 0
+                
+                # e) Device breakdown
+                device_rows = _gsc_query(['device'], current_start, current_end)
+                devices = []
+                for row in device_rows:
+                    devices.append({
+                        'device': row['keys'][0],
+                        'clicks': row['clicks'],
+                        'impressions': row['impressions']
+                    })
+                
+                # f) Country breakdown (top 10)
+                country_rows = _gsc_query(['country'], current_start, current_end)
+                # Sort by impressions descending, take top 10
+                country_rows.sort(key=lambda x: x['impressions'], reverse=True)
+                countries = []
+                for row in country_rows[:10]:
+                    countries.append({
+                        'country': row['keys'][0],
+                        'clicks': row['clicks'],
+                        'impressions': row['impressions'],
+                        'ctr': row['ctr'],
+                        'position': row['position']
+                    })
+                
+                # g) Top queries (top 25)
+                query_rows = _gsc_query(['query'], current_start, current_end)
+                query_rows.sort(key=lambda x: x['clicks'], reverse=True)
+                queries = []
+                for row in query_rows[:25]:
+                    queries.append({
+                        'query': row['keys'][0],
+                        'clicks': row['clicks'],
+                        'impressions': row['impressions'],
+                        'ctr': row['ctr'],
+                        'position': row['position']
+                    })
+                
+                # h) Top pages (top 25)
+                page_rows = _gsc_query(['page'], current_start, current_end)
+                page_rows.sort(key=lambda x: x['clicks'], reverse=True)
+                pages = []
+                for row in page_rows[:25]:
+                    pages.append({
+                        'page': row['keys'][0],
+                        'clicks': row['clicks'],
+                        'impressions': row['impressions'],
+                        'ctr': row['ctr'],
+                        'position': row['position']
+                    })
+                
+                # i) Unique queries & pages counts
+                unique_queries = len(query_rows)
+                unique_pages = len(page_rows)
+
                 results['gsc'] = {
                     'clicks': total_clicks,
                     'impressions': total_impressions,
                     'ctr': avg_ctr,
                     'position': avg_position,
-                    'timeseries': rows
+                    'uniqueQueries': unique_queries,
+                    'uniquePages': unique_pages,
+                    'prev': {
+                        'clicks': prev_clicks,
+                        'impressions': prev_impressions,
+                        'ctr': prev_ctr,
+                        'position': prev_position
+                    },
+                    'timeseries': timeseries,
+                    'prevTimeseries': prev_timeseries,
+                    'devices': devices,
+                    'countries': countries,
+                    'queries': queries,
+                    'pages': pages
                 }
             except Exception as e:
                 logger.error(f"GSC Metrics Error: {e}")
                 results['gsc'] = {'error': str(e)}
                 
-        # 2. Fetch GA4 Metrics
+        # =====================================================================
+        # 2. GA4 — Full Data Fetch
+        # =====================================================================
         if ga4_property:
             try:
                 ga_data = build('analyticsdata', 'v1beta', credentials=creds)
-                # GA4 properties are structured as "properties/12345"
                 if not ga4_property.startswith('properties/'):
                     ga4_property = f'properties/{ga4_property}'
-                    
-                request_body = {
-                    'dateRanges': [{'startDate': start_date, 'endDate': end_date}],
-                    'metrics': [
-                        {'name': 'activeUsers'},
-                        {'name': 'sessions'},
-                        {'name': 'conversions'}
-                    ]
-                }
-                response = ga_data.properties().runReport(property=ga4_property, body=request_body).execute()
                 
-                rows = response.get('rows', [])
-                if rows:
-                    metric_values = rows[0].get('metricValues', [])
-                    results['ga4'] = {
-                        'activeUsers': int(metric_values[0].get('value', 0)) if len(metric_values) > 0 else 0,
-                        'sessions': int(metric_values[1].get('value', 0)) if len(metric_values) > 1 else 0,
-                        'conversions': float(metric_values[2].get('value', 0)) if len(metric_values) > 2 else 0
+                def _ga4_report(metrics, dimensions=None, start='30daysAgo', end='today', limit=10):
+                    """Helper to run a GA4 report."""
+                    body = {
+                        'dateRanges': [{'startDate': start, 'endDate': end}],
+                        'metrics': [{'name': m} for m in metrics],
+                        'limit': limit
                     }
-                else:
-                    results['ga4'] = {'activeUsers': 0, 'sessions': 0, 'conversions': 0}
+                    if dimensions:
+                        body['dimensions'] = [{'name': d} for d in dimensions]
+                    resp = ga_data.properties().runReport(property=ga4_property, body=body).execute()
+                    return resp
+                
+                def _parse_value(val, is_int=True):
+                    """Parse a GA4 metric value."""
+                    try:
+                        return int(float(val)) if is_int else round(float(val), 2)
+                    except (ValueError, TypeError):
+                        return 0
+                
+                # a) KPI Totals — current period
+                kpi_metrics = [
+                    'activeUsers', 'sessions', 'engagedSessions', 'bounceRate',
+                    'averageSessionDuration', 'screenPageViews', 'conversions',
+                    'totalRevenue', 'transactions', 'ecommercePurchases'
+                ]
+                kpi_resp = _ga4_report(kpi_metrics, start='30daysAgo', end='today', limit=1)
+                kpi_rows = kpi_resp.get('rows', [])
+                kpi_vals = kpi_rows[0].get('metricValues', []) if kpi_rows else []
+                
+                def _kpi(idx, is_int=True):
+                    return _parse_value(kpi_vals[idx].get('value', 0), is_int) if idx < len(kpi_vals) else 0
+                
+                kpi = {
+                    'activeUsers': _kpi(0),
+                    'sessions': _kpi(1),
+                    'engagedSessions': _kpi(2),
+                    'bounceRate': _kpi(3, False),
+                    'avgSessionDuration': _kpi(4, False),
+                    'pageViews': _kpi(5),
+                    'conversions': _kpi(6, False),
+                    'totalRevenue': _kpi(7, False),
+                    'transactions': _kpi(8),
+                    'purchasers': _kpi(9)
+                }
+                
+                # b) KPI Totals — previous period
+                prev_kpi_resp = _ga4_report(kpi_metrics, start='60daysAgo', end='31daysAgo', limit=1)
+                prev_kpi_rows = prev_kpi_resp.get('rows', [])
+                prev_kpi_vals = prev_kpi_rows[0].get('metricValues', []) if prev_kpi_rows else []
+                
+                def _prev_kpi(idx, is_int=True):
+                    return _parse_value(prev_kpi_vals[idx].get('value', 0), is_int) if idx < len(prev_kpi_vals) else 0
+                
+                prev_kpi = {
+                    'activeUsers': _prev_kpi(0),
+                    'sessions': _prev_kpi(1),
+                    'engagedSessions': _prev_kpi(2),
+                    'bounceRate': _prev_kpi(3, False),
+                    'avgSessionDuration': _prev_kpi(4, False),
+                    'pageViews': _prev_kpi(5),
+                    'conversions': _prev_kpi(6, False),
+                    'totalRevenue': _prev_kpi(7, False),
+                    'transactions': _prev_kpi(8),
+                    'purchasers': _prev_kpi(9)
+                }
+                
+                # c) Time-series (sessions by day) — current
+                ts_resp = _ga4_report(['sessions', 'activeUsers'], dimensions=['date'], limit=60)
+                ga4_timeseries = []
+                for row in ts_resp.get('rows', []):
+                    raw_date = row['dimensionValues'][0]['value']  # YYYYMMDD
+                    formatted = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}"
+                    ga4_timeseries.append({
+                        'date': formatted,
+                        'sessions': _parse_value(row['metricValues'][0]['value']),
+                        'activeUsers': _parse_value(row['metricValues'][1]['value'])
+                    })
+                ga4_timeseries.sort(key=lambda x: x['date'])
+                
+                # d) Time-series — previous period
+                prev_ts_resp = _ga4_report(['sessions', 'activeUsers'], dimensions=['date'], start='60daysAgo', end='31daysAgo', limit=60)
+                ga4_prev_timeseries = []
+                for row in prev_ts_resp.get('rows', []):
+                    raw_date = row['dimensionValues'][0]['value']
+                    formatted = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}"
+                    ga4_prev_timeseries.append({
+                        'date': formatted,
+                        'sessions': _parse_value(row['metricValues'][0]['value']),
+                        'activeUsers': _parse_value(row['metricValues'][1]['value'])
+                    })
+                ga4_prev_timeseries.sort(key=lambda x: x['date'])
+                
+                # e) Device breakdown
+                device_resp = _ga4_report(['sessions'], dimensions=['deviceCategory'], limit=5)
+                ga4_devices = []
+                for row in device_resp.get('rows', []):
+                    ga4_devices.append({
+                        'device': row['dimensionValues'][0]['value'],
+                        'sessions': _parse_value(row['metricValues'][0]['value'])
+                    })
+                
+                # f) Country breakdown (top 10)
+                country_resp = _ga4_report(['sessions', 'activeUsers'], dimensions=['country'], limit=10)
+                ga4_countries = []
+                for row in country_resp.get('rows', []):
+                    ga4_countries.append({
+                        'country': row['dimensionValues'][0]['value'],
+                        'sessions': _parse_value(row['metricValues'][0]['value']),
+                        'activeUsers': _parse_value(row['metricValues'][1]['value'])
+                    })
+                
+                # g) Channel breakdown (top 10)
+                channel_resp = _ga4_report(['sessions', 'activeUsers'], dimensions=['sessionDefaultChannelGroup'], limit=10)
+                ga4_channels = []
+                for row in channel_resp.get('rows', []):
+                    ga4_channels.append({
+                        'channel': row['dimensionValues'][0]['value'],
+                        'sessions': _parse_value(row['metricValues'][0]['value']),
+                        'activeUsers': _parse_value(row['metricValues'][1]['value'])
+                    })
+                
+                # h) Top landing pages (top 15)
+                lp_resp = _ga4_report(['sessions', 'activeUsers', 'bounceRate'], dimensions=['landingPagePlusQueryString'], limit=15)
+                ga4_landing_pages = []
+                for row in lp_resp.get('rows', []):
+                    ga4_landing_pages.append({
+                        'page': row['dimensionValues'][0]['value'],
+                        'sessions': _parse_value(row['metricValues'][0]['value']),
+                        'activeUsers': _parse_value(row['metricValues'][1]['value']),
+                        'bounceRate': _parse_value(row['metricValues'][2]['value'], False)
+                    })
+                
+                results['ga4'] = {
+                    **kpi,
+                    'prev': prev_kpi,
+                    'timeseries': ga4_timeseries,
+                    'prevTimeseries': ga4_prev_timeseries,
+                    'devices': ga4_devices,
+                    'countries': ga4_countries,
+                    'channels': ga4_channels,
+                    'landingPages': ga4_landing_pages
+                }
             except Exception as e:
                 logger.error(f"GA4 Metrics Error: {e}")
                 results['ga4'] = {'error': str(e)}
@@ -392,3 +627,4 @@ def get_google_metrics():
     except Exception as e:
         logger.error(f"Metrics Endpoint Error: {e}")
         return jsonify({'error': str(e)}), 500
+

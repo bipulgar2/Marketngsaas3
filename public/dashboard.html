@@ -1165,8 +1165,8 @@
                             <div>
                                 <label class="block text-sm text-gray-400 mb-1">Location</label>
                                 <select name="location" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                    ${renderCountryOptions('US')}
                                 </select>
-                                <script>document.querySelector('select[name="location"]').innerHTML = renderCountryOptions('US');</script>
                             </div>
                         </div>
                         <div>
@@ -2132,8 +2132,8 @@
 
                             <label class="block text-sm font-medium text-gray-300 mb-2">Competitor Country</label>
                             <select id="competitorCountryInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
+                                ${renderCountryOptions('US')}
                             </select>
-                            <script>document.getElementById('competitorCountryInput').innerHTML = renderCountryOptions('US');</script>
 
                             <label class="block text-sm font-medium text-gray-300 mb-2">Pages to Crawl (Max Pages)</label>
                             <select id="competitorPageLimitInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-6 focus:outline-none focus:border-violet-500">

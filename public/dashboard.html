@@ -789,6 +789,7 @@
                 });
 
                 const data = await response.json();
+                console.log('Analytics API response:', data);
                 if (data.error) throw new Error(data.error);
 
                 _analyticsData = data;
@@ -867,7 +868,9 @@
             if (_analyticsSubTab === 'overview') {
                 // GSC KPIs
                 let gscSection = '';
-                if (gscProp && !gsc.error) {
+                if (gsc.error) {
+                    gscSection = '<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 mb-4 text-sm"><span class="text-red-400 font-medium">GSC Error:</span> <span class="text-gray-400">' + gsc.error + '</span></div>';
+                } else if (gscProp && !gsc.error) {
                     const gscPrev = gsc.prev || {};
                     gscSection = `
                     <div class="mb-6">
@@ -916,7 +919,9 @@
 
                 // GA4 KPIs
                 let ga4Section = '';
-                if (ga4Prop && !ga4.error) {
+                if (ga4.error) {
+                    ga4Section = '<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 mb-4 text-sm"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">' + ga4.error + '</span></div>';
+                } else if (ga4Prop && !ga4.error) {
                     const ga4Prev = ga4.prev || {};
                     ga4Section = `
                     <div class="mb-6">

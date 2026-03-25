@@ -495,13 +495,12 @@ def get_google_metrics():
                     except (ValueError, TypeError):
                         return 0
                 
-                # a) KPI Totals — current period
-                kpi_metrics = [
+                # a) KPI Totals — current period (core metrics only)
+                core_metrics = [
                     'activeUsers', 'sessions', 'engagedSessions', 'bounceRate',
-                    'averageSessionDuration', 'screenPageViews', 'conversions',
-                    'totalRevenue', 'transactions', 'ecommercePurchases'
+                    'averageSessionDuration', 'screenPageViews'
                 ]
-                kpi_resp = _ga4_report(kpi_metrics, start='30daysAgo', end='today', limit=1)
+                kpi_resp = _ga4_report(core_metrics, start='30daysAgo', end='today', limit=1)
                 kpi_rows = kpi_resp.get('rows', [])
                 kpi_vals = kpi_rows[0].get('metricValues', []) if kpi_rows else []
                 
@@ -515,14 +514,26 @@ def get_google_metrics():
                     'bounceRate': _kpi(3, False),
                     'avgSessionDuration': _kpi(4, False),
                     'pageViews': _kpi(5),
-                    'conversions': _kpi(6, False),
-                    'totalRevenue': _kpi(7, False),
-                    'transactions': _kpi(8),
-                    'purchasers': _kpi(9)
+                    'conversions': 0,
+                    'totalRevenue': 0,
+                    'transactions': 0,
+                    'purchasers': 0
                 }
                 
+                # Try optional e-commerce / key events metrics (may not exist)
+                try:
+                    ecom_resp = _ga4_report(['keyEvents', 'totalRevenue', 'transactions'], start='30daysAgo', end='today', limit=1)
+                    ecom_rows = ecom_resp.get('rows', [])
+                    if ecom_rows:
+                        ev = ecom_rows[0].get('metricValues', [])
+                        kpi['conversions'] = _parse_value(ev[0].get('value', 0), False) if len(ev) > 0 else 0
+                        kpi['totalRevenue'] = _parse_value(ev[1].get('value', 0), False) if len(ev) > 1 else 0
+                        kpi['transactions'] = _parse_value(ev[2].get('value', 0)) if len(ev) > 2 else 0
+                except Exception as ecom_err:
+                    logger.warning(f"GA4 e-commerce metrics not available: {ecom_err}")
+                
                 # b) KPI Totals — previous period
-                prev_kpi_resp = _ga4_report(kpi_metrics, start='60daysAgo', end='31daysAgo', limit=1)
+                prev_kpi_resp = _ga4_report(core_metrics, start='60daysAgo', end='31daysAgo', limit=1)
                 prev_kpi_rows = prev_kpi_resp.get('rows', [])
                 prev_kpi_vals = prev_kpi_rows[0].get('metricValues', []) if prev_kpi_rows else []
                 
@@ -536,10 +547,10 @@ def get_google_metrics():
                     'bounceRate': _prev_kpi(3, False),
                     'avgSessionDuration': _prev_kpi(4, False),
                     'pageViews': _prev_kpi(5),
-                    'conversions': _prev_kpi(6, False),
-                    'totalRevenue': _prev_kpi(7, False),
-                    'transactions': _prev_kpi(8),
-                    'purchasers': _prev_kpi(9)
+                    'conversions': 0,
+                    'totalRevenue': 0,
+                    'transactions': 0,
+                    'purchasers': 0
                 }
                 
                 # c) Time-series (sessions by day) — current

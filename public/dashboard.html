@@ -751,7 +751,38 @@
         // Analytics Dashboard — store fetched data globally for sub-tab switching
         // =====================================================================
         let _analyticsData = null;
-        let _analyticsSubTab = 'overview';
+        let _analyticsTemplate = localStorage.getItem('analytics_template') || 'gsc';
+        let _analyticsView = 'overview';
+
+        // =====================================================================
+        // PREMIUM ANALYTICS DASHBOARD — HELPERS
+        // =====================================================================
+        function fmtK(n) {
+            if (n === null || n === undefined) return '0';
+            if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+            return new Intl.NumberFormat('en-US').format(n);
+        }
+        function pctChange(curr, prev) {
+            if (!prev || prev === 0) return null;
+            return ((curr - prev) / prev * 100);
+        }
+        function changeBadgeHtml(curr, prev, invert = false) {
+            const pct = pctChange(curr, prev);
+            if (pct === null) return '<span class="text-xs text-gray-600">N/A</span>';
+            const isPositive = pct >= 0;
+            const isGood = invert ? !isPositive : isPositive;
+            const arrow = isPositive ? '▲' : '▼';
+            const color = isGood ? 'text-emerald-400' : 'text-red-400';
+            return '<span class="text-xs font-medium ' + color + '">' + arrow + ' ' + Math.abs(pct).toFixed(1) + '%</span>';
+        }
+        function formatDuration(seconds) {
+            if (!seconds) return '00:00:00';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+        }
 
         async function loadAnalyticsDashboard() {
             const contentArea = document.getElementById('contentArea');
@@ -793,8 +824,8 @@
                 if (data.error) throw new Error(data.error);
 
                 _analyticsData = data;
-                _analyticsSubTab = 'overview';
-                renderAnalyticsSubTab();
+                _analyticsView = 'overview';
+                renderAnalyticsDashboard();
 
             } catch (err) {
                 console.error(err);
@@ -803,18 +834,26 @@
                         <i data-lucide="x-circle" class="w-12 h-12 text-red-500 mx-auto mb-4"></i>
                         <h3 class="text-lg font-semibold text-white mb-2">Failed to load analytics</h3>
                         <p class="text-gray-400 mb-2">${err.message}</p>
-                        <p class="text-sm text-gray-500">Ensure your Google Account is connected and the selected properties are valid.</p>
                     </div>`;
                 lucide.createIcons();
             }
         }
 
-        function switchAnalyticsSubTab(tab) {
-            _analyticsSubTab = tab;
-            renderAnalyticsSubTab();
+        function switchAnalyticsTemplate(tpl) {
+            _analyticsTemplate = tpl;
+            _analyticsView = 'overview';
+            localStorage.setItem('analytics_template', tpl);
+            renderAnalyticsDashboard();
+        }
+        function switchAnalyticsView(view) {
+            _analyticsView = view;
+            renderAnalyticsDashboard();
         }
 
-        function renderAnalyticsSubTab() {
+        // =====================================================================
+        // PREMIUM ANALYTICS DASHBOARD — MAIN RENDERER
+        // =====================================================================
+        function renderAnalyticsDashboard() {
             const contentArea = document.getElementById('contentArea');
             const data = _analyticsData;
             if (!data) return;
@@ -823,422 +862,370 @@
             const ga4 = data.ga4 || {};
             const gscProp = currentClient.settings.gsc_property;
             const ga4Prop = currentClient.settings.ga4_property;
+            const tpl = _analyticsTemplate;
 
-            const tabs = [
-                { id: 'overview', label: 'Overview', icon: 'layout-dashboard' },
-                { id: 'keywords', label: 'Keywords', icon: 'search' },
-                { id: 'landing-pages', label: 'Landing Pages', icon: 'file-text' },
-                { id: 'channels', label: 'Channels', icon: 'git-branch' },
-                { id: 'geographics', label: 'Geographics', icon: 'globe' }
-            ];
+            const T = {
+                gsc:  { accent: '#10b981', accentRgb: '16,185,129', name: 'Google Search Console', subtitle: 'Overview - Site', icon: 'search',
+                        views: [{id:'overview',icon:'layout-dashboard',label:'Overview'},{id:'keywords',icon:'search',label:'Keywords'},{id:'landing-pages',icon:'file-text',label:'Landing Page'},{id:'geographics',icon:'globe',label:'Geographics'}] },
+                ga4:  { accent: '#f59e0b', accentRgb: '245,158,11', name: 'Google Analytics 4', subtitle: 'Overview', icon: 'bar-chart-3',
+                        views: [{id:'overview',icon:'layout-dashboard',label:'Overview'},{id:'engagements',icon:'activity',label:'Engagements'},{id:'channels',icon:'git-branch',label:'Channels'},{id:'geographics',icon:'globe',label:'Geographics'}] },
+                ecom: { accent: '#3b82f6', accentRgb: '59,130,246', name: 'E-Commerce Dashboard', subtitle: 'Revenue & Conversions', icon: 'shopping-cart',
+                        views: [{id:'overview',icon:'layout-dashboard',label:'Overview'},{id:'channels',icon:'git-branch',label:'Channels'},{id:'locations',icon:'map-pin',label:'Locations'},{id:'products',icon:'package',label:'Products'}] }
+            };
+            const cfg = T[tpl];
+            const ac = cfg.accent;
+            const acRgb = cfg.accentRgb;
 
-            const subTabsHtml = tabs.map(t => `
-                <button onclick="switchAnalyticsSubTab('${t.id}')"
-                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${_analyticsSubTab === t.id ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'}">
-                    <i data-lucide="${t.icon}" class="w-4 h-4"></i> ${t.label}
+            // Template selector
+            const tplSelector = `
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[10px] text-gray-600 uppercase tracking-widest mr-1">Template</span>
+                    <button onclick="switchAnalyticsTemplate('gsc')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='gsc' ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="search" class="w-3 h-3 inline mr-1"></i>GSC</button>
+                    <button onclick="switchAnalyticsTemplate('ga4')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='ga4' ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="bar-chart-3" class="w-3 h-3 inline mr-1"></i>GA4</button>
+                    <button onclick="switchAnalyticsTemplate('ecom')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='ecom' ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="shopping-cart" class="w-3 h-3 inline mr-1"></i>E-Commerce</button>
+                </div>`;
+
+            // Left sidebar
+            const sidebarHtml = cfg.views.map(v => `
+                <button onclick="switchAnalyticsView('${v.id}')" class="group flex flex-col items-center gap-1 py-3 px-1.5 rounded-xl transition-all w-full" style="${_analyticsView === v.id ? 'background:rgba('+acRgb+',0.18);color:'+ac+';' : 'color:#6b7280;'}">
+                    <i data-lucide="${v.icon}" class="w-5 h-5"></i>
+                    <span class="text-[10px] font-semibold leading-tight text-center">${v.label}</span>
                 </button>
             `).join('');
 
-            // ---- Helper functions ----
-            const fmtNum = (n) => new Intl.NumberFormat('en-US').format(n || 0);
-            const fmtPct = (n) => (n * 100).toFixed(2) + '%';
-            const fmtDuration = (secs) => {
-                const m = Math.floor(secs / 60);
-                const s = Math.floor(secs % 60);
-                return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-            };
-            const pctChange = (curr, prev) => {
-                if (!prev || prev === 0) return { val: 0, html: '<span class="text-gray-500 text-xs">N/A</span>' };
-                const pct = ((curr - prev) / Math.abs(prev) * 100).toFixed(1);
-                const color = pct >= 0 ? 'text-emerald-400' : 'text-red-400';
-                const arrow = pct >= 0 ? '↑' : '↓';
-                return { val: pct, html: '<span class="' + color + ' text-xs font-medium">' + arrow + ' ' + Math.abs(pct) + '%</span>' };
-            };
+            // Build view content
+            let viewHtml = '';
 
-            const kpiCard = (label, value, prevValue, icon) => {
-                const change = pctChange(value, prevValue);
-                return '<div class="bg-gray-900 border border-gray-800 rounded-xl p-4"><div class="flex items-center justify-between mb-1"><span class="text-gray-400 text-xs uppercase tracking-wider">' + label + '</span><i data-lucide="' + icon + '" class="w-4 h-4 text-gray-600"></i></div><div class="text-2xl font-bold text-white">' + (typeof value === 'string' ? value : fmtNum(value)) + '</div><div class="mt-1">' + change.html + '</div></div>';
-            };
-
-            let bodyHtml = '';
-
-            // ================================================================
-            // OVERVIEW SUB-TAB
-            // ================================================================
-            if (_analyticsSubTab === 'overview') {
-                // GSC KPIs
-                let gscSection = '';
+            // =========================== GSC VIEWS ===========================
+            if (tpl === 'gsc') {
                 if (gsc.error) {
-                    gscSection = '<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 mb-4 text-sm"><span class="text-red-400 font-medium">GSC Error:</span> <span class="text-gray-400">' + gsc.error + '</span></div>';
-                } else if (gscProp && !gsc.error) {
+                    viewHtml = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400 font-medium">GSC Error:</span> <span class="text-gray-400">${gsc.error}</span><br><button onclick="switchSideTab('google'); switchTopTab('client-settings');" class="mt-3 text-white px-4 py-1.5 rounded-lg text-xs font-medium" style="background:${ac}">Reconnect Google</button></div>`;
+                } else if (!gscProp) {
+                    viewHtml = '<div class="text-gray-500 text-center py-16">GSC not connected. Go to Settings → Google to connect.</div>';
+                } else if (_analyticsView === 'overview') {
                     const gscPrev = gsc.prev || {};
-                    gscSection = `
-                    <div class="mb-6">
-                        <div class="flex items-center gap-2 mb-3">
-                            <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
-                            <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Google Search Console</h3>
+                    const countries = gsc.countries || [];
+                    viewHtml = `
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                        ${[{l:'Impressions',v:gsc.totalImpressions,p:gscPrev.totalImpressions},{l:'Clicks',v:gsc.totalClicks,p:gscPrev.totalClicks},{l:'Site CTR',v:gsc.avgCtr,p:gscPrev.avgCtr,fmt:'pct'},{l:'Average Position',v:gsc.avgPosition,p:gscPrev.avgPosition,inv:true,fmt:'dec'},{l:'Unique Queries',v:(gsc.queries||[]).length},{l:'Unique Pages',v:(gsc.pages||[]).length}].map(m => {
+                            let display = m.fmt === 'pct' ? ((m.v||0)*100).toFixed(2)+'%' : m.fmt === 'dec' ? (m.v||0).toFixed(2) : fmtK(m.v||0);
+                            return '<div class="border border-gray-700/60 rounded-lg p-3 text-center" style="background:rgba('+acRgb+',0.04)"><div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div></div>';
+                        }).join('')}
+                    </div>
+                    <div class="border border-gray-700/60 rounded-xl p-4 mb-6" style="background:rgba(${acRgb},0.03)">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-4">
+                                <span class="flex items-center gap-1.5 text-xs text-gray-400"><span class="w-4 h-[2px] rounded" style="background:${ac}"></span>Impressions</span>
+                                <span class="flex items-center gap-1.5 text-xs text-gray-500"><span class="w-4 h-[2px] rounded border-t border-dashed border-gray-500" style="border-style:dashed"></span>Previous 30d</span>
+                            </div>
                         </div>
-                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-                            ${kpiCard('Impressions', gsc.impressions, gscPrev.impressions, 'eye')}
-                            ${kpiCard('Clicks', gsc.clicks, gscPrev.clicks, 'mouse-pointer-click')}
-                            ${kpiCard('Site CTR', fmtPct(gsc.ctr), null, 'percent')}
-                            ${kpiCard('Avg. Position', (gsc.position||0).toFixed(1), null, 'bar-chart')}
-                            ${kpiCard('Unique Queries', gsc.uniqueQueries, null, 'search')}
-                            ${kpiCard('Unique Pages', gsc.uniquePages, null, 'file-text')}
-                        </div>
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <h4 class="text-sm font-medium text-gray-300">Impressions Over Time</h4>
-                                <div class="flex items-center gap-4 text-xs text-gray-500">
-                                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-emerald-500 inline-block rounded"></span> Current</span>
-                                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-gray-600 inline-block rounded"></span> Previous 30d</span>
+                        <canvas id="premiumLineChart" height="110"></canvas>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold italic mb-4" style="color:${ac}">Impressions by Device Category</h4>
+                            <div class="flex items-center gap-6">
+                                <div class="w-36 h-36 flex-shrink-0 relative"><canvas id="premiumDonut"></canvas>
+                                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none"><div class="text-center"><div class="text-lg font-bold text-white">${fmtK((gsc.devices||[]).reduce((s,d)=>s+d.impressions,0))}</div><div class="text-[9px] text-gray-500 uppercase">Total</div></div></div>
                                 </div>
+                                <div id="premiumDonutLegend" class="flex-1"></div>
                             </div>
-                            <canvas id="gscTimeseriesChart" height="100"></canvas>
                         </div>
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                                <h4 class="text-sm font-medium text-gray-300 mb-3">Impressions by Device</h4>
-                                <div class="flex items-center gap-6">
-                                    <div style="width:180px;height:180px;"><canvas id="gscDeviceChart"></canvas></div>
-                                    <div class="flex-1" id="gscDeviceLegend"></div>
-                                </div>
-                            </div>
-                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                                <h4 class="text-sm font-medium text-gray-300 mb-3">Top Countries by Impressions</h4>
-                                <table class="w-full text-sm">
-                                    <thead><tr class="text-gray-500 text-xs uppercase"><th class="text-left pb-2">#</th><th class="text-left pb-2">Country</th><th class="text-right pb-2">Impressions</th></tr></thead>
-                                    <tbody>
-                                        ${(gsc.countries||[]).map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">' + (i+1) + '.</td><td class="py-1.5 text-white">' + (c.country||'').toUpperCase() + '</td><td class="py-1.5 text-right text-emerald-400 font-medium">' + fmtNum(c.impressions) + '</td></tr>').join('')}
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold text-white mb-3">Top Acquisition Country</h4>
+                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac}"><th class="text-left pb-2 w-8">#</th><th class="text-left pb-2">Country</th><th class="text-right pb-2">Impressions ▼</th></tr></thead><tbody>
+                            ${countries.slice(0,7).map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">'+(i+1)+'.</td><td class="py-1.5 text-white">'+(c.country||'').toUpperCase()+'</td><td class="py-1.5 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.impressions)+'</td></tr>').join('')}
+                            <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-1.5 text-gray-300">Grand total</td><td class="py-1.5 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.impressions,0))}</td></tr>
+                            </tbody></table>
                         </div>
                     </div>`;
+                } else if (_analyticsView === 'keywords') {
+                    const queries = gsc.queries || [];
+                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Query</th><th class="text-right py-3 px-4">Clicks</th><th class="text-right py-3 px-4">Impressions</th><th class="text-right py-3 px-4">CTR</th><th class="text-right py-3 px-4">Position</th></tr></thead><tbody>
+                    ${queries.map((q,i) => '<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2.5 px-4 text-white font-medium">'+q.query+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(q.clicks)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(q.impressions)+'</td><td class="py-2.5 px-4 text-right text-gray-400">'+(q.ctr*100).toFixed(2)+'%</td><td class="py-2.5 px-4 text-right text-gray-400">'+q.position.toFixed(1)+'</td></tr>').join('')}
+                    </tbody></table></div>`;
+                } else if (_analyticsView === 'landing-pages') {
+                    const pages = gsc.pages || [];
+                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Page</th><th class="text-right py-3 px-4">Clicks</th><th class="text-right py-3 px-4">Impressions</th><th class="text-right py-3 px-4">CTR</th><th class="text-right py-3 px-4">Position</th></tr></thead><tbody>
+                    ${pages.map((p,i) => '<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2.5 px-4 text-white font-medium truncate max-w-xs" title="'+p.page+'">'+(p.page.length>50?p.page.substring(0,50)+'...':p.page)+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(p.clicks)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(p.impressions)+'</td><td class="py-2.5 px-4 text-right text-gray-400">'+(p.ctr*100).toFixed(2)+'%</td><td class="py-2.5 px-4 text-right text-gray-400">'+p.position.toFixed(1)+'</td></tr>').join('')}
+                    </tbody></table></div>`;
+                } else if (_analyticsView === 'geographics') {
+                    const countries = gsc.countries || [];
+                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Country</th><th class="text-right py-3 px-4">Clicks</th><th class="text-right py-3 px-4">Impressions</th><th class="text-right py-3 px-4">CTR</th><th class="text-right py-3 px-4">Position</th></tr></thead><tbody>
+                    ${countries.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2 px-4 text-white">'+(c.country||'').toUpperCase()+'</td><td class="py-2 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.clicks)+'</td><td class="py-2 px-4 text-right text-gray-300">'+fmtNum(c.impressions)+'</td><td class="py-2 px-4 text-right text-gray-400">'+(c.ctr*100).toFixed(2)+'%</td><td class="py-2 px-4 text-right text-gray-400">'+c.position.toFixed(1)+'</td></tr>').join('')}
+                    <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-2 px-4 text-gray-300">Grand total</td><td class="py-2 px-4 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.clicks,0))}</td><td class="py-2 px-4 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.impressions,0))}</td><td></td><td></td></tr>
+                    </tbody></table></div>`;
                 }
-
-                // GA4 KPIs
-                let ga4Section = '';
+            }
+            // =========================== GA4 VIEWS ===========================
+            else if (tpl === 'ga4') {
                 if (ga4.error) {
-                    ga4Section = '<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 mb-4 text-sm"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">' + ga4.error + '</span></div>';
-                } else if (ga4Prop && !ga4.error) {
+                    viewHtml = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">${ga4.error}</span><br><button onclick="switchSideTab('google'); switchTopTab('client-settings');" class="mt-3 text-white px-4 py-1.5 rounded-lg text-xs font-medium" style="background:${ac}">Reconnect Google</button></div>`;
+                } else if (!ga4Prop) {
+                    viewHtml = '<div class="text-gray-500 text-center py-16">GA4 not connected. Go to Settings → Google to connect.</div>';
+                } else if (_analyticsView === 'overview') {
                     const ga4Prev = ga4.prev || {};
-                    ga4Section = `
-                    <div class="mb-6">
-                        <div class="flex items-center gap-2 mb-3">
-                            <div class="w-2 h-2 rounded-full bg-blue-500"></div>
-                            <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Google Analytics 4</h3>
+                    const countries = ga4.countries || [];
+                    viewHtml = `
+                    <p class="text-xs text-gray-500 mb-4" style="color:rgba(${acRgb},0.6)">Explore Website Performance — sessions, users, bounce rate, conversions, and more.</p>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                        ${[{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Bounce Rate',v:ga4.bounceRate,p:ga4Prev.bounceRate,fmt:'pctraw',inv:true},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'},{l:'Transactions',v:ga4.transactions,p:ga4Prev.transactions},{l:'Purchaser Rate',v:ga4.purchaserRate,p:ga4Prev.purchaserRate,fmt:'pctraw'}].map(m => {
+                            let display = m.fmt === 'pctraw' ? (m.v||0).toFixed(2)+'%' : m.fmt === 'dur' ? formatDuration(m.v||0) : fmtK(m.v||0);
+                            return '<div class="border border-gray-700/60 rounded-lg p-3 text-center" style="background:rgba('+acRgb+',0.04)"><div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div></div>';
+                        }).join('')}
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold italic mb-4" style="color:${ac}">Sessions by Device Category</h4>
+                            <div class="flex items-center gap-6">
+                                <div class="w-36 h-36 flex-shrink-0 relative"><canvas id="premiumDonut"></canvas>
+                                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none"><div class="text-center"><div class="text-lg font-bold text-white">${fmtK((ga4.devices||[]).reduce((s,d)=>s+d.sessions,0))}</div><div class="text-[9px] text-gray-500 uppercase">Total</div></div></div>
+                                </div>
+                                <div id="premiumDonutLegend" class="flex-1"></div>
+                            </div>
                         </div>
-                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-                            ${kpiCard('Sessions', ga4.sessions, ga4Prev.sessions, 'activity')}
-                            ${kpiCard('Engaged Sessions', ga4.engagedSessions, ga4Prev.engagedSessions, 'zap')}
-                            ${kpiCard('Bounce Rate', (ga4.bounceRate||0).toFixed(1) + '%', null, 'arrow-down-right')}
-                            ${kpiCard('Avg. Duration', fmtDuration(ga4.avgSessionDuration||0), null, 'clock')}
-                            ${kpiCard('Transactions', ga4.transactions, ga4Prev.transactions, 'shopping-cart')}
-                            ${kpiCard('Revenue', '$' + fmtNum(ga4.totalRevenue), null, 'dollar-sign')}
-                        </div>
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <h4 class="text-sm font-medium text-gray-300">Sessions Over Time</h4>
-                                <div class="flex items-center gap-4 text-xs text-gray-500">
-                                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-blue-500 inline-block rounded"></span> Current</span>
-                                    <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-gray-600 inline-block rounded"></span> Previous 30d</span>
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-sm font-semibold text-white">KPI Performance Overtime</h4>
+                                <div class="flex items-center gap-3 text-[10px]">
+                                    <span class="flex items-center gap-1 text-gray-400"><span class="w-3 h-[2px] rounded" style="background:${ac}"></span>Sessions</span>
+                                    <span class="flex items-center gap-1 text-gray-500"><span class="w-3 h-[2px] rounded" style="background:#6b7280;border-top:1px dashed"></span>Previous</span>
                                 </div>
                             </div>
-                            <canvas id="ga4TimeseriesChart" height="100"></canvas>
+                            <canvas id="premiumLineChart" height="130"></canvas>
                         </div>
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                                <h4 class="text-sm font-medium text-gray-300 mb-3">Sessions by Device</h4>
-                                <div class="flex items-center gap-6">
-                                    <div style="width:180px;height:180px;"><canvas id="ga4DeviceChart"></canvas></div>
-                                    <div class="flex-1" id="ga4DeviceLegend"></div>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold text-white mb-3">Top Acquisition Channels</h4>
+                            <div class="flex items-center gap-4">
+                                <div class="w-32 h-32 flex-shrink-0"><canvas id="premiumChannelDonut"></canvas></div>
+                                <div class="flex-1">
+                                    <table class="w-full text-xs"><thead><tr style="color:${ac}" class="uppercase tracking-wider"><th class="text-left pb-1.5">#</th><th class="text-left pb-1.5">Channels</th><th class="text-right pb-1.5">Sessions ▼</th></tr></thead><tbody>
+                                    ${(ga4.channels||[]).slice(0,5).map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1 text-gray-500">'+(i+1)+'.</td><td class="py-1 text-white">'+c.channel+'</td><td class="py-1 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td></tr>').join('')}
+                                    <tr class="border-t border-gray-700 font-bold"><td></td><td class="py-1 text-gray-300">Grand total</td><td class="py-1 text-right text-white">${fmtNum((ga4.channels||[]).reduce((s,c)=>s+c.sessions,0))}</td></tr>
+                                    </tbody></table>
                                 </div>
                             </div>
-                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                                <h4 class="text-sm font-medium text-gray-300 mb-3">Top Acquisition Channels</h4>
-                                <canvas id="ga4ChannelChart" height="160"></canvas>
-                            </div>
+                        </div>
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold text-white mb-3">Top Acquisition Country</h4>
+                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac}"><th class="text-left pb-2 w-8">#</th><th class="text-left pb-2">Country</th><th class="text-right pb-2">Sessions ▼</th></tr></thead><tbody>
+                            ${countries.slice(0,7).map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">'+(i+1)+'.</td><td class="py-1.5 text-white">'+c.country+'</td><td class="py-1.5 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td></tr>').join('')}
+                            <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-1.5 text-gray-300">Grand total</td><td class="py-1.5 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.sessions,0))}</td></tr>
+                            </tbody></table>
                         </div>
                     </div>`;
+                } else if (_analyticsView === 'engagements') {
+                    const ga4Prev = ga4.prev || {};
+                    viewHtml = `
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        ${[{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Users',v:ga4.activeUsers,p:ga4Prev.activeUsers},{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'}].map(m => {
+                            let display = m.fmt === 'dur' ? formatDuration(m.v||0) : fmtK(m.v||0);
+                            return '<div class="border border-gray-700/60 rounded-xl p-5 text-center" style="background:rgba('+acRgb+',0.05)"><div class="text-xs uppercase tracking-wider text-gray-500 mb-2">'+m.l+'</div><div class="text-3xl font-bold text-white mb-1">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p)+'</div></div>';
+                        }).join('')}
+                    </div>
+                    <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                        <h4 class="text-sm font-semibold text-white mb-3">Sessions Over Time</h4>
+                        <canvas id="premiumLineChart" height="120"></canvas>
+                    </div>`;
+                } else if (_analyticsView === 'channels') {
+                    const channels = ga4.channels || [];
+                    viewHtml = `
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold text-white mb-3">Channel Breakdown</h4>
+                            <canvas id="premiumChannelBar" height="200"></canvas>
+                        </div>
+                        <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
+                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Channel</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th></tr></thead><tbody>
+                            ${channels.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'.</td><td class="py-2.5 px-4 text-white font-medium">'+c.channel+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(c.activeUsers)+'</td></tr>').join('')}
+                            <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-2.5 px-4 text-gray-300">Total</td><td class="py-2.5 px-4 text-right text-white">${fmtNum(channels.reduce((s,c)=>s+c.sessions,0))}</td><td class="py-2.5 px-4 text-right text-white">${fmtNum(channels.reduce((s,c)=>s+c.activeUsers,0))}</td></tr>
+                            </tbody></table>
+                        </div>
+                    </div>`;
+                } else if (_analyticsView === 'geographics') {
+                    const countries = ga4.countries || [];
+                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Country</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th></tr></thead><tbody>
+                    ${countries.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2 px-4 text-white">'+c.country+'</td><td class="py-2 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td><td class="py-2 px-4 text-right text-gray-300">'+fmtNum(c.activeUsers)+'</td></tr>').join('')}
+                    <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-2 px-4 text-gray-300">Grand total</td><td class="py-2 px-4 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.sessions,0))}</td><td class="py-2 px-4 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.activeUsers,0))}</td></tr>
+                    </tbody></table></div>`;
                 }
-
-                bodyHtml = `
-                    <div class="mb-4 flex items-center justify-between">
-                        <h2 class="text-xl font-bold text-white">Analytics Dashboard</h2>
-                        <div class="flex items-center gap-2 text-xs text-gray-500">
-                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full ${gscProp ? 'bg-emerald-500' : 'bg-gray-600'}"></span>GSC</span>
-                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full ${ga4Prop ? 'bg-blue-500' : 'bg-gray-600'}"></span>GA4</span>
-                            <span class="text-gray-600">|</span>
-                            <span>Last 30 days vs previous</span>
-                        </div>
+            }
+            // =========================== E-COM VIEWS ===========================
+            else if (tpl === 'ecom') {
+                if (ga4.error) {
+                    viewHtml = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">${ga4.error}</span><br><button onclick="switchSideTab('google'); switchTopTab('client-settings');" class="mt-3 text-white px-4 py-1.5 rounded-lg text-xs font-medium" style="background:${ac}">Reconnect Google</button></div>`;
+                } else if (!ga4Prop) {
+                    viewHtml = '<div class="text-gray-500 text-center py-16">GA4 not connected. E-Commerce data requires GA4. Go to Settings → Google to connect.</div>';
+                } else if (_analyticsView === 'overview') {
+                    const ga4Prev = ga4.prev || {};
+                    viewHtml = `
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                        ${[{l:'Total Users',v:ga4.activeUsers,p:ga4Prev.activeUsers},{l:'Purchasers',v:ga4.transactions,p:ga4Prev.transactions},{l:'Total Revenue',v:ga4.totalRevenue,p:ga4Prev.totalRevenue,fmt:'money'},{l:'Transactions',v:ga4.transactions,p:ga4Prev.transactions}].map(m => {
+                            let display = m.fmt === 'money' ? '$'+fmtK(m.v||0) : fmtK(m.v||0);
+                            return '<div class="border rounded-xl p-4 text-center" style="border-color:rgba('+acRgb+',0.3);background:rgba('+acRgb+',0.06)"><div class="text-[10px] uppercase tracking-wider text-gray-400 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p)+'</div></div>';
+                        }).join('')}
                     </div>
-                    ${gscSection}
-                    ${ga4Section}
-                `;
-            }
-            // ================================================================
-            // KEYWORDS SUB-TAB
-            // ================================================================
-            else if (_analyticsSubTab === 'keywords') {
-                const queries = gsc.queries || [];
-                bodyHtml = `
-                    <h2 class="text-xl font-bold text-white mb-4">Top Search Queries (GSC)</h2>
-                    ${gsc.error ? '<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 mb-2 text-sm"><span class="text-red-400 font-medium">GSC Error:</span> <span class="text-gray-400">' + gsc.error + '</span><br><button onclick="switchSideTab(\"google\"); switchTopTab(\"client-settings\");" class="mt-2 bg-violet-600 hover:bg-violet-500 text-white px-3 py-1 rounded text-xs">Reconnect Google</button></div>' : (!gscProp ? '<div class="text-gray-500 text-center py-8">GSC not connected for this client.</div>' : '')}
-                    ${gscProp && !gsc.error ? '<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"><table class="w-full text-sm"><thead><tr class="bg-gray-800/50 text-gray-400 text-xs uppercase"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Query</th><th class="text-right py-3 px-4">Clicks</th><th class="text-right py-3 px-4">Impressions</th><th class="text-right py-3 px-4">CTR</th><th class="text-right py-3 px-4">Position</th></tr></thead><tbody>' + queries.map((q,i) => '<tr class="border-t border-gray-800 hover:bg-gray-800/30 transition-colors"><td class="py-2.5 px-4 text-gray-500">' + (i+1) + '</td><td class="py-2.5 px-4 text-white font-medium">' + q.query + '</td><td class="py-2.5 px-4 text-right text-emerald-400 font-medium">' + fmtNum(q.clicks) + '</td><td class="py-2.5 px-4 text-right text-gray-300">' + fmtNum(q.impressions) + '</td><td class="py-2.5 px-4 text-right text-gray-300">' + (q.ctr*100).toFixed(2) + '%</td><td class="py-2.5 px-4 text-right text-gray-300">' + q.position.toFixed(1) + '</td></tr>').join('') + '</tbody></table></div>' : ''}
-                `;
-            }
-            // ================================================================
-            // LANDING PAGES SUB-TAB
-            // ================================================================
-            else if (_analyticsSubTab === 'landing-pages') {
-                const gscPages = gsc.pages || [];
-                const ga4Pages = ga4.landingPages || [];
-                bodyHtml = `
-                    <h2 class="text-xl font-bold text-white mb-4">Top Landing Pages</h2>
-                    <div class="grid grid-cols-1 gap-6">
-                        ${gscProp && !gsc.error ? '<div><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>GSC — Top Pages by Clicks</h3><div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"><table class="w-full text-sm"><thead><tr class="bg-gray-800/50 text-gray-400 text-xs uppercase"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Page</th><th class="text-right py-3 px-4">Clicks</th><th class="text-right py-3 px-4">Impressions</th><th class="text-right py-3 px-4">CTR</th><th class="text-right py-3 px-4">Position</th></tr></thead><tbody>' + gscPages.map((p,i) => '<tr class="border-t border-gray-800 hover:bg-gray-800/30"><td class="py-2.5 px-4 text-gray-500">' + (i+1) + '</td><td class="py-2.5 px-4 text-white font-medium truncate max-w-xs" title="' + p.page + '">' + (p.page.length > 60 ? p.page.substring(0,60) + '...' : p.page) + '</td><td class="py-2.5 px-4 text-right text-emerald-400 font-medium">' + fmtNum(p.clicks) + '</td><td class="py-2.5 px-4 text-right text-gray-300">' + fmtNum(p.impressions) + '</td><td class="py-2.5 px-4 text-right text-gray-300">' + (p.ctr*100).toFixed(2) + '%</td><td class="py-2.5 px-4 text-right text-gray-300">' + p.position.toFixed(1) + '</td></tr>').join('') + '</tbody></table></div></div>' : ''}
-                        ${ga4Prop && !ga4.error ? '<div><h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-500"></span>GA4 — Top Landing Pages by Sessions</h3><div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"><table class="w-full text-sm"><thead><tr class="bg-gray-800/50 text-gray-400 text-xs uppercase"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Page</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th><th class="text-right py-3 px-4">Bounce Rate</th></tr></thead><tbody>' + ga4Pages.map((p,i) => '<tr class="border-t border-gray-800 hover:bg-gray-800/30"><td class="py-2 px-4 text-gray-500">' + (i+1) + '</td><td class="py-2 px-4 text-white font-medium truncate max-w-xs" title="' + p.page + '">' + (p.page.length > 60 ? p.page.substring(0,60) + '...' : p.page) + '</td><td class="py-2 px-4 text-right text-blue-400 font-medium">' + fmtNum(p.sessions) + '</td><td class="py-2 px-4 text-right text-gray-300">' + fmtNum(p.activeUsers) + '</td><td class="py-2 px-4 text-right text-gray-300">' + (p.bounceRate||0).toFixed(1) + '%</td></tr>').join('') + '</tbody></table></div></div>' : ''}
+                    <div class="border border-gray-700/60 rounded-xl p-4 mb-6" style="background:rgba(${acRgb},0.03)">
+                        <h4 class="text-sm font-semibold text-white mb-2">Performance Over Time</h4>
+                        <canvas id="premiumLineChart" height="120"></canvas>
                     </div>
-                `;
-            }
-            // ================================================================
-            // CHANNELS SUB-TAB
-            // ================================================================
-            else if (_analyticsSubTab === 'channels') {
-                const channels = ga4.channels || [];
-                bodyHtml = `
-                    <h2 class="text-xl font-bold text-white mb-4">Acquisition Channels (GA4)</h2>
-                    ${ga4.error ? '<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 mb-2 text-sm"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">' + ga4.error + '</span><br><button onclick="switchSideTab(\"google\"); switchTopTab(\"client-settings\");" class="mt-2 bg-violet-600 hover:bg-violet-500 text-white px-3 py-1 rounded text-xs">Reconnect Google</button></div>' : (!ga4Prop ? '<div class="text-gray-500 text-center py-8">GA4 not connected for this client.</div>' : `
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                            <h4 class="text-sm font-medium text-gray-300 mb-3">Sessions by Channel</h4>
-                            <canvas id="channelsBarChart" height="200"></canvas>
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold text-white mb-3">Revenue by Channel</h4>
+                            <canvas id="premiumChannelBar" height="180"></canvas>
                         </div>
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                            <h4 class="text-sm font-medium text-gray-300 mb-3">Channel Breakdown</h4>
-                            <table class="w-full text-sm">
-                                <thead><tr class="text-gray-400 text-xs uppercase"><th class="text-left pb-2">#</th><th class="text-left pb-2">Channel</th><th class="text-right pb-2">Sessions</th><th class="text-right pb-2">Users</th></tr></thead>
-                                <tbody>
-                                    ${channels.map((c,i) => '<tr class="border-t border-gray-800"><td class="py-2 text-gray-500">' + (i+1) + '.</td><td class="py-2 text-white">' + c.channel + '</td><td class="py-2 text-right text-blue-400 font-medium">' + fmtNum(c.sessions) + '</td><td class="py-2 text-right text-gray-300">' + fmtNum(c.activeUsers) + '</td></tr>').join('')}
-                                    <tr class="border-t border-gray-700 font-semibold"><td></td><td class="py-2 text-gray-300">Total</td><td class="py-2 text-right text-white">${fmtNum(channels.reduce((s,c)=>s+c.sessions,0))}</td><td class="py-2 text-right text-white">${fmtNum(channels.reduce((s,c)=>s+c.activeUsers,0))}</td></tr>
-                                </tbody>
-                            </table>
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold text-white mb-3">Revenue by Country</h4>
+                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac}"><th class="text-left pb-2">#</th><th class="text-left pb-2">Country</th><th class="text-right pb-2">Sessions ▼</th></tr></thead><tbody>
+                            ${(ga4.countries||[]).slice(0,10).map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">'+(i+1)+'.</td><td class="py-1.5 text-white">'+c.country+'</td><td class="py-1.5 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td></tr>').join('')}
+                            </tbody></table>
                         </div>
-                    </div>`)}
-                `;
-            }
-            // ================================================================
-            // GEOGRAPHICS SUB-TAB
-            // ================================================================
-            else if (_analyticsSubTab === 'geographics') {
-                const gscCountries = gsc.countries || [];
-                const ga4Countries = ga4.countries || [];
-                bodyHtml = `
-                    <h2 class="text-xl font-bold text-white mb-4">Geographic Breakdown</h2>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        ${gscProp && !gsc.error ? '<div class="bg-gray-900 border border-gray-800 rounded-xl p-4"><h4 class="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>GSC — Top Countries by Impressions</h4><table class="w-full text-sm"><thead><tr class="text-gray-400 text-xs uppercase"><th class="text-left pb-2">#</th><th class="text-left pb-2">Country</th><th class="text-right pb-2">Clicks</th><th class="text-right pb-2">Impressions</th></tr></thead><tbody>' + gscCountries.map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">' + (i+1) + '.</td><td class="py-1.5 text-white">' + (c.country||'').toUpperCase() + '</td><td class="py-1.5 text-right text-emerald-400 font-medium">' + fmtNum(c.clicks) + '</td><td class="py-1.5 text-right text-gray-300">' + fmtNum(c.impressions) + '</td></tr>').join('') + '<tr class="border-t border-gray-700 font-semibold"><td></td><td class="py-1.5 text-gray-300">Total</td><td class="py-1.5 text-right text-white">' + fmtNum(gscCountries.reduce((s,c)=>s+c.clicks,0)) + '</td><td class="py-1.5 text-right text-white">' + fmtNum(gscCountries.reduce((s,c)=>s+c.impressions,0)) + '</td></tr></tbody></table></div>' : ''}
-                        ${ga4Prop && !ga4.error ? '<div class="bg-gray-900 border border-gray-800 rounded-xl p-4"><h4 class="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-500"></span>GA4 — Top Countries by Sessions</h4><table class="w-full text-sm"><thead><tr class="text-gray-400 text-xs uppercase"><th class="text-left pb-2">#</th><th class="text-left pb-2">Country</th><th class="text-right pb-2">Sessions</th><th class="text-right pb-2">Users</th></tr></thead><tbody>' + ga4Countries.map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">' + (i+1) + '.</td><td class="py-1.5 text-white">' + c.country + '</td><td class="py-1.5 text-right text-blue-400 font-medium">' + fmtNum(c.sessions) + '</td><td class="py-1.5 text-right text-gray-300">' + fmtNum(c.activeUsers) + '</td></tr>').join('') + '<tr class="border-t border-gray-700 font-semibold"><td></td><td class="py-1.5 text-gray-300">Total</td><td class="py-1.5 text-right text-white">' + fmtNum(ga4Countries.reduce((s,c)=>s+c.sessions,0)) + '</td><td class="py-1.5 text-right text-white">' + fmtNum(ga4Countries.reduce((s,c)=>s+c.activeUsers,0)) + '</td></tr></tbody></table></div>' : ''}
-                    </div>
-                `;
+                    </div>`;
+                } else if (_analyticsView === 'channels') {
+                    const channels = ga4.channels || [];
+                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Channel</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th></tr></thead><tbody>
+                    ${channels.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'.</td><td class="py-2.5 px-4 text-white font-medium">'+c.channel+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(c.activeUsers)+'</td></tr>').join('')}
+                    </tbody></table></div>`;
+                } else if (_analyticsView === 'locations') {
+                    const countries = ga4.countries || [];
+                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Country</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th></tr></thead><tbody>
+                    ${countries.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2 px-4 text-white">'+c.country+'</td><td class="py-2 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td><td class="py-2 px-4 text-right text-gray-300">'+fmtNum(c.activeUsers)+'</td></tr>').join('')}
+                    </tbody></table></div>`;
+                } else {
+                    viewHtml = '<div class="text-gray-500 text-center py-16">This view requires e-commerce data configured in GA4.</div>';
+                }
             }
 
-            // Render the full layout with sub-tab nav
+            // ======================== ASSEMBLE LAYOUT ========================
+            const headerTitle = cfg.name;
+            const headerSub = cfg.subtitle;
+
             contentArea.innerHTML = `
-                <div class="flex gap-2 mb-6 bg-gray-900/50 border border-gray-800 rounded-xl p-1.5 overflow-x-auto">
-                    ${subTabsHtml}
+                ${tplSelector}
+                <div class="flex gap-0 rounded-xl overflow-hidden border border-gray-800" style="min-height:600px;background:linear-gradient(135deg, rgba(${acRgb},0.02) 0%, rgba(0,0,0,0) 60%)">
+                    <!-- Sidebar -->
+                    <div class="w-[76px] flex-shrink-0 border-r border-gray-800 flex flex-col items-center py-4 gap-1 bg-gray-950/60">
+                        ${sidebarHtml}
+                    </div>
+                    <!-- Main -->
+                    <div class="flex-1 p-5 overflow-y-auto">
+                        <div class="flex items-center justify-between mb-5">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(${acRgb},0.15)"><i data-lucide="${cfg.icon}" class="w-5 h-5" style="color:${ac}"></i></div>
+                                <div>
+                                    <h2 class="text-lg font-bold text-white">${headerTitle} - <span style="color:${ac}">${_analyticsView.charAt(0).toUpperCase()+_analyticsView.slice(1).replace('-',' ')}</span></h2>
+                                    <p class="text-xs text-gray-500">${headerSub}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs text-gray-500">
+                                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${gscProp?ac:'#4b5563'}"></span>GSC</span>
+                                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${ga4Prop?ac:'#4b5563'}"></span>GA4</span>
+                                <span class="text-gray-700 mx-1">|</span>
+                                <span>Last 30 days vs previous</span>
+                            </div>
+                        </div>
+                        ${viewHtml}
+                    </div>
                 </div>
-                ${bodyHtml}
+                <div class="text-center text-[10px] text-gray-700 mt-2">Data last updated: ${new Date().toLocaleString()}</div>
             `;
-            lucide.createIcons();
 
-            // ================================================================
-            // Initialize Charts (after DOM is rendered)
-            // ================================================================
-            setTimeout(() => { initAnalyticsCharts(gsc, ga4); }, 50);
+            lucide.createIcons();
+            setTimeout(() => initPremiumCharts(gsc, ga4, tpl, ac, acRgb), 80);
         }
 
-        function initAnalyticsCharts(gsc, ga4) {
-            const chartDefaults = {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6b7280', font: { size: 10 } } },
-                    y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6b7280', font: { size: 10 } } }
-                }
-            };
+        // =====================================================================
+        // PREMIUM CHART INITIALIZATION
+        // =====================================================================
+        function initPremiumCharts(gsc, ga4, tpl, ac, acRgb) {
+            const chartFont = { family: "'Inter','system-ui',sans-serif", size: 10 };
+            const gridColor = 'rgba(255,255,255,0.04)';
+            const tickColor = '#6b7280';
 
-            // ---- GSC Time-series Chart ----
-            const gscTsEl = document.getElementById('gscTimeseriesChart');
-            if (gscTsEl && gsc.timeseries && gsc.timeseries.length) {
-                const labels = gsc.timeseries.map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US', {month:'short', day:'numeric'}); });
-                new Chart(gscTsEl, {
+            // ---- LINE CHART ----
+            const lineEl = document.getElementById('premiumLineChart');
+            if (lineEl) {
+                const ctx = lineEl.getContext('2d');
+                const gradient = ctx.createLinearGradient(0, 0, 0, lineEl.height * 2);
+                gradient.addColorStop(0, 'rgba('+acRgb+',0.25)');
+                gradient.addColorStop(1, 'rgba('+acRgb+',0)');
+
+                let labels, dataCurr, dataPrev;
+                if (tpl === 'gsc') {
+                    labels = (gsc.timeseries||[]).map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
+                    dataCurr = (gsc.timeseries||[]).map(r => r.impressions);
+                    dataPrev = (gsc.prevTimeseries||[]).map(r => r.impressions);
+                } else {
+                    labels = (ga4.timeseries||[]).map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
+                    dataCurr = (ga4.timeseries||[]).map(r => r.sessions);
+                    dataPrev = (ga4.prevTimeseries||[]).map(r => r.sessions);
+                }
+                new Chart(lineEl, {
                     type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'Impressions',
-                                data: gsc.timeseries.map(r => r.impressions),
-                                borderColor: '#10b981',
-                                backgroundColor: 'rgba(16,185,129,0.1)',
-                                fill: true,
-                                tension: 0.3,
-                                borderWidth: 2,
-                                pointRadius: 0,
-                                pointHoverRadius: 4
-                            },
-                            {
-                                label: 'Previous',
-                                data: (gsc.prevTimeseries||[]).map(r => r.impressions),
-                                borderColor: '#4b5563',
-                                borderDash: [5, 5],
-                                fill: false,
-                                tension: 0.3,
-                                borderWidth: 1.5,
-                                pointRadius: 0
-                            }
-                        ]
-                    },
-                    options: { ...chartDefaults }
+                    data: { labels, datasets: [
+                        { label: tpl==='gsc'?'Impressions':'Sessions', data: dataCurr, borderColor: ac, backgroundColor: gradient, fill: true, tension: 0.35, borderWidth: 2, pointRadius: 2, pointBackgroundColor: ac, pointBorderColor: ac, pointHoverRadius: 5 },
+                        { label: 'Previous', data: dataPrev, borderColor: '#4b5563', borderDash: [5,5], fill: false, tension: 0.35, borderWidth: 1.5, pointRadius: 0 }
+                    ]},
+                    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af', borderColor: '#374151', borderWidth: 1 } }, scales: { x: { grid: { color: gridColor }, ticks: { color: tickColor, font: chartFont, maxTicksLimit: 10 } }, y: { grid: { color: gridColor }, ticks: { color: tickColor, font: chartFont, callback: v => fmtK(v) } } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } }
                 });
             }
 
-            // ---- GSC Device Donut ----
-            const gscDevEl = document.getElementById('gscDeviceChart');
-            if (gscDevEl && gsc.devices && gsc.devices.length) {
-                const deviceColors = { 'DESKTOP': '#6366f1', 'MOBILE': '#10b981', 'TABLET': '#f59e0b' };
-                const devLabels = gsc.devices.map(d => d.device);
-                const devData = gsc.devices.map(d => d.impressions);
-                new Chart(gscDevEl, {
+            // ---- DONUT CHART ----
+            const donutEl = document.getElementById('premiumDonut');
+            if (donutEl) {
+                const devColors = { 'DESKTOP': '#6366f1', 'desktop': '#6366f1', 'MOBILE': ac, 'mobile': ac, 'TABLET': '#f59e0b', 'tablet': '#f59e0b' };
+                let devData, devLabels, devMetric;
+                if (tpl === 'gsc') {
+                    devLabels = (gsc.devices||[]).map(d => d.device);
+                    devData = (gsc.devices||[]).map(d => d.impressions);
+                    devMetric = 'impressions';
+                } else {
+                    devLabels = (ga4.devices||[]).map(d => d.device);
+                    devData = (ga4.devices||[]).map(d => d.sessions);
+                    devMetric = 'sessions';
+                }
+                new Chart(donutEl, {
                     type: 'doughnut',
-                    data: {
-                        labels: devLabels,
-                        datasets: [{ data: devData, backgroundColor: devLabels.map(l => deviceColors[l] || '#8b5cf6'), borderWidth: 0 }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: true, cutout: '65%', plugins: { legend: { display: false } } }
+                    data: { labels: devLabels, datasets: [{ data: devData, backgroundColor: devLabels.map(l => devColors[l]||'#8b5cf6'), borderWidth: 0, hoverBorderWidth: 2, hoverBorderColor: '#fff' }] },
+                    options: { responsive: true, maintainAspectRatio: true, cutout: '68%', plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af' } } }
                 });
-                // Device legend
-                const legendEl = document.getElementById('gscDeviceLegend');
+                const legendEl = document.getElementById('premiumDonutLegend');
                 if (legendEl) {
                     const total = devData.reduce((a,b)=>a+b,0);
-                    legendEl.innerHTML = gsc.devices.map(d => {
-                        const pct = total > 0 ? ((d.impressions/total)*100).toFixed(1) : '0';
-                        const color = deviceColors[d.device] || '#8b5cf6';
-                        return '<div class="mb-3"><div class="flex items-center gap-2 mb-0.5"><span class="w-2.5 h-2.5 rounded-full" style="background:' + color + '"></span><span class="text-gray-300 text-sm capitalize">' + d.device.toLowerCase() + '</span></div><div class="text-xl font-bold text-white">' + new Intl.NumberFormat('en-US').format(d.impressions) + '</div><div class="text-xs text-gray-500">' + pct + '%</div></div>';
+                    const devices = tpl === 'gsc' ? (gsc.devices||[]) : (ga4.devices||[]);
+                    legendEl.innerHTML = devices.map(d => {
+                        const val = tpl==='gsc' ? d.impressions : d.sessions;
+                        const pct = total > 0 ? ((val/total)*100).toFixed(1) : '0';
+                        const color = devColors[d.device] || '#8b5cf6';
+                        const label = (d.device||'').charAt(0).toUpperCase() + (d.device||'').slice(1).toLowerCase();
+                        return '<div class="mb-3"><div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:'+color+'"></span><span class="text-xs text-gray-400 uppercase">'+label+'</span></div><div class="text-xl font-bold text-white">'+fmtK(val)+'</div><div class="text-xs" style="color:'+color+'">'+pct+'%</div></div>';
                     }).join('');
                 }
             }
 
-            // ---- GA4 Time-series Chart ----
-            const ga4TsEl = document.getElementById('ga4TimeseriesChart');
-            if (ga4TsEl && ga4.timeseries && ga4.timeseries.length) {
-                const labels = ga4.timeseries.map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US', {month:'short', day:'numeric'}); });
-                new Chart(ga4TsEl, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'Sessions',
-                                data: ga4.timeseries.map(r => r.sessions),
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59,130,246,0.1)',
-                                fill: true,
-                                tension: 0.3,
-                                borderWidth: 2,
-                                pointRadius: 0,
-                                pointHoverRadius: 4
-                            },
-                            {
-                                label: 'Previous',
-                                data: (ga4.prevTimeseries||[]).map(r => r.sessions),
-                                borderColor: '#4b5563',
-                                borderDash: [5, 5],
-                                fill: false,
-                                tension: 0.3,
-                                borderWidth: 1.5,
-                                pointRadius: 0
-                            }
-                        ]
-                    },
-                    options: { ...chartDefaults }
-                });
-            }
-
-            // ---- GA4 Device Donut ----
-            const ga4DevEl = document.getElementById('ga4DeviceChart');
-            if (ga4DevEl && ga4.devices && ga4.devices.length) {
-                const deviceColors = { 'desktop': '#6366f1', 'mobile': '#3b82f6', 'tablet': '#f59e0b' };
-                const devLabels = ga4.devices.map(d => d.device);
-                const devData = ga4.devices.map(d => d.sessions);
-                new Chart(ga4DevEl, {
+            // ---- CHANNEL DONUT (GA4 overview) ----
+            const chDonutEl = document.getElementById('premiumChannelDonut');
+            if (chDonutEl && ga4.channels) {
+                const chColors = [ac, '#6366f1', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#14b8a6', '#ec4899'];
+                const chLabels = (ga4.channels||[]).slice(0,6).map(c => c.channel);
+                const chData = (ga4.channels||[]).slice(0,6).map(c => c.sessions);
+                new Chart(chDonutEl, {
                     type: 'doughnut',
-                    data: {
-                        labels: devLabels,
-                        datasets: [{ data: devData, backgroundColor: devLabels.map(l => deviceColors[l] || '#8b5cf6'), borderWidth: 0 }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: true, cutout: '65%', plugins: { legend: { display: false } } }
-                });
-                const legendEl = document.getElementById('ga4DeviceLegend');
-                if (legendEl) {
-                    const total = devData.reduce((a,b)=>a+b,0);
-                    legendEl.innerHTML = ga4.devices.map(d => {
-                        const pct = total > 0 ? ((d.sessions/total)*100).toFixed(1) : '0';
-                        const color = deviceColors[d.device] || '#8b5cf6';
-                        return '<div class="mb-3"><div class="flex items-center gap-2 mb-0.5"><span class="w-2.5 h-2.5 rounded-full" style="background:' + color + '"></span><span class="text-gray-300 text-sm capitalize">' + d.device + '</span></div><div class="text-xl font-bold text-white">' + new Intl.NumberFormat('en-US').format(d.sessions) + '</div><div class="text-xs text-gray-500">' + pct + '%</div></div>';
-                    }).join('');
-                }
-            }
-
-            // ---- GA4 Channel Bar Chart (Overview) ----
-            const ga4ChEl = document.getElementById('ga4ChannelChart');
-            if (ga4ChEl && ga4.channels && ga4.channels.length) {
-                new Chart(ga4ChEl, {
-                    type: 'bar',
-                    data: {
-                        labels: ga4.channels.map(c => c.channel),
-                        datasets: [{
-                            label: 'Sessions',
-                            data: ga4.channels.map(c => c.sessions),
-                            backgroundColor: '#3b82f6',
-                            borderRadius: 4
-                        }]
-                    },
-                    options: {
-                        ...chartDefaults,
-                        indexAxis: 'y',
-                        scales: {
-                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6b7280', font: { size: 10 } } },
-                            y: { grid: { display: false }, ticks: { color: '#d1d5db', font: { size: 11 } } }
-                        }
-                    }
+                    data: { labels: chLabels, datasets: [{ data: chData, backgroundColor: chColors.slice(0, chLabels.length), borderWidth: 0 }] },
+                    options: { responsive: true, maintainAspectRatio: true, cutout: '55%', plugins: { legend: { display: false } } }
                 });
             }
 
-            // ---- Channels Sub-tab Bar Chart ----
-            const chBarEl = document.getElementById('channelsBarChart');
-            if (chBarEl && ga4.channels && ga4.channels.length) {
+            // ---- CHANNEL BAR CHART ----
+            const chBarEl = document.getElementById('premiumChannelBar');
+            if (chBarEl && ga4.channels) {
+                const chColors2 = [ac, '#6366f1', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#14b8a6', '#ec4899'];
                 new Chart(chBarEl, {
                     type: 'bar',
-                    data: {
-                        labels: ga4.channels.map(c => c.channel),
-                        datasets: [{
-                            label: 'Sessions',
-                            data: ga4.channels.map(c => c.sessions),
-                            backgroundColor: '#3b82f6',
-                            borderRadius: 4
-                        }]
-                    },
-                    options: {
-                        ...chartDefaults,
-                        indexAxis: 'y',
-                        scales: {
-                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6b7280', font: { size: 10 } } },
-                            y: { grid: { display: false }, ticks: { color: '#d1d5db', font: { size: 11 } } }
-                        }
-                    }
+                    data: { labels: (ga4.channels||[]).map(c => c.channel), datasets: [{ label: 'Sessions', data: (ga4.channels||[]).map(c => c.sessions), backgroundColor: (ga4.channels||[]).map((_,i) => chColors2[i%chColors2.length]), borderRadius: 4, barThickness: 18 }] },
+                    options: { responsive: true, maintainAspectRatio: true, indexAxis: 'y', plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937' } }, scales: { x: { grid: { color: gridColor }, ticks: { color: tickColor, font: chartFont, callback: v => fmtK(v) } }, y: { grid: { display: false }, ticks: { color: '#d1d5db', font: { ...chartFont, size: 11 } } } } }
                 });
             }
         }

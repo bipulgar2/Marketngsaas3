@@ -763,6 +763,9 @@
             if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
             return new Intl.NumberFormat('en-US').format(n);
         }
+        function fmtNum(n) {
+            return new Intl.NumberFormat('en-US').format(n || 0);
+        }
         function pctChange(curr, prev) {
             if (!prev || prev === 0) return null;
             return ((curr - prev) / prev * 100);

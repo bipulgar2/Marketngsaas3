@@ -17,23 +17,245 @@ load_dotenv()
 DATAFORSEO_API_URL = "https://api.dataforseo.com/v3"
 
 # DataForSEO location codes — maps ISO country codes to API location_code integers
+# Pattern: 2000 + ISO 3166-1 Numeric code  (exceptions noted inline)
 LOCATION_CODE_MAP = {
-    "US": 2840,   # United States
-    "UK": 2826,   # United Kingdom (alias)
-    "GB": 2826,   # United Kingdom
-    "IN": 2356,   # India
+    "AF": 2004,   # Afghanistan
+    "AL": 2008,   # Albania
+    "DZ": 2012,   # Algeria
+    "AS": 2016,   # American Samoa
+    "AD": 2020,   # Andorra
+    "AO": 2024,   # Angola
+    "AI": 2660,   # Anguilla
+    "AQ": 2010,   # Antarctica
+    "AG": 2028,   # Antigua and Barbuda
+    "AR": 2032,   # Argentina
+    "AM": 2051,   # Armenia
+    "AW": 2533,   # Aruba
     "AU": 2036,   # Australia
+    "AT": 2040,   # Austria
+    "AZ": 2031,   # Azerbaijan
+    "BS": 2044,   # Bahamas
+    "BH": 2048,   # Bahrain
+    "BD": 2050,   # Bangladesh
+    "BB": 2052,   # Barbados
+    "BE": 2056,   # Belgium
+    "BZ": 2084,   # Belize
+    "BJ": 2204,   # Benin
+    "BM": 2060,   # Bermuda
+    "BT": 2064,   # Bhutan
+    "BO": 2068,   # Bolivia
+    "BQ": 2535,   # Bonaire, Sint Eustatius and Saba
+    "BA": 2070,   # Bosnia and Herzegovina
+    "BW": 2072,   # Botswana
+    "BR": 2076,   # Brazil
+    "BN": 2096,   # Brunei
+    "BG": 2100,   # Bulgaria
+    "BF": 2854,   # Burkina Faso
+    "BI": 2108,   # Burundi
+    "CV": 2132,   # Cabo Verde
+    "KH": 2116,   # Cambodia
+    "CM": 2120,   # Cameroon
     "CA": 2124,   # Canada
-    "DE": 2276,   # Germany
+    "KY": 2136,   # Cayman Islands
+    "CF": 2140,   # Central African Republic
+    "TD": 2148,   # Chad
+    "CL": 2152,   # Chile
+    "CN": 2156,   # China
+    "CO": 2170,   # Colombia
+    "KM": 2174,   # Comoros
+    "CG": 2178,   # Congo
+    "CD": 2180,   # Congo (DRC)
+    "CK": 2184,   # Cook Islands
+    "CR": 2188,   # Costa Rica
+    "HR": 2191,   # Croatia
+    "CU": 2192,   # Cuba
+    "CW": 2531,   # Curaçao
+    "CY": 2196,   # Cyprus
+    "CZ": 2203,   # Czechia
+    "CI": 2384,   # Côte d'Ivoire
+    "DK": 2208,   # Denmark
+    "DJ": 2262,   # Djibouti
+    "DM": 2212,   # Dominica
+    "DO": 2214,   # Dominican Republic
+    "EC": 2218,   # Ecuador
+    "EG": 2818,   # Egypt
+    "SV": 2222,   # El Salvador
+    "GQ": 2226,   # Equatorial Guinea
+    "ER": 2232,   # Eritrea
+    "EE": 2233,   # Estonia
+    "SZ": 2748,   # Eswatini
+    "ET": 2231,   # Ethiopia
+    "FK": 2238,   # Falkland Islands
+    "FO": 2234,   # Faroe Islands
+    "FJ": 2242,   # Fiji
+    "FI": 2246,   # Finland
     "FR": 2250,   # France
-    "SG": 2702,   # Singapore
-    "AE": 2784,   # United Arab Emirates
-    "NZ": 2554,   # New Zealand
-    "PK": 2586,   # Pakistan
-    "ZA": 2710,   # South Africa
-    "NG": 2566,   # Nigeria
-    "PH": 2608,   # Philippines
+    "GF": 2254,   # French Guiana
+    "PF": 2258,   # French Polynesia
+    "GA": 2266,   # Gabon
+    "GM": 2270,   # Gambia
+    "GE": 2268,   # Georgia
+    "DE": 2276,   # Germany
+    "GH": 2288,   # Ghana
+    "GI": 2292,   # Gibraltar
+    "GR": 2300,   # Greece
+    "GL": 2304,   # Greenland
+    "GD": 2308,   # Grenada
+    "GP": 2312,   # Guadeloupe
+    "GU": 2316,   # Guam
+    "GT": 2320,   # Guatemala
+    "GG": 2831,   # Guernsey
+    "GN": 2324,   # Guinea
+    "GW": 2624,   # Guinea-Bissau
+    "GY": 2328,   # Guyana
+    "HT": 2332,   # Haiti
+    "VA": 2336,   # Holy See
+    "HN": 2340,   # Honduras
+    "HK": 2344,   # Hong Kong
+    "HU": 2348,   # Hungary
+    "IS": 2352,   # Iceland
+    "IN": 2356,   # India
+    "ID": 2360,   # Indonesia
+    "IR": 2364,   # Iran
+    "IQ": 2368,   # Iraq
+    "IE": 2372,   # Ireland
+    "IM": 2833,   # Isle of Man
+    "IL": 2376,   # Israel
+    "IT": 2380,   # Italy
+    "JM": 2388,   # Jamaica
+    "JP": 2392,   # Japan
+    "JE": 2832,   # Jersey
+    "JO": 2400,   # Jordan
+    "KZ": 2398,   # Kazakhstan
+    "KE": 2404,   # Kenya
+    "KI": 2296,   # Kiribati
+    "KP": 2408,   # North Korea
+    "KR": 2410,   # South Korea
+    "KW": 2414,   # Kuwait
+    "KG": 2417,   # Kyrgyzstan
+    "LA": 2418,   # Laos
+    "LV": 2428,   # Latvia
+    "LB": 2422,   # Lebanon
+    "LS": 2426,   # Lesotho
+    "LR": 2430,   # Liberia
+    "LY": 2434,   # Libya
+    "LI": 2438,   # Liechtenstein
+    "LT": 2440,   # Lithuania
+    "LU": 2442,   # Luxembourg
+    "MO": 2446,   # Macao
+    "MG": 2450,   # Madagascar
+    "MW": 2454,   # Malawi
     "MY": 2458,   # Malaysia
+    "MV": 2462,   # Maldives
+    "ML": 2466,   # Mali
+    "MT": 2470,   # Malta
+    "MH": 2584,   # Marshall Islands
+    "MQ": 2474,   # Martinique
+    "MR": 2478,   # Mauritania
+    "MU": 2480,   # Mauritius
+    "YT": 2175,   # Mayotte
+    "MX": 2484,   # Mexico
+    "FM": 2583,   # Micronesia
+    "MD": 2498,   # Moldova
+    "MC": 2492,   # Monaco
+    "MN": 2496,   # Mongolia
+    "ME": 2499,   # Montenegro
+    "MS": 2500,   # Montserrat
+    "MA": 2504,   # Morocco
+    "MZ": 2508,   # Mozambique
+    "MM": 2104,   # Myanmar
+    "NA": 2516,   # Namibia
+    "NR": 2520,   # Nauru
+    "NP": 2524,   # Nepal
+    "NL": 2528,   # Netherlands
+    "NC": 2540,   # New Caledonia
+    "NZ": 2554,   # New Zealand
+    "NI": 2558,   # Nicaragua
+    "NE": 2562,   # Niger
+    "NG": 2566,   # Nigeria
+    "NU": 2570,   # Niue
+    "NF": 2574,   # Norfolk Island
+    "MK": 2807,   # North Macedonia
+    "MP": 2580,   # Northern Mariana Islands
+    "NO": 2578,   # Norway
+    "OM": 2512,   # Oman
+    "PK": 2586,   # Pakistan
+    "PW": 2585,   # Palau
+    "PS": 2275,   # Palestine
+    "PA": 2591,   # Panama
+    "PG": 2598,   # Papua New Guinea
+    "PY": 2600,   # Paraguay
+    "PE": 2604,   # Peru
+    "PH": 2608,   # Philippines
+    "PL": 2616,   # Poland
+    "PT": 2620,   # Portugal
+    "PR": 2630,   # Puerto Rico
+    "QA": 2634,   # Qatar
+    "RO": 2642,   # Romania
+    "RW": 2646,   # Rwanda
+    "RE": 2638,   # Réunion
+    "BL": 2652,   # Saint Barthélemy
+    "SH": 2654,   # Saint Helena
+    "KN": 2659,   # Saint Kitts and Nevis
+    "LC": 2662,   # Saint Lucia
+    "MF": 2663,   # Saint Martin
+    "PM": 2666,   # Saint Pierre and Miquelon
+    "VC": 2670,   # Saint Vincent and the Grenadines
+    "WS": 2882,   # Samoa
+    "SM": 2674,   # San Marino
+    "ST": 2678,   # Sao Tome and Principe
+    "SA": 2682,   # Saudi Arabia
+    "SN": 2686,   # Senegal
+    "RS": 2688,   # Serbia
+    "SC": 2690,   # Seychelles
+    "SL": 2694,   # Sierra Leone
+    "SG": 2702,   # Singapore
+    "SX": 2534,   # Sint Maarten
+    "SK": 2703,   # Slovakia
+    "SI": 2705,   # Slovenia
+    "SB": 2090,   # Solomon Islands
+    "SO": 2706,   # Somalia
+    "ZA": 2710,   # South Africa
+    "SS": 2728,   # South Sudan
+    "ES": 2724,   # Spain
+    "LK": 2144,   # Sri Lanka
+    "SD": 2736,   # Sudan
+    "SR": 2740,   # Suriname
+    "SE": 2752,   # Sweden
+    "CH": 2756,   # Switzerland
+    "SY": 2760,   # Syria
+    "TW": 2158,   # Taiwan
+    "TJ": 2762,   # Tajikistan
+    "TZ": 2834,   # Tanzania
+    "TH": 2764,   # Thailand
+    "TL": 2626,   # Timor-Leste
+    "TG": 2768,   # Togo
+    "TK": 2772,   # Tokelau
+    "TO": 2776,   # Tonga
+    "TT": 2780,   # Trinidad and Tobago
+    "TN": 2788,   # Tunisia
+    "TR": 2792,   # Turkey
+    "TM": 2795,   # Turkmenistan
+    "TC": 2796,   # Turks and Caicos Islands
+    "TV": 2798,   # Tuvalu
+    "UG": 2800,   # Uganda
+    "UA": 2804,   # Ukraine
+    "AE": 2784,   # United Arab Emirates
+    "GB": 2826,   # United Kingdom
+    "UK": 2826,   # United Kingdom (alias)
+    "US": 2840,   # United States
+    "UY": 2858,   # Uruguay
+    "UZ": 2860,   # Uzbekistan
+    "VU": 2548,   # Vanuatu
+    "VE": 2862,   # Venezuela
+    "VN": 2704,   # Vietnam
+    "VG": 2092,   # Virgin Islands (British)
+    "VI": 2850,   # Virgin Islands (U.S.)
+    "WF": 2876,   # Wallis and Futuna
+    "EH": 2732,   # Western Sahara
+    "YE": 2887,   # Yemen
+    "ZM": 2894,   # Zambia
+    "ZW": 2716,   # Zimbabwe
 }
 
 def location_code_for(country: str, default: int = 2840) -> int:

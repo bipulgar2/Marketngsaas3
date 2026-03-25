@@ -984,7 +984,7 @@
                 const queries = gsc.queries || [];
                 bodyHtml = `
                     <h2 class="text-xl font-bold text-white mb-4">Top Search Queries (GSC)</h2>
-                    ${!gscProp || gsc.error ? '<div class="text-gray-500 text-center py-8">GSC not connected for this client.</div>' : ''}
+                    ${gsc.error ? '<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 mb-2 text-sm"><span class="text-red-400 font-medium">GSC Error:</span> <span class="text-gray-400">' + gsc.error + '</span><br><button onclick="switchSideTab(\"google\"); switchTopTab(\"client-settings\");" class="mt-2 bg-violet-600 hover:bg-violet-500 text-white px-3 py-1 rounded text-xs">Reconnect Google</button></div>' : (!gscProp ? '<div class="text-gray-500 text-center py-8">GSC not connected for this client.</div>' : '')}
                     ${gscProp && !gsc.error ? '<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"><table class="w-full text-sm"><thead><tr class="bg-gray-800/50 text-gray-400 text-xs uppercase"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Query</th><th class="text-right py-3 px-4">Clicks</th><th class="text-right py-3 px-4">Impressions</th><th class="text-right py-3 px-4">CTR</th><th class="text-right py-3 px-4">Position</th></tr></thead><tbody>' + queries.map((q,i) => '<tr class="border-t border-gray-800 hover:bg-gray-800/30 transition-colors"><td class="py-2.5 px-4 text-gray-500">' + (i+1) + '</td><td class="py-2.5 px-4 text-white font-medium">' + q.query + '</td><td class="py-2.5 px-4 text-right text-emerald-400 font-medium">' + fmtNum(q.clicks) + '</td><td class="py-2.5 px-4 text-right text-gray-300">' + fmtNum(q.impressions) + '</td><td class="py-2.5 px-4 text-right text-gray-300">' + (q.ctr*100).toFixed(2) + '%</td><td class="py-2.5 px-4 text-right text-gray-300">' + q.position.toFixed(1) + '</td></tr>').join('') + '</tbody></table></div>' : ''}
                 `;
             }
@@ -1009,7 +1009,7 @@
                 const channels = ga4.channels || [];
                 bodyHtml = `
                     <h2 class="text-xl font-bold text-white mb-4">Acquisition Channels (GA4)</h2>
-                    ${!ga4Prop || ga4.error ? '<div class="text-gray-500 text-center py-8">GA4 not connected for this client.</div>' : `
+                    ${ga4.error ? '<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 mb-2 text-sm"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">' + ga4.error + '</span><br><button onclick="switchSideTab(\"google\"); switchTopTab(\"client-settings\");" class="mt-2 bg-violet-600 hover:bg-violet-500 text-white px-3 py-1 rounded text-xs">Reconnect Google</button></div>' : (!ga4Prop ? '<div class="text-gray-500 text-center py-8">GA4 not connected for this client.</div>' : `
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
                             <h4 class="text-sm font-medium text-gray-300 mb-3">Sessions by Channel</h4>
@@ -1025,7 +1025,7 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>`}
+                    </div>`)}
                 `;
             }
             // ================================================================

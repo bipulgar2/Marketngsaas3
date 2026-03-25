@@ -97,6 +97,13 @@ app = Flask(
     static_url_path=''
 )
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key')
+
+# Session cookie config for Railway proxy (needed for OAuth PKCE flow)
+is_production = bool(os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RAILWAY_PUBLIC_DOMAIN'))
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = is_production
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+
 CORS(app)
 
 # Register Google OAuth Integration Blueprint

@@ -72,6 +72,9 @@ def google_auth():
             state=user_id
         )
         
+        # Store the code_verifier in session for PKCE (required by newer google-auth-oauthlib)
+        session['google_code_verifier'] = flow.code_verifier
+        
         return redirect(auth_url)
     except Exception as e:
         logger.error(f"Google Auth Error: {e}")
@@ -95,6 +98,11 @@ def google_callback():
             scopes=SCOPES,
             redirect_uri=redirect_uri
         )
+        
+        # Restore the PKCE code_verifier from the session
+        code_verifier = session.pop('google_code_verifier', None)
+        if code_verifier:
+            flow.code_verifier = code_verifier
         
         # Use the full URL to fetch the token
         authorization_response = request.url

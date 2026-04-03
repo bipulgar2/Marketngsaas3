@@ -910,7 +910,7 @@
                     const countries = gsc.countries || [];
                     viewHtml = `
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                        ${[{l:'Impressions',v:gsc.totalImpressions,p:gscPrev.totalImpressions},{l:'Clicks',v:gsc.totalClicks,p:gscPrev.totalClicks},{l:'Site CTR',v:gsc.avgCtr,p:gscPrev.avgCtr,fmt:'pct'},{l:'Average Position',v:gsc.avgPosition,p:gscPrev.avgPosition,inv:true,fmt:'dec'},{l:'Unique Queries',v:(gsc.queries||[]).length},{l:'Unique Pages',v:(gsc.pages||[]).length}].map(m => {
+                        ${[{l:'Impressions',v:gsc.impressions,p:gscPrev.impressions},{l:'Clicks',v:gsc.clicks,p:gscPrev.clicks},{l:'Site CTR',v:gsc.ctr,p:gscPrev.ctr,fmt:'pct'},{l:'Average Position',v:gsc.position,p:gscPrev.position,inv:true,fmt:'dec'},{l:'Unique Queries',v:(gsc.queries||[]).length},{l:'Unique Pages',v:(gsc.pages||[]).length}].map(m => {
                             let display = m.fmt === 'pct' ? ((m.v||0)*100).toFixed(2)+'%' : m.fmt === 'dec' ? (m.v||0).toFixed(2) : fmtK(m.v||0);
                             return '<div class="border border-gray-700/60 rounded-lg p-3 text-center" style="background:rgba('+acRgb+',0.04)"><div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div></div>';
                         }).join('')}

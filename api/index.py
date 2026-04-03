@@ -3066,7 +3066,7 @@ def perform_seo_analysis(page_id):
     project_loc = 'US'
     project_lang = 'English'
     try:
-        project_res = supabase.table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
+        project_res = (supabase_admin or supabase).table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
         if project_res.data:
             _settings = project_res.data.get('settings', {}) or {}
             project_loc = _settings.get('location', 'US')
@@ -3300,7 +3300,7 @@ def batch_update_pages():
                         project_lang = 'English'
                         try:
                             log_debug(f"Fetching project settings for {page['project_id']}...")
-                            project_res = supabase.table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
+                            project_res = (supabase_admin or supabase).table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
                             if project_res.data:
                                 _settings = project_res.data.get('settings', {}) or {}
                                 project_loc = _settings.get('location', 'US')
@@ -3676,7 +3676,7 @@ def batch_update_pages():
                         competitor_urls = research_data.get('competitor_urls', [])
                         
                         # Fetch Project Settings for Localization
-                        project_res = supabase.table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
+                        project_res = (supabase_admin or supabase).table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
                         _settings = (project_res.data.get('settings', {}) or {}) if project_res.data else {}
                         project_loc = _settings.get('location', 'US')
                         project_lang = _settings.get('language', 'English')
@@ -3831,7 +3831,7 @@ def batch_update_pages():
                         print(f"DEBUG: Processing Product: {product_title}", flush=True)
                         
                         # Fetch Project Settings
-                        project_res = supabase.table('campaigns').select('settings').eq('id', product['project_id']).single().execute()
+                        project_res = (supabase_admin or supabase).table('campaigns').select('settings').eq('id', product['project_id']).single().execute()
                         _settings = (project_res.data.get('settings', {}) or {}) if project_res.data else {}
                         project_loc = _settings.get('location', 'US')
                         project_lang = _settings.get('language', 'English')
@@ -4187,7 +4187,7 @@ def batch_update_pages():
                         competitor_urls = research_data.get('competitor_urls', [])
                         
                         # Fetch Project Settings for Localization
-                        project_res = supabase.table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
+                        project_res = (supabase_admin or supabase).table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
                         _settings = (project_res.data.get('settings', {}) or {}) if project_res.data else {}
                         project_loc = _settings.get('location', 'US')
                         project_lang = _settings.get('language', 'English')
@@ -4276,7 +4276,7 @@ def batch_update_pages():
                         # === NEW DATA-FIRST WORKFLOW FOR TOFU ===
                         
                         # Fetch Project Settings for Localization (Moved UP)
-                        project_res = supabase.table('campaigns').select('settings').eq('id', mofu['project_id']).single().execute()
+                        project_res = (supabase_admin or supabase).table('campaigns').select('settings').eq('id', mofu['project_id']).single().execute()
                         _settings = (project_res.data.get('settings', {}) or {}) if project_res.data else {}
                         project_loc = _settings.get('location', 'US')
                         project_lang = _settings.get('language', 'English')

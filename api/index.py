@@ -4523,7 +4523,8 @@ def get_page_details():
 # --- get_pages (L1611-1637) ---
 @app.route('/api/get-pages', methods=['GET'])
 def get_pages():
-    if not supabase:
+    client = supabase_admin or supabase
+    if not client:
         return jsonify({"error": "Supabase not configured"}), 500
     
     try:
@@ -4535,7 +4536,7 @@ def get_pages():
         # We need tech_audit_data for the status/title, but we don't need the full body_content if it's huge.
         # However, Supabase select doesn't support "exclude".
         # Let's select explicit columns.
-        response = supabase.table('pages').select('id, project_id, url, page_type, created_at, tech_audit_data, funnel_stage, source_page_id, content_description, keywords, product_action, research_data, content, seo_analysis').eq('project_id', project_id).order('id').execute()
+        response = client.table('pages').select('id, project_id, url, page_type, created_at, tech_audit_data, funnel_stage, source_page_id, content_description, keywords, product_action, research_data, content, seo_analysis').eq('project_id', project_id).order('id').execute()
         
         import sys
         print(f"DEBUG: get_pages for {project_id} found {len(response.data) if response.data else 0} pages.", file=sys.stderr)

@@ -3051,7 +3051,7 @@ def perform_seo_analysis(page_id):
     print(f"DEBUG: Starting SEO Analysis for page_id: {page_id}", flush=True)
     
     # Fetch page data
-    page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+    page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
     if not page_res.data:
         return {"error": "Page not found"}
     
@@ -3190,7 +3190,7 @@ def analyze_seo_endpoint():
             return jsonify(analysis), 400
         
         # Save analysis to database
-        supabase.table('pages').update({
+        (supabase_admin or supabase).table('pages').update({
             'seo_analysis': analysis
         }).eq('id', page_id).execute()
         
@@ -3219,18 +3219,18 @@ def batch_update_pages():
             
         if action == 'trigger_audit':
             # In a real app, this would trigger a background job
-            supabase.table('pages').update({"audit_status": "Pending"}).in_('id', page_ids).execute()
+            (supabase_admin or supabase).table('pages').update({"audit_status": "Pending"}).in_('id', page_ids).execute()
             
         elif action == 'trigger_classification':
-            supabase.table('pages').update({"classification_status": "Pending"}).in_('id', page_ids).execute()
+            (supabase_admin or supabase).table('pages').update({"classification_status": "Pending"}).in_('id', page_ids).execute()
             
         elif action == 'approve_strategy':
-            supabase.table('pages').update({"approval_status": True}).in_('id', page_ids).execute()
+            (supabase_admin or supabase).table('pages').update({"approval_status": True}).in_('id', page_ids).execute()
             
         elif action == 'scrape_content':
             # Scrape existing content for selected pages
             for page_id in page_ids:
-                page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+                page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
                 if not page_res.data: continue
                 page = page_res.data
                 
@@ -3245,7 +3245,7 @@ def batch_update_pages():
                         if not current_tech_data.get('title') or current_tech_data.get('title') == 'Untitled':
                              current_tech_data['title'] = scraped_data['title'] or get_title_from_url(page['url'])
                         
-                        supabase.table('pages').update({
+                        (supabase_admin or supabase).table('pages').update({
                             "tech_audit_data": current_tech_data
                         }).eq('id', page_id).execute()
                         print(f"✓ Scraped content for {page['url']}")
@@ -3270,7 +3270,7 @@ def batch_update_pages():
                 for page_id in page_ids:
                     try:
                         # 1. Get Page Data
-                        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+                        page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
                         if not page_res.data: continue
                         page = page_res.data
                         
@@ -3317,7 +3317,7 @@ def batch_update_pages():
                             if page.get('source_page_id'):
                                 try:
                                     # 1. Fetch Parent (MoFu)
-                                    parent_res = supabase.table('pages').select('id, url, tech_audit_data, source_page_id').eq('id', page['source_page_id']).single().execute()
+                                    parent_res = (supabase_admin or supabase).table('pages').select('id, url, tech_audit_data, source_page_id').eq('id', page['source_page_id']).single().execute()
                                     if parent_res.data:
                                         p_data = parent_res.data
                                         p_title = p_data.get('tech_audit_data', {}).get('title', 'Related Page')
@@ -3327,7 +3327,7 @@ def batch_update_pages():
                                         gp_context = ""
                                         if p_data.get('source_page_id'):
                                             try:
-                                                gp_res = supabase.table('pages').select('url, tech_audit_data').eq('id', p_data['source_page_id']).single().execute()
+                                                gp_res = (supabase_admin or supabase).table('pages').select('url, tech_audit_data').eq('id', p_data['source_page_id']).single().execute()
                                                 if gp_res.data:
                                                     gp_data = gp_res.data
                                                     gp_title = gp_data.get('tech_audit_data', {}).get('title', 'Main Product')
@@ -3375,7 +3375,7 @@ def batch_update_pages():
                                             print(f"DEBUG: Found {len(issues_list)} SEO issues to fix. Score: {seo_analysis.get('overall_score')}", flush=True)
                                         
                                         # Save analysis to DB
-                                        supabase.table('pages').update({
+                                        (supabase_admin or supabase).table('pages').update({
                                             'seo_analysis': seo_analysis
                                         }).eq('id', page_id).execute()
                                         
@@ -3530,7 +3530,7 @@ def batch_update_pages():
                                 
                                 if source_page_id:
                                     try:
-                                        parent_res = supabase.table('pages').select('id, url, tech_audit_data, source_page_id').eq('id', source_page_id).single().execute()
+                                        parent_res = (supabase_admin or supabase).table('pages').select('id, url, tech_audit_data, source_page_id').eq('id', source_page_id).single().execute()
                                         if parent_res.data:
                                             parent = parent_res.data
                                             parent_title = parent.get('tech_audit_data', {}).get('title', parent.get('url'))
@@ -3542,7 +3542,7 @@ def batch_update_pages():
                                                 internal_links.append(f"- {parent_title} (In-Depth Guide - USE 2 TIMES): {parent['url']}")
                                                 grandparent_id = parent.get('source_page_id')
                                                 if grandparent_id:
-                                                    gp_res = supabase.table('pages').select('url, tech_audit_data').eq('id', grandparent_id).single().execute()
+                                                    gp_res = (supabase_admin or supabase).table('pages').select('url, tech_audit_data').eq('id', grandparent_id).single().execute()
                                                     if gp_res.data:
                                                         gp_title = gp_res.data.get('tech_audit_data', {}).get('title', gp_res.data.get('url'))
                                                         internal_links.append(f"- {gp_title} (Main Product - USE 2-3 TIMES): {gp_res.data['url']}")
@@ -3606,7 +3606,7 @@ def batch_update_pages():
                                 log_debug(f"Meta extraction failed: {e}")
                             
                             # Update Page
-                            supabase.table('pages').update({
+                            (supabase_admin or supabase).table('pages').update({
                                 "content": generated_text,
                                 "status": "Generated",
                                 "product_action": "Idle",
@@ -3623,19 +3623,19 @@ def batch_update_pages():
                             import traceback
                             traceback.print_exc()
                             # Reset status
-                            supabase.table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
+                            (supabase_admin or supabase).table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
                             
                     except Exception as e:
                         log_debug(f"Outer error for {page_id}: {e}")
                         try:
-                            supabase.table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
+                            (supabase_admin or supabase).table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
                         except: pass
 
             # Update status to Processing IMMEDIATELY (Before thread starts)
             # This ensures frontend sees the loading state
             for pid in page_ids:
                 try:
-                    supabase.table('pages').update({
+                    (supabase_admin or supabase).table('pages').update({
                         "product_action": "Processing Content..."
                     }).eq('id', pid).execute()
                 except: pass
@@ -3660,7 +3660,7 @@ def batch_update_pages():
                     print(f"DEBUG: Processing page_id: {page_id}", flush=True)
                     try:
                         # Get the Topic page
-                        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+                        page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
                         if not page_res.data: continue
                         
                         page = page_res.data
@@ -3724,7 +3724,7 @@ def batch_update_pages():
                         })
                         
                         # Update page
-                        supabase.table('pages').update({
+                        (supabase_admin or supabase).table('pages').update({
                             "research_data": research_data,
                             "product_action": "Idle"
                         }).eq('id', page_id).execute()
@@ -3737,14 +3737,14 @@ def batch_update_pages():
                         traceback.print_exc()
                         # Reset status on error
                         try:
-                            supabase.table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
+                            (supabase_admin or supabase).table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
                         except: pass
 
             # Update status to Processing IMMEDIATELY (Before thread starts)
             # This ensures frontend sees the loading state
             for pid in page_ids:
                 try:
-                    supabase.table('pages').update({
+                    (supabase_admin or supabase).table('pages').update({
                         "product_action": "Processing Research..."
                     }).eq('id', pid).execute()
                 except: pass
@@ -3779,7 +3779,7 @@ def batch_update_pages():
                     for pid in page_ids:
                         print(f"DEBUG: Processing page_id: {pid}")
                         # Get Product Page Data
-                        res = supabase.table('pages').select('*').eq('id', pid).single().execute()
+                        res = (supabase_admin or supabase).table('pages').select('*').eq('id', pid).single().execute()
                         if not res.data: 
                             print(f"DEBUG: Page {pid} not found")
                             continue
@@ -3814,7 +3814,7 @@ def batch_update_pages():
                                 current_tech['body_content'] = body_content
                                 current_tech['title'] = product_title # Save real title
                                 
-                                supabase.table('pages').update({
+                                (supabase_admin or supabase).table('pages').update({
                                     "tech_audit_data": current_tech
                                 }).eq('id', pid).execute()
                                 product_tech = current_tech # Update local var
@@ -3822,7 +3822,7 @@ def batch_update_pages():
                         log_debug(f"Using Product Title: {product_title}")
 
                         # Fetch Source Product Page
-                        product_res = supabase.table('pages').select('*').eq('id', pid).single().execute()
+                        product_res = (supabase_admin or supabase).table('pages').select('*').eq('id', pid).single().execute()
                         if not product_res.data:
                             print(f"DEBUG: Product page not found for ID: {pid}", flush=True)
                             continue
@@ -4061,7 +4061,7 @@ def batch_update_pages():
                             if new_pages:
                                 print(f"DEBUG: Attempting to insert {len(new_pages)} MoFu topics...", file=sys.stderr)
                                 try:
-                                    insert_res = supabase.table('pages').insert(new_pages).execute()
+                                    insert_res = (supabase_admin or supabase).table('pages').insert(new_pages).execute()
                                     print("DEBUG: ✓ MoFu topics inserted successfully.", file=sys.stderr)
                                     
                                     # AUTO-KEYWORD RESEARCH (Gemini)
@@ -4098,7 +4098,7 @@ def batch_update_pages():
                                                         "formatted_keywords": formatted_keywords
                                                     }
                                                     
-                                                    supabase.table('pages').update({
+                                                    (supabase_admin or supabase).table('pages').update({
                                                         "keywords": formatted_keywords,
                                                         "research_data": research_data
                                                     }).eq('id', p_id).execute()
@@ -4112,7 +4112,7 @@ def batch_update_pages():
                                         print("DEBUG: Retrying insert without research_data column...", file=sys.stderr)
                                         for p in new_pages:
                                             p.pop('research_data', None)
-                                        supabase.table('pages').insert(new_pages).execute()
+                                        (supabase_admin or supabase).table('pages').insert(new_pages).execute()
                                         print("DEBUG: ✓ MoFu topics inserted (without research data).", file=sys.stderr)
                                     else:
                                         raise insert_error
@@ -4120,20 +4120,20 @@ def batch_update_pages():
                                 print("DEBUG: No new pages to insert (topics list empty).", file=sys.stderr)
                             
                             # Update Source Page Status
-                            supabase.table('pages').update({"product_action": "MoFu Generated"}).eq('id', pid).execute()
+                            (supabase_admin or supabase).table('pages').update({"product_action": "MoFu Generated"}).eq('id', pid).execute()
                         
                         except Exception as e:
                             print(f"DEBUG: Error generating MoFu topics: {e}", file=sys.stderr)
                             import traceback
                             traceback.print_exc()
                             # Reset status on error so frontend doesn't hang
-                            supabase.table('pages').update({"product_action": "Failed"}).eq('id', pid).execute()
+                            (supabase_admin or supabase).table('pages').update({"product_action": "Failed"}).eq('id', pid).execute()
                             
                 except Exception as e:
                     log_debug(f"MoFu Thread Error: {e}")
                     # Ensure we try to reset status for all pages if the whole thread crashes
                     try:
-                        supabase.table('pages').update({"product_action": "Failed"}).in_('id', page_ids).execute()
+                        (supabase_admin or supabase).table('pages').update({"product_action": "Failed"}).in_('id', page_ids).execute()
                     except: pass
                             
                 except Exception as e:
@@ -4142,7 +4142,7 @@ def batch_update_pages():
             # Set status to Processing immediately
             try:
                 log_debug(f"Updating status to Processing for {page_ids}")
-                supabase.table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
+                (supabase_admin or supabase).table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
             except Exception as e:
                 log_debug(f"Failed to update status to Processing: {e}")
 
@@ -4166,12 +4166,12 @@ def batch_update_pages():
                     print(f"DEBUG: Processing page_id: {page_id}", flush=True)
                     try:
                         # Update status to Processing
-                        supabase.table('pages').update({
+                        (supabase_admin or supabase).table('pages').update({
                             "product_action": "Processing Research..."
                         }).eq('id', page_id).execute()
 
                         # Get the Topic page
-                        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+                        page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
                         if not page_res.data: continue
                         
                         page = page_res.data
@@ -4232,7 +4232,7 @@ def batch_update_pages():
                         })
                         
                         # Update page
-                        supabase.table('pages').update({
+                        (supabase_admin or supabase).table('pages').update({
                             "research_data": research_data,
                             "product_action": "Idle"
                         }).eq('id', page_id).execute()
@@ -4245,7 +4245,7 @@ def batch_update_pages():
                         traceback.print_exc()
                         # Reset status on error
                         try:
-                            supabase.table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
+                            (supabase_admin or supabase).table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
                         except: pass
 
             # Start background thread
@@ -4266,7 +4266,7 @@ def batch_update_pages():
                     
                     for pid in page_ids:
                         # Fetch Source MoFu Page
-                        mofu_res = supabase.table('pages').select('*').eq('id', pid).single().execute()
+                        mofu_res = (supabase_admin or supabase).table('pages').select('*').eq('id', pid).single().execute()
                         if not mofu_res.data: continue
                         mofu = mofu_res.data
                         mofu_tech = mofu.get('tech_audit_data') or {}
@@ -4413,7 +4413,7 @@ def batch_update_pages():
                             
                             if new_pages:
                                 print(f"Attempting to insert {len(new_pages)} ToFu topics...")
-                                insert_res = supabase.table('pages').insert(new_pages).execute()
+                                insert_res = (supabase_admin or supabase).table('pages').insert(new_pages).execute()
                                 print("✓ ToFu topics inserted successfully.")
                                 
                                 # AUTO-KEYWORD RESEARCH (Gemini) - Architecture Parity with MoFu
@@ -4450,7 +4450,7 @@ def batch_update_pages():
                                                     "formatted_keywords": formatted_keywords
                                                 }
                                                 
-                                                supabase.table('pages').update({
+                                                (supabase_admin or supabase).table('pages').update({
                                                     "keywords": formatted_keywords,
                                                     "research_data": research_data
                                                 }).eq('id', p_id).execute()
@@ -4460,7 +4460,7 @@ def batch_update_pages():
                             
                             log_debug(f"ToFu generation complete for {pid}. Updating status...")
                             # Update Source Page Status
-                            supabase.table('pages').update({"product_action": "ToFu Generated"}).eq('id', pid).execute()
+                            (supabase_admin or supabase).table('pages').update({"product_action": "ToFu Generated"}).eq('id', pid).execute()
                             log_debug(f"Status updated to 'ToFu Generated' for {pid}")
                             
                         except Exception as e:
@@ -4468,19 +4468,19 @@ def batch_update_pages():
                             import traceback
                             traceback.print_exc()
                             # Reset status on error so frontend doesn't hang
-                            supabase.table('pages').update({"product_action": "Failed"}).eq('id', pid).execute()
+                            (supabase_admin or supabase).table('pages').update({"product_action": "Failed"}).eq('id', pid).execute()
                 
                 except Exception as e:
                     log_debug(f"ToFu Thread Error: {e}")
                     # Ensure we try to reset status for all pages if the whole thread crashes
                     try:
-                        supabase.table('pages').update({"product_action": "Failed"}).in_('id', page_ids).execute()
+                        (supabase_admin or supabase).table('pages').update({"product_action": "Failed"}).in_('id', page_ids).execute()
                     except: pass
 
             # Set status to Processing immediately
             try:
                 log_debug(f"Updating status to Processing for {page_ids}")
-                supabase.table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
+                (supabase_admin or supabase).table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
             except Exception as e:
                 log_debug(f"Failed to update status to Processing: {e}")
 
@@ -4502,7 +4502,7 @@ def get_page_details():
         page_id = request.args.get('page_id')
         if not page_id: return jsonify({"error": "page_id required"}), 400
         
-        res = supabase.table('pages').select('*').eq('id', page_id).execute()
+        res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).execute()
         if not res.data: return jsonify({"error": "Page not found"}), 404
         
         return jsonify(res.data[0])
@@ -4565,13 +4565,13 @@ def delete_page():
         # Recursive delete function to handle children manually
         def delete_children(pid):
             # Find all children
-            children = supabase.table('pages').select('id').eq('source_page_id', pid).execute()
+            children = (supabase_admin or supabase).table('pages').select('id').eq('source_page_id', pid).execute()
             if children.data:
                 for child in children.data:
                     delete_children(child['id'])
             
             # Delete the page itself
-            supabase.table('pages').delete().eq('id', pid).execute()
+            (supabase_admin or supabase).table('pages').delete().eq('id', pid).execute()
 
         delete_children(page_id)
         
@@ -4592,7 +4592,7 @@ def get_page_status():
         if not page_id:
             return jsonify({"error": "page_id is required"}), 400
             
-        response = supabase.table('pages').select('id, product_action, audit_status').eq('id', page_id).single().execute()
+        response = (supabase_admin or supabase).table('pages').select('id, product_action, audit_status').eq('id', page_id).single().execute()
         
         if not response.data:
             return jsonify({"error": "Page not found"}), 404
@@ -4643,7 +4643,7 @@ def generate_blog_image_endpoint():
     
     try:
         # Fetch page
-        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+        page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
         if not page_res.data: return jsonify({"error": "Page not found"}), 404
         page = page_res.data
         
@@ -4662,7 +4662,7 @@ def generate_blog_image_endpoint():
         image_url = nano_banana_client.generate_image(prompt)
         
         # Update Page
-        supabase.table('pages').update({
+        (supabase_admin or supabase).table('pages').update({
             'main_image_url': image_url,
             'image_prompt': prompt
         }).eq('id', page_id).execute()
@@ -4690,7 +4690,7 @@ def get_html_content():
         
     try:
         # Fetch page
-        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+        page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
         if not page_res.data: 
             return jsonify({"error": "Page not found"}), 404
         page = page_res.data
@@ -4806,7 +4806,7 @@ def webflow_publish():
         
     try:
         # Fetch page
-        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+        page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
         if not page_res.data: return jsonify({"error": "Page not found"}), 404
         page = page_res.data
         
@@ -5025,7 +5025,7 @@ def webflow_publish():
 
         
         # Update status
-        supabase.table('pages').update({'status': 'Published'}).eq('id', page_id).execute()
+        (supabase_admin or supabase).table('pages').update({'status': 'Published'}).eq('id', page_id).execute()
         
         return jsonify({"message": "Published successfully", "webflow_response": res})
         
@@ -5063,9 +5063,9 @@ def debug_sync_supergoop():
             url = page.get('url')
             if not url: continue
             tech_audit_data = {"title": page.get('meta', {}).get('title', url)}
-            existing = supabase.table('pages').select('id').eq('url', url).eq('project_id', pid).execute()
+            existing = (supabase_admin or supabase).table('pages').select('id').eq('url', url).eq('project_id', pid).execute()
             if not existing.data:
-                supabase.table('pages').insert({"project_id": pid, "url": url, "page_type": "product", "tech_audit_data": tech_audit_data, "content_description": "Auto-synced from audit"}).execute()
+                (supabase_admin or supabase).table('pages').insert({"project_id": pid, "url": url, "page_type": "product", "tech_audit_data": tech_audit_data, "content_description": "Auto-synced from audit"}).execute()
                 count += 1
                 
         return jsonify({"success": True, "count": count})

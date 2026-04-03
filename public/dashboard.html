@@ -312,11 +312,9 @@
                 { id: 'overview', label: 'Audit Overview' }
             ],
             'content': [
-                { id: 'briefs', label: 'Briefs' },
-                { id: 'drafts', label: 'Drafts' },
-                { id: 'published', label: 'Published' },
-                { id: 'calendar', label: 'Calendar' },
-                { id: 'templates', label: 'Templates' }
+                { id: 'bofu', label: 'BoFu (Products)' },
+                { id: 'mofu', label: 'MoFu (Silo Topics)' },
+                { id: 'tofu', label: 'ToFu (Sub-Silo)' }
             ],
             'keywords': [
                 { id: 'research', label: 'Research' },
@@ -734,6 +732,8 @@
                 await loadClientSettingsContent();
             } else if (currentTopTab === 'reports' && currentSideTab === 'analytics') {
                 await loadAnalyticsDashboard();
+            } else if (currentTopTab === 'content') {
+                await loadContentTab();
             } else {
                 contentArea.innerHTML = `
                     <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
@@ -3230,7 +3230,931 @@
                 lucide.createIcons();
             }
         }
+
+        // =========================================================================
+        // CONTENT TAB — BOFU / MOFU / TOFU
+        // =========================================================================
+        let contentProjectPages = [];
+        let contentCurrentProject = null;
+        let currentArticlePageId = null;
+        let currentModalPage = null;
+
+        // --- Helpers ---
+        function safeStr(str) {
+            if (!str) return '';
+            return str.replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/\"/g, '&quot;')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '');
+        }
+
+        function contentShowLoading(message) {
+            const overlay = document.getElementById('contentLoadingOverlay');
+            if (!overlay) return;
+            overlay.querySelector('span').innerText = message || 'Processing...';
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+        }
+
+        function contentHideLoading() {
+            const overlay = document.getElementById('contentLoadingOverlay');
+            if (!overlay) return;
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
+        }
+
+        function renderMarkdown(text) {
+            if (!text) return '';
+            let html = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/^### (.*$)/gm, '<h5 class="font-bold text-gray-200 mt-3 mb-1">$1</h5>')
+                .replace(/^## (.*$)/gm, '<h4 class="font-bold text-white mt-4 mb-2">$1</h4>')
+                .replace(/^\s*[\*\-]\s+(.*$)/gm, '<li class="ml-4">$1</li>')
+                .replace(/\n/g, '<br>');
+            if (html.includes('<li')) {
+                html = html.replace(/((?:<li.*?>.*?<\/li>\s*)+)/g, '<ul class="list-disc list-inside space-y-1 text-gray-300">$1</ul>');
+            }
+            return html;
+        }
+
+        // --- Data Loading ---
+        async function loadContentPages() {
+            if (!currentClient) return;
+            try {
+                const res = await fetch(`/api/get-pages?project_id=${currentClient.id}`);
+                const data = await res.json();
+                contentProjectPages = data.pages || [];
+                console.log(`Content: Loaded ${contentProjectPages.length} pages for client ${currentClient.id}`);
+            } catch (e) {
+                console.error('Error loading content pages:', e);
+                contentProjectPages = [];
+            }
+        }
+
+        // --- Content Tab Router ---
+        async function loadContentTab() {
+            const contentArea = document.getElementById('contentArea');
+            contentArea.innerHTML = `<div class="flex items-center justify-center h-32 text-gray-500">
+                <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading content...
+            </div>`;
+            lucide.createIcons();
+
+            await loadContentPages();
+
+            if (currentSideTab === 'bofu') {
+                renderBoFu();
+            } else if (currentSideTab === 'mofu') {
+                renderMoFu();
+            } else if (currentSideTab === 'tofu') {
+                renderToFu();
+            }
+            lucide.createIcons();
+        }
+
+        // --- BoFu (Products) Render ---
+        function renderBoFu() {
+            const contentArea = document.getElementById('contentArea');
+            const products = contentProjectPages.filter(p => (p.page_type || '').toLowerCase() === 'product');
+
+            if (products.length === 0) {
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                        <i data-lucide="package" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">No Product Pages Found</h3>
+                        <p class="text-gray-400">Product pages need to be classified first via the SEO System's URL Classification tab.</p>
+                    </div>`;
+                return;
+            }
+
+            let rows = products.map(p => {
+                const data = p.tech_audit_data || {};
+                const contentPreview = p.content ? p.content.substring(0, 50) + '...' : '';
+                let displayTitle = data.title || '';
+                const isBadTitle = !displayTitle || displayTitle.toLowerCase().includes('pending') || displayTitle.toLowerCase().includes('untitled') || displayTitle.toLowerCase().includes('scan');
+                if (isBadTitle) {
+                    const slug = p.url.split('/').filter(s => s).pop() || 'product';
+                    displayTitle = slug.replace(/-/g, ' ').replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                }
+                return `
+                    <tr class="hover:bg-gray-800/30 transition-colors border-b border-gray-800/50">
+                        <td class="px-6 py-4 truncate max-w-xs text-sm font-medium text-white capitalize" title="${displayTitle}">${displayTitle}</td>
+                        <td class="px-6 py-4 truncate max-w-xs text-xs text-blue-400" title="${p.url}"><a href="${p.url}" target="_blank" class="hover:underline">${p.url}</a></td>
+                        <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400 cursor-pointer hover:text-white" onclick="contentShowModalContent('${p.id}', 'existing')">
+                            ${data.body_content && data.body_content.length > 50
+                            ? '<span class="px-2 py-1 bg-green-900/30 border border-green-800 rounded text-green-400 text-xs hover:bg-green-900/50">View Content</span>'
+                            : '<span class="px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-xs">View Content</span>'}
+                        </td>
+                        <td class="px-6 py-4">
+                            <select onchange="handleBoFuAction('${p.id}', this.value, this)" class="bg-gray-800 border border-gray-700 text-xs rounded px-3 py-1.5 text-white min-w-[150px] focus:ring-1 focus:ring-violet-500 focus:border-violet-500 outline-none cursor-pointer">
+                                <option value="Idle" ${p.product_action === 'Idle' ? 'selected' : ''}>Idle</option>
+                                <option value="Generate Content" ${p.product_action === 'Generate Content' ? 'selected' : ''}>Generate Content</option>
+                                <option value="Generate MoFu" ${p.product_action === 'Generate MoFu' ? 'selected' : ''}>Generate MoFu</option>
+                            </select>
+                        </td>
+                        <td class="px-6 py-4 text-xs text-gray-400 cursor-pointer hover:text-white" onclick="contentShowModalContent('${p.id}', 'new')">
+                            ${contentPreview ? '<span class="px-2 py-1 bg-green-900/30 border border-green-800 rounded text-green-400 text-xs whitespace-nowrap">View</span>' : '<span class="text-gray-600">Generate First</span>'}
+                        </td>
+                        <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400 cursor-pointer hover:text-white hover:underline" onclick="contentShowTextModal('Meta Description', '${safeStr(data.meta_description)}')">
+                            ${data.meta_description || '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            contentArea.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
+                            <tr>
+                                <th class="px-6 py-3 text-left font-medium">Product</th>
+                                <th class="px-6 py-3 text-left font-medium">URL</th>
+                                <th class="px-6 py-3 text-left font-medium">Existing Content</th>
+                                <th class="px-6 py-3 text-left font-medium">Action</th>
+                                <th class="px-6 py-3 text-left font-medium">Generated</th>
+                                <th class="px-6 py-3 text-left font-medium">Meta Description</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800 text-sm text-gray-300">
+                            ${rows}
+                        </tbody>
+                    </table>
+                </div>`;
+        }
+
+        // --- MoFu Render ---
+        function renderMoFu() {
+            const contentArea = document.getElementById('contentArea');
+            const topics = contentProjectPages.filter(p => (p.page_type || '').toLowerCase() === 'topic' && (p.funnel_stage || '').toLowerCase() === 'mofu');
+
+            if (topics.length === 0) {
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                        <i data-lucide="layers" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">No MoFu Topics</h3>
+                        <p class="text-gray-400">Go to BoFu (Products) and select "Generate MoFu" to create silo topics.</p>
+                    </div>`;
+                return;
+            }
+
+            // Group by source page
+            const grouped = {};
+            topics.forEach(t => {
+                const sourceId = t.source_page_id || 'unknown';
+                if (!grouped[sourceId]) grouped[sourceId] = [];
+                grouped[sourceId].push(t);
+            });
+
+            let htmlContent = '';
+            for (const [sourceId, groupTopics] of Object.entries(grouped)) {
+                const sourcePage = contentProjectPages.find(p => p.id === sourceId);
+                const sourceTitle = sourcePage ? (sourcePage.tech_audit_data?.title || sourcePage.url) : 'Unknown Source';
+
+                htmlContent += `
+                    <tr class="bg-gray-800/50 border-b border-gray-800">
+                        <td colspan="9" class="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <div class="flex items-center justify-between">
+                                <div><i data-lucide="folder" class="w-3 h-3 inline mr-2"></i> ${sourceTitle} <span class="ml-2 text-gray-600">(${groupTopics.length})</span></div>
+                                ${sourcePage ? `<button onclick="contentDeletePage('${sourcePage.id}')" class="text-gray-500 hover:text-red-500 transition-colors" title="Delete Group"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
+                            </div>
+                        </td>
+                    </tr>`;
+
+                htmlContent += groupTopics.map(t => {
+                    const data = t.tech_audit_data || {};
+                    const contentPreview = t.content ? t.content.substring(0, 30) + '...' : '';
+                    return `
+                        <tr class="hover:bg-gray-800/30 transition-colors border-b border-gray-800/50">
+                            <td class="px-6 py-4 text-center w-12">
+                                <button onclick="contentDeletePage('${t.id}')" class="text-gray-500 hover:text-red-500 transition-colors" title="Delete Topic"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </td>
+                            <td class="px-6 py-4 font-medium text-white text-sm pl-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                    ${data.title || t.title || 'Untitled Topic'}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs cursor-pointer hover:text-white hover:underline" onclick="contentShowTextModal('Content Description', '${safeStr(t.content_description)}')">
+                                ${t.content_description || '-'}
+                            </td>
+                            <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs cursor-pointer hover:text-white hover:underline" onclick="contentShowTextModal('Keywords', '${safeStr(t.keywords)}')">
+                                ${t.keywords || '-'}
+                            </td>
+                            <td class="px-6 py-4">
+                                <select onchange="handleMoFuAction('${t.id}', this.value)" class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-full">
+                                    <option value="Idle" ${t.product_action === 'Idle' ? 'selected' : ''}>Idle</option>
+                                    <option value="Conduct Research" ${t.product_action === 'Conduct Research' ? 'selected' : ''}>Conduct Research</option>
+                                    <option value="Generate Content" ${t.product_action === 'Generate Content' ? 'selected' : ''}>Generate Content</option>
+                                    <option value="Generate ToFu" ${t.product_action === 'Generate ToFu' ? 'selected' : ''}>Generate ToFu</option>
+                                    <option value="Generate Image" ${t.product_action === 'Generate Image' ? 'selected' : ''}>Generate Image</option>
+                                    <option value="PushWebflow" ${t.product_action === 'PushWebflow' ? 'selected' : ''}>PushWebflow</option>
+                                    <option value="CopyHTML">Copy HTML</option>
+                                </select>
+                            </td>
+                            <td class="px-6 py-4 text-xs text-gray-400 cursor-pointer hover:text-white" onclick="contentShowResearchData('${t.id}')">
+                                ${t.research_data ? '<span class="text-green-400 cursor-pointer hover:underline">View Research</span>' : '<span class="text-gray-600">-</span>'}
+                            </td>
+                            <td class="px-6 py-4 text-xs text-gray-400 cursor-pointer hover:text-white" onclick="contentShowModalContent('${t.id}', 'new')">
+                                ${contentPreview || '<span class="text-gray-600">-</span>'}
+                            </td>
+                            <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs cursor-pointer hover:text-white hover:underline" onclick="contentShowTextModal('Meta Title', '${safeStr(data.meta_title)}')">
+                                ${data.meta_title || '-'}
+                            </td>
+                            <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs cursor-pointer hover:text-white hover:underline" onclick="contentShowTextModal('Meta Description', '${safeStr(data.meta_description)}')">
+                                ${data.meta_description || '-'}
+                            </td>
+                        </tr>`;
+                }).join('');
+            }
+
+            contentArea.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
+                            <tr>
+                                <th class="px-6 py-3 w-12"></th>
+                                <th class="px-6 py-3 text-left font-medium">Topic</th>
+                                <th class="px-6 py-3 text-left font-medium">Description</th>
+                                <th class="px-6 py-3 text-left font-medium">Keywords</th>
+                                <th class="px-6 py-3 text-left font-medium">Action</th>
+                                <th class="px-6 py-3 text-left font-medium">Research</th>
+                                <th class="px-6 py-3 text-left font-medium">Content</th>
+                                <th class="px-6 py-3 text-left font-medium">Meta Title</th>
+                                <th class="px-6 py-3 text-left font-medium">Meta Desc</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800 text-sm text-gray-300">
+                            ${htmlContent}
+                        </tbody>
+                    </table>
+                </div>`;
+        }
+
+        // --- ToFu Render ---
+        function renderToFu() {
+            const contentArea = document.getElementById('contentArea');
+            const tofus = contentProjectPages.filter(p => (p.page_type || '').toLowerCase() === 'topic' && (p.funnel_stage || '').toLowerCase() === 'tofu');
+
+            if (tofus.length === 0) {
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                        <i data-lucide="git-branch" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">No ToFu Topics</h3>
+                        <p class="text-gray-400">Go to MoFu (Silo Topics) and select "Generate ToFu" to create sub-silo topics.</p>
+                    </div>`;
+                return;
+            }
+
+            // Group ToFus: Product -> MoFu -> ToFu
+            const byMoFu = {};
+            tofus.forEach(t => {
+                const mofuId = t.source_page_id || 'unknown';
+                if (!byMoFu[mofuId]) byMoFu[mofuId] = [];
+                byMoFu[mofuId].push(t);
+            });
+
+            const byProduct = {};
+            Object.keys(byMoFu).forEach(mofuId => {
+                const mofuPage = contentProjectPages.find(p => p.id === mofuId);
+                const productId = mofuPage ? mofuPage.source_page_id : 'unknown';
+                if (!byProduct[productId]) byProduct[productId] = [];
+                byProduct[productId].push({ mofu: mofuPage, tofus: byMoFu[mofuId] });
+            });
+
+            let htmlContent = '';
+            for (const [productId, mofuGroups] of Object.entries(byProduct)) {
+                const productPage = contentProjectPages.find(p => p.id === productId);
+                const productTitle = productPage ? (productPage.tech_audit_data?.title || productPage.url) : 'Unknown Product';
+
+                htmlContent += `
+                    <tr class="bg-gray-900 border-b border-gray-800">
+                        <td colspan="9" class="px-6 py-3 text-sm font-bold text-white uppercase tracking-wider">
+                            <i data-lucide="box" class="w-4 h-4 inline mr-2 text-blue-500"></i> ${productTitle}
+                        </td>
+                    </tr>`;
+
+                mofuGroups.forEach(group => {
+                    const mofuTitle = group.mofu ? (group.mofu.tech_audit_data?.title || group.mofu.content_description) : 'Unknown MoFu';
+
+                    htmlContent += `
+                        <tr class="bg-gray-800/50 border-b border-gray-800">
+                            <td colspan="9" class="px-6 py-2 text-xs font-medium text-gray-400 pl-12">
+                                <div class="flex items-center justify-between">
+                                    <div><i data-lucide="folder" class="w-3 h-3 inline mr-2 text-purple-400"></i> ${mofuTitle} <span class="ml-2 text-gray-600">(${group.tofus.length})</span></div>
+                                    ${group.mofu ? `<button onclick="contentDeletePage('${group.mofu.id}')" class="text-gray-500 hover:text-red-500 transition-colors" title="Delete Group"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
+                                </div>
+                            </td>
+                        </tr>`;
+
+                    group.tofus.forEach(t => {
+                        const data = t.tech_audit_data || {};
+                        const contentPreview = t.content ? t.content.substring(0, 30) + '...' : '';
+                        htmlContent += `
+                            <tr class="hover:bg-gray-800/30 transition-colors border-b border-gray-800/50">
+                                <td class="px-6 py-4 text-center w-12">
+                                    <button onclick="contentDeletePage('${t.id}')" class="text-gray-500 hover:text-red-500 transition-colors" title="Delete Topic"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </td>
+                                <td class="px-6 py-4 font-medium text-white text-sm pl-4 min-w-[250px]">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"></span>
+                                        <span class="whitespace-normal leading-relaxed">${data.title || t.title || 'Untitled Topic'}</span>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs cursor-pointer hover:text-white hover:underline" onclick="contentShowTextModal('Content Description', '${safeStr(t.content_description)}')">
+                                    ${t.content_description || '-'}
+                                </td>
+                                <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs cursor-pointer hover:text-white hover:underline" onclick="contentShowTextModal('Keywords', '${safeStr(t.keywords)}')">
+                                    ${t.keywords || '-'}
+                                </td>
+                                <td class="px-6 py-4">
+                                    <select onchange="handleToFuAction('${t.id}', this.value)" class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-full">
+                                        <option value="Idle" ${t.product_action === 'Idle' ? 'selected' : ''}>Idle</option>
+                                        <option value="Conduct Research" ${t.product_action === 'Conduct Research' ? 'selected' : ''}>Conduct Research</option>
+                                        <option value="Generate Content" ${t.product_action === 'Generate Content' ? 'selected' : ''}>Generate Content</option>
+                                        <option value="Generate Image" ${t.product_action === 'Generate Image' ? 'selected' : ''}>Generate Image</option>
+                                        <option value="PushWebflow" ${t.product_action === 'PushWebflow' ? 'selected' : ''}>PushWebflow</option>
+                                        <option value="CopyHTML">Copy HTML</option>
+                                    </select>
+                                </td>
+                                <td class="px-6 py-4 text-xs text-gray-400 cursor-pointer hover:text-white" onclick="contentShowResearchData('${t.id}')">
+                                    ${t.research_data ? '<span class="text-green-400 cursor-pointer hover:underline">View Research</span>' : '<span class="text-gray-600">-</span>'}
+                                </td>
+                                <td class="px-6 py-4 text-xs text-gray-400 cursor-pointer hover:text-white" onclick="contentShowModalContent('${t.id}', 'new')">
+                                    ${contentPreview || '<span class="text-gray-600">-</span>'}
+                                </td>
+                                <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs cursor-pointer hover:text-white hover:underline" onclick="contentShowTextModal('Meta Title', '${safeStr(data.meta_title)}')">
+                                    ${data.meta_title || '-'}
+                                </td>
+                                <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs cursor-pointer hover:text-white hover:underline" onclick="contentShowTextModal('Meta Description', '${safeStr(data.meta_description)}')">
+                                    ${data.meta_description || '-'}
+                                </td>
+                            </tr>`;
+                    });
+                });
+            }
+
+            contentArea.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
+                            <tr>
+                                <th class="px-6 py-3 w-12"></th>
+                                <th class="px-6 py-3 text-left font-medium">Topic</th>
+                                <th class="px-6 py-3 text-left font-medium">Description</th>
+                                <th class="px-6 py-3 text-left font-medium">Keywords</th>
+                                <th class="px-6 py-3 text-left font-medium">Action</th>
+                                <th class="px-6 py-3 text-left font-medium">Research</th>
+                                <th class="px-6 py-3 text-left font-medium">Content</th>
+                                <th class="px-6 py-3 text-left font-medium">Meta Title</th>
+                                <th class="px-6 py-3 text-left font-medium">Meta Desc</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800 text-sm text-gray-300">
+                            ${htmlContent}
+                        </tbody>
+                    </table>
+                </div>`;
+        }
+
+        // --- Action Handlers ---
+        async function handleBoFuAction(pageId, action, selectElement) {
+            if (action === 'Idle') return;
+            try {
+                if (action === 'Generate Content' || action === 'Generate MoFu') {
+                    contentShowLoading('Processing... this may take more than 2 minutes');
+                } else {
+                    contentShowLoading(`Processing ${action}...`);
+                }
+
+                const apiAction = action === 'Generate Content' ? 'generate_content' : 'generate_mofu';
+
+                const res = await fetch('/api/batch-update-pages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ page_ids: [pageId], action: apiAction })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Unknown error');
+
+                // Poll for completion
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch(`/api/get-page-status?page_id=${pageId}`);
+                        if (statusRes.ok) {
+                            const statusData = await statusRes.json();
+                            if (statusData.product_action && !statusData.product_action.includes('Processing')) {
+                                clearInterval(pollInterval);
+                                contentHideLoading();
+                                await loadContentTab();
+                                alert(`Success! ${action} completed.`);
+                            }
+                        }
+                    } catch (e) { console.error('Polling error:', e); }
+                }, 3000);
+
+            } catch (e) {
+                console.error(e);
+                alert('Error: ' + e.message);
+                contentHideLoading();
+            } finally {
+                if (selectElement) selectElement.value = 'Idle';
+            }
+        }
+
+        async function handleMoFuAction(pageId, action) {
+            if (action === 'Idle') return;
+
+            if (action === 'PushWebflow') {
+                currentArticlePageId = pageId;
+                contentOpenWebflowModal();
+                return;
+            }
+            if (action === 'CopyHTML') {
+                await contentCopyHTML(pageId);
+                return;
+            }
+            if (action === 'Generate Image') {
+                await contentGenerateImage(pageId);
+                return;
+            }
+
+            if (action === 'Conduct Research') {
+                contentShowLoading('Conducting Deep Research... This may take up to 2 minutes per topic.');
+            } else {
+                contentShowLoading(`Processing ${action}... this may take more than 2 minutes`);
+            }
+
+            try {
+                const apiAction = action === 'Generate Content' ? 'generate_content' :
+                    action === 'Conduct Research' ? 'conduct_research' :
+                    action === 'Generate ToFu' ? 'generate_tofu' : 'idle';
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 600000);
+
+                const res = await fetch('/api/batch-update-pages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ page_ids: [pageId], action: apiAction }),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!res.ok) {
+                    const err = await res.text();
+                    throw new Error(`API Error: ${res.status} - ${err}`);
+                }
+
+                // Poll for completion
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch(`/api/get-page-status?page_id=${pageId}`);
+                        if (statusRes.ok) {
+                            const statusData = await statusRes.json();
+                            if (statusData.product_action && !statusData.product_action.includes('Processing')) {
+                                clearInterval(pollInterval);
+                                contentHideLoading();
+                                await loadContentTab();
+                            }
+                        }
+                    } catch (e) { console.error('Polling error:', e); }
+                }, 3000);
+
+            } catch (e) {
+                console.error(e);
+                if (e.name === 'AbortError') {
+                    alert('Action timed out. It may still be running in background. Refresh in a few minutes.');
+                } else {
+                    alert('Action failed: ' + e.message);
+                }
+                contentHideLoading();
+            }
+        }
+
+        async function handleToFuAction(pageId, action) {
+            if (action === 'Idle') return;
+
+            if (action === 'PushWebflow') {
+                currentArticlePageId = pageId;
+                contentOpenWebflowModal();
+                return;
+            }
+            if (action === 'CopyHTML') {
+                await contentCopyHTML(pageId);
+                return;
+            }
+            if (action === 'Generate Image') {
+                await contentGenerateImage(pageId);
+                return;
+            }
+
+            if (action === 'Conduct Research') {
+                contentShowLoading('Conducting Deep Research... This may take up to 2 minutes per topic.');
+            } else {
+                contentShowLoading(`Processing ${action}... this may take more than 2 minutes`);
+            }
+
+            try {
+                const apiAction = action === 'Generate Content' ? 'generate_content' :
+                    action === 'Conduct Research' ? 'conduct_research' : 'idle';
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 600000);
+
+                const res = await fetch('/api/batch-update-pages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ page_ids: [pageId], action: apiAction }),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!res.ok) {
+                    const err = await res.text();
+                    throw new Error(`API Error: ${res.status} - ${err}`);
+                }
+
+                // Poll for completion
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch(`/api/get-page-status?page_id=${pageId}`);
+                        if (statusRes.ok) {
+                            const statusData = await statusRes.json();
+                            if (statusData.product_action && !statusData.product_action.includes('Processing')) {
+                                clearInterval(pollInterval);
+                                contentHideLoading();
+                                await loadContentTab();
+                            }
+                        }
+                    } catch (e) { console.error('Polling error:', e); }
+                }, 3000);
+
+            } catch (e) {
+                console.error(e);
+                if (e.name === 'AbortError') {
+                    alert('Action timed out. It may still be running in background. Refresh in a few minutes.');
+                } else {
+                    alert('Action failed: ' + e.message);
+                }
+                contentHideLoading();
+            }
+        }
+
+        // --- Content Helper Functions ---
+        async function contentDeletePage(id) {
+            if (!confirm('Are you sure you want to delete this item? This cannot be undone.')) return;
+            try {
+                contentShowLoading('Deleting item...');
+                const res = await fetch(`/api/delete-page?page_id=${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(await res.text());
+                alert('Item deleted successfully.');
+                await loadContentTab();
+            } catch (e) {
+                console.error(e);
+                alert('Error deleting item: ' + e.message);
+            } finally {
+                contentHideLoading();
+            }
+        }
+
+        async function contentCopyHTML(pageId) {
+            contentShowLoading('Preparing HTML...');
+            try {
+                const res = await fetch('/api/get-html-content', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ page_id: pageId })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                const data = await res.json();
+                await navigator.clipboard.writeText(data.html);
+                const toast = document.createElement('div');
+                toast.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-[9999] animate-pulse';
+                toast.innerHTML = '<strong>✓ HTML Copied!</strong> Paste into WordPress or any CMS.';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+            } catch (e) {
+                console.error(e);
+                alert('Error copying HTML: ' + e.message);
+            } finally {
+                contentHideLoading();
+            }
+        }
+
+        async function contentGenerateImage(pageId) {
+            if (!confirm('Generate AI image for this article? This will use 1 credit.')) return;
+            contentShowLoading('Generating Image...');
+            try {
+                const res = await fetch('/api/generate-blog-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ page_id: pageId })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                alert('Image generated successfully!');
+                await loadContentTab();
+            } catch (e) {
+                console.error(e);
+                alert('Error generating image: ' + e.message);
+            } finally {
+                contentHideLoading();
+            }
+        }
+
+        // --- Content Modal ---
+        function contentShowModalContent(pageId, type) {
+            const p = contentProjectPages.find(page => page.id === pageId);
+            if (!p) return;
+
+            currentModalPage = p;
+            let existingContent = p.tech_audit_data?.body_content || p.tech_audit_data?.meta_description || 'No existing content found.';
+            let newContent = p.content || 'No content generated yet. Select "Generate Content" from the dropdown.';
+
+            let formattedExisting = existingContent
+                .replace(/\n([A-Z][A-Z\s]+[A-Z])\n/g, '\n\n## $1\n\n')
+                .replace(/\n-\s+/g, '\n• ')
+                .replace(/[ \t]+/g, ' ')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+
+            let pageTitle = p.tech_audit_data?.title || p.url || 'Content';
+            if (pageTitle === 'Pending Scan') pageTitle = p.url || 'Content Details';
+
+            let modalHtml;
+            if (type === 'new') {
+                modalHtml = `
+                    <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+                        <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-white">${pageTitle}</h3>
+                            <button onclick="document.getElementById('contentDetailModal').classList.add('hidden')" class="text-gray-400 hover:text-white">
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-6">
+                            <div class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-200">${renderMarkdown(newContent)}</div>
+                        </div>
+                    </div>`;
+            } else {
+                modalHtml = `
+                    <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-6xl max-h-[80vh] flex flex-col">
+                        <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-white">${pageTitle}</h3>
+                            <button onclick="document.getElementById('contentDetailModal').classList.add('hidden')" class="text-gray-400 hover:text-white">
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                        <div class="flex-1 overflow-y-auto flex gap-4 p-6">
+                            <div class="w-1/2">
+                                <h4 class="text-xs font-semibold text-gray-400 uppercase mb-3">Existing Content</h4>
+                                <div class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-200">${renderMarkdown(formattedExisting)}</div>
+                            </div>
+                            <div class="w-1/2">
+                                <h4 class="text-xs font-semibold text-gray-400 uppercase mb-3">Generated Content</h4>
+                                <div class="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-200">${renderMarkdown(newContent)}</div>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+
+            let modal = document.getElementById('contentDetailModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'contentDetailModal';
+                modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[60] flex';
+                modal.onclick = function(e) { if (e.target === modal) modal.classList.add('hidden'); };
+                document.body.appendChild(modal);
+            }
+            modal.innerHTML = modalHtml;
+            modal.classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function contentShowTextModal(title, text) {
+            let modalHtml = `
+                <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+                    <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-white">${title}</h3>
+                        <button onclick="document.getElementById('contentDetailModal').classList.add('hidden')" class="text-gray-400 hover:text-white">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-6">
+                        <div class="whitespace-pre-wrap text-gray-300 text-sm leading-relaxed">${renderMarkdown(text)}</div>
+                    </div>
+                </div>`;
+
+            let modal = document.getElementById('contentDetailModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'contentDetailModal';
+                modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[60] flex';
+                modal.onclick = function(e) { if (e.target === modal) modal.classList.add('hidden'); };
+                document.body.appendChild(modal);
+            }
+            modal.innerHTML = modalHtml;
+            modal.classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function contentShowResearchData(pageId) {
+            const p = contentProjectPages.find(page => page.id === pageId);
+            if (!p || !p.research_data) {
+                alert('No research data available for this topic.');
+                return;
+            }
+
+            const researchData = p.research_data;
+            function formatResearchValue(val) {
+                if (!val) return 'N/A';
+                if (typeof val === 'string') return renderMarkdown(val);
+                if (Array.isArray(val)) {
+                    return `<ul class="list-disc list-inside space-y-1 ml-2">
+                        ${val.map(item => `<li>${formatResearchValue(item)}</li>`).join('')}
+                    </ul>`;
+                }
+                if (typeof val === 'object') {
+                    return `<div class="space-y-2 ml-2 border-l-2 border-gray-700 pl-3">
+                        ${Object.entries(val).map(([k, v]) => `
+                            <div>
+                                <span class="font-semibold text-gray-400 capitalize">${k.replace(/_/g, ' ')}:</span>
+                                <span class="text-gray-300">${formatResearchValue(v)}</span>
+                            </div>
+                        `).join('')}
+                    </div>`;
+                }
+                return String(val);
+            }
+
+            let html = '<div class="space-y-4">';
+            for (const [key, value] of Object.entries(researchData)) {
+                html += `
+                    <div class="bg-gray-800/50 rounded-lg p-4">
+                        <h4 class="text-sm font-semibold text-violet-400 uppercase mb-2">${key.replace(/_/g, ' ')}</h4>
+                        <div class="text-sm text-gray-300">${formatResearchValue(value)}</div>
+                    </div>`;
+            }
+            html += '</div>';
+
+            contentShowTextModal('Research Data', '');
+            // Replace the modal body content with research HTML
+            const modal = document.getElementById('contentDetailModal');
+            const body = modal.querySelector('.overflow-y-auto');
+            if (body) body.innerHTML = html;
+        }
+
+        // --- Webflow Modal ---
+        function contentOpenWebflowModal() {
+            if (!currentArticlePageId) return alert('No article selected to publish');
+
+            let modal = document.getElementById('contentWebflowModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'contentWebflowModal';
+                modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[60]';
+                modal.onclick = function(e) { if (e.target === modal) modal.classList.add('hidden'); };
+                document.body.appendChild(modal);
+            }
+
+            const savedKey = localStorage.getItem('wf_api_key') || '';
+            modal.innerHTML = `
+                <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-white">Publish to Webflow</h3>
+                        <button onclick="document.getElementById('contentWebflowModal').classList.add('hidden')" class="text-gray-400 hover:text-white">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Webflow API Key</label>
+                            <div class="flex gap-2">
+                                <input type="password" id="contentWfApiKey" value="${savedKey}" class="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" placeholder="Enter Webflow API Key">
+                                <button onclick="contentLoadWebflowSites()" id="contentWfLoadBtn" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-2 rounded text-sm">Load Sites</button>
+                            </div>
+                        </div>
+                        <div id="contentWfSiteSection" class="hidden">
+                            <label class="text-xs text-gray-400 block mb-1">Select Site</label>
+                            <select id="contentWfSiteSelect" onchange="contentLoadWebflowCollections()" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                                <option value="">Select a site...</option>
+                            </select>
+                        </div>
+                        <div id="contentWfCollectionSection" class="hidden">
+                            <label class="text-xs text-gray-400 block mb-1">Select Collection</label>
+                            <select id="contentWfCollectionSelect" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                                <option value="">Select a collection...</option>
+                            </select>
+                            <button onclick="contentPublishToWebflow()" class="mt-3 w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-2 rounded text-sm font-medium">Publish Article</button>
+                        </div>
+                    </div>
+                </div>`;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+
+            if (savedKey) contentLoadWebflowSites();
+        }
+
+        async function contentLoadWebflowSites() {
+            const apiKey = document.getElementById('contentWfApiKey').value.trim();
+            if (!apiKey) return alert('Please enter API Key');
+            localStorage.setItem('wf_api_key', apiKey);
+
+            const btn = document.getElementById('contentWfLoadBtn');
+            btn.innerText = 'Loading...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/webflow/sites', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: apiKey })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                if (data.sites && data.sites.length > 0) {
+                    const select = document.getElementById('contentWfSiteSelect');
+                    select.innerHTML = '<option value="">Select a site...</option>';
+                    data.sites.forEach(site => {
+                        const name = site.displayName || site.name || 'Untitled Site';
+                        select.innerHTML += `<option value="${site.id}">${name}</option>`;
+                    });
+                    document.getElementById('contentWfSiteSection').classList.remove('hidden');
+                } else {
+                    alert('No sites found. Check your API Key.');
+                }
+            } catch (e) {
+                console.error(e);
+                alert(e.message);
+            } finally {
+                btn.innerText = 'Load Sites';
+                btn.disabled = false;
+            }
+        }
+
+        async function contentLoadWebflowCollections() {
+            const apiKey = localStorage.getItem('wf_api_key');
+            const siteId = document.getElementById('contentWfSiteSelect').value;
+            if (!siteId) return;
+
+            try {
+                const res = await fetch('/api/webflow/collections', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: apiKey, site_id: siteId })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                const select = document.getElementById('contentWfCollectionSelect');
+                select.innerHTML = '<option value="">Select a collection...</option>';
+                (data.collections || []).forEach(col => {
+                    select.innerHTML += `<option value="${col.id}">${col.displayName || col.name}</option>`;
+                });
+                document.getElementById('contentWfCollectionSection').classList.remove('hidden');
+            } catch (e) {
+                console.error(e);
+                alert(e.message);
+            }
+        }
+
+        async function contentPublishToWebflow() {
+            const apiKey = localStorage.getItem('wf_api_key');
+            const collectionId = document.getElementById('contentWfCollectionSelect').value;
+            if (!collectionId) return alert('Select a collection first');
+
+            contentShowLoading('Publishing to Webflow...');
+            try {
+                const res = await fetch('/api/webflow/publish', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api_key: apiKey,
+                        collection_id: collectionId,
+                        page_id: currentArticlePageId
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                alert('Published to Webflow successfully!');
+                document.getElementById('contentWebflowModal').classList.add('hidden');
+            } catch (e) {
+                console.error(e);
+                alert('Error publishing: ' + e.message);
+            } finally {
+                contentHideLoading();
+            }
+        }
     </script>
+
+    <!-- Content Loading Overlay -->
+    <div id="contentLoadingOverlay" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-[70]">
+        <div class="bg-gray-900 border border-gray-700 rounded-xl p-8 text-center">
+            <i data-lucide="loader-2" class="w-10 h-10 text-violet-500 animate-spin mx-auto mb-4"></i>
+            <span class="text-white text-sm">Processing...</span>
+        </div>
+    </div>
 </body>
 
 </html>

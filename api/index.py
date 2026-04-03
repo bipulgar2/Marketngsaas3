@@ -28,6 +28,14 @@ from api.export import generate_audit_excel
 from execution.screenshot_capture import capture_screenshot_with_fallback
 from api.deep_audit_slides import create_deep_audit_slides, create_authority_shift_slides
 from api.google_auth import get_google_credentials
+import time
+import requests
+import threading
+import json
+import re
+import gemini_client
+from webflow_client import webflow_client
+from nano_banana_client import nano_banana_client
 
 # Setup logging
 logging.basicConfig(
@@ -2185,6 +2193,2503 @@ def refresh_pagespeed(audit_id):
     except Exception as e:
         logger.error(f"Error refreshing pagespeed: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+
+
+
+# =========================================================================
+# CONTENT TAB — PORTED FROM SEO SYSTEM
+# =========================================================================
+
+def log_debug(message):
+    try:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] {message}", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"Logging failed: {e}", file=sys.stderr)
+
+
+# --- generate_image_prompt (L3229-3248) ---
+def generate_image_prompt(topic, summary=""):
+    """Generates an image prompt using Gemini."""
+    prompt = f"""
+    Create a detailed image generation prompt for a blog post titled: "{topic}"
+    Summary: {summary[:500]}
+
+    The image should be:
+    - Visually matching the theme and tone of the article (e.g., if it's about nature, use natural elements; if tech, use modern tech aesthetics).
+    - Strictly PHOTOREALISTIC, cinematic lighting, 8k resolution, highly detailed photography style.
+    - NOT 3D render, NOT illustration, NOT cartoon.
+    - No text in the image.
+    - Aspect Ratio: 16:9
+
+    Output ONLY the prompt text, no explanations.
+    """
+    try:
+        return gemini_client.generate_content(prompt=prompt, model_name="gemini-2.5-flash")
+    except Exception as e:
+        print(f"Error generating image prompt: {e}")
+        return f"A professional, modern header image for a blog post about {topic}, high quality, 4k, no text"
+
+
+# --- research_with_perplexity (L3251-3431) ---
+def research_with_perplexity(query, location="US", language="English", stage="MoFu"):
+    """
+    Conducts deep research using Perplexity's Sonar Pro model.
+    """
+    api_key = os.environ.get("PERPLEXITY_API_KEY")
+    
+    if not api_key:
+        log_debug("Perplexity API key missing - skipping research")
+        print("Perplexity API key missing - skipping research")
+        return {"research": "Perplexity API not configured", "citations": []}
+    
+    log_debug(f"Perplexity API key found: {api_key[:10]}...")
+    
+    # Define stage description
+    stage_desc = "Middle-of-Funnel (MoFu)" if stage == "MoFu" else "Top-of-Funnel (ToFu)"
+    
+    try:
+        url = "https://api.perplexity.ai/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "sonar-pro",  # Using deep research model
+            "max_tokens": 8000,  # Force longer, comprehensive responses
+            "messages": [{
+                "role": "user",
+                "content": f"""**Role**: You are a Senior Content Strategist and Market Researcher conducting deep-dive competitive analysis.
+
+**CRITICAL: LENGTH & DEPTH REQUIREMENTS**:
+- This research brief MUST be MINIMUM 2500 words
+- Each section requires DEEP ANALYSIS, not summaries
+- Include SPECIFIC data points, prices, percentages, and citations
+- Competitor analysis must include 3+ competitors with detailed strengths/weaknesses
+- Content outline must have complete H2/H3/H4 structure with key points for EACH section
+
+**Objective**: Create a comprehensive Research Brief for a {stage_desc} content asset. This must be the MOST authoritative resource on this topic, outranking all competitors with superior data, utility, and insight.
+
+**CONTEXT**:
+- Target Audience Location: {location}
+- Target Language: {language}
+
+**LOCALIZATION RULES (CRITICAL)**:
+1. **Currency**: You MUST use the local currency for **{location}** (e.g., ₹ INR for India). Convert any research prices (like $) to the local currency using approximate current rates.
+2. **Units**: Use the measurement system standard for **{location}**.
+3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India).
+
+{query}
+
+**CRITICAL RULES**:
+- GENERATE A COMPLETE BRIEF based on the provided data and your general knowledge
+- Use the provided competitor URLs and scraped text as your primary source
+- If specific data is missing, use INDUSTRY BENCHMARKS or GENERAL CATEGORY KNOWLEDGE relevant to **{location}**
+- Do not refuse to generate sections - provide the best available estimates
+- Format as markdown with ## headers
+
+---
+
+## 1. Strategic Overview
+
+**Proposed Title**: [SEO-optimized H1 using "Best X for Y 2025" or "Product A vs B vs C" format]
+
+**Search Intent**: [Analyze based on the provided keyword list: Informational/Commercial/Transactional]
+
+**Format Strategy**: [Why this format fits the MoFu stage]
+
+---
+
+## 2. Key Insights & Benchmarks (The Evidence)
+
+**Market Data & Specifications** (Extract from content or use category knowledge):
+- [Key Feature/Spec 1]: [Value/Description]
+- [Key Feature/Spec 2]: [Value/Description]
+- [Price Range]: [Estimated category range]
+- [User Ratings]: [Typical sentiment/rating]
+- [Technical Specs]: [Ingredients, dimensions, etc.]
+
+**Expert/Industry Concepts**:
+- [Key Concept 1]: [Explanation]
+- [Key Concept 2]: [Explanation]
+
+---
+
+## 3. Competitor Landscape & Content Gaps
+
+**Competitor Analysis** (Based on provided URLs):
+- **Competitor 1**: [Name/URL]
+  - Strengths: [What they cover well]
+  - Weaknesses: [What they miss]
+- **Competitor 2**: [Name/URL]
+  - Strengths: [What they cover well]
+  - Weaknesses: [What they miss]
+
+**The "Blue Ocean" Gap**: [The ONE angle or utility missing from the above competitors. E.g., "No one compares X vs Y directly" or "Missing detailed ingredient breakdown"]
+
+---
+
+## 4. Comprehensive Content Outline
+
+**Type**: [Comparison Guide / Buying Guide / Ultimate Guide]
+
+**Title**: [Final SEO-optimized H1]
+
+**Detailed Structure**:
+
+### H2: Introduction
+- Hook: [Problem/Stat]
+- Scope: [What's covered]
+
+### H2: [Main Section 1 - Category Overview]
+- H3: [Subtopic from keyword list]
+  - **Key Point**: [Detail]
+- H3: [Subtopic from keyword list]
+  - **Key Point**: [Detail]
+
+### H2: [Comparison Section]
+- H3: Comparison Chart
+  - **Columns**: [Attribute 1], [Attribute 2], [Attribute 3]
+  - **Data Source**: [Competitor content or benchmarks]
+- H3: [Product A] vs [Competitors]
+  - **Differentiator**: [Specific advantage]
+
+### H2: [Buying Guide / Selection Criteria]
+- H3: Who is this for?
+  - **User Type 1**: [Recommendation]
+  - **User Type 2**: [Recommendation]
+
+### H2: FAQ
+- [Question from keyword list]: [Answer]
+- [Question from keyword list]: [Answer]
+
+### H2: Conclusion
+- Final Recommendation
+- CTA
+
+---
+
+## 5. Unique Ranking Hypothesis
+
+[Explain why this content will outrank competitors based on the gaps identified above. Focus on: Better data, clearer structure, or more comprehensive scope.]
+
+**GENERATE THE COMPLETE BRIEF NOW.**
+"""
+            }],
+            "return_citations": True,
+            "search_recency_filter": "month"
+        }
+        
+        log_debug(f"Calling Perplexity API with query: {query[:50]}...")
+        print(f"Researching with Perplexity: {query[:100]}...")
+        # Increased timeout to 180s for deep research
+        response = requests.post(url, headers=headers, json=payload, timeout=180)
+        log_debug(f"Perplexity response status: {response.status_code}")
+        
+        data = response.json()
+        
+        if 'choices' in data and len(data['choices']) > 0:
+            content = data['choices'][0]['message']['content']
+            citations = data.get('citations', [])
+            
+            log_debug(f"✓ Perplexity success! {len(citations)} citations")
+            print(f"✓ Research completed. Found {len(citations)} citations")
+            for i, cite in enumerate(citations[:3]):
+                print(f"  Citation {i+1}: {cite}")
+            
+            return {
+                "research": content,
+                "citations": citations
+            }
+        else:
+            log_debug(f"Unexpected Perplexity response structure: {str(data)[:200]}")
+            print(f"Unexpected Perplexity response: {data}")
+            return {"research": "Research failed", "citations": []}
+            
+    except Exception as e:
+        log_debug(f"Perplexity error: {type(e).__name__} - {str(e)}")
+        print(f"Perplexity research error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"research": f"Error: {str(e)}", "citations": []}
+
+
+# --- scrape_page_content (L3977-4218) ---
+def scrape_page_content(url):
+    """
+    Scrapes a URL and returns structured content including body text, title, and meta data.
+    Uses Jina Reader as PRIMARY method (renders JavaScript, free, no API key).
+    Falls back to BeautifulSoup + Gemini if Jina fails.
+    """
+    import requests
+    import re
+    from bs4 import BeautifulSoup
+
+    try:
+        print(f"Scraping content for: {url}")
+        
+        # --- PRIMARY METHOD: JINA READER ---
+        # Jina renders JavaScript and returns clean markdown
+        jina_url = f"https://r.jina.ai/{url}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        }
+        
+        raw_jina_content = None
+        page_title = None
+        meta_description = ""
+        
+        try:
+            print("DEBUG: Trying Jina Reader...")
+            response = requests.get(jina_url, headers=headers, timeout=45)
+            
+            if response.status_code == 200 and len(response.text) > 500:
+                raw_jina_content = response.text
+                print(f"DEBUG: Jina returned {len(raw_jina_content)} chars")
+                
+                # Extract title from Jina markdown (first H1)
+                title_match = re.search(r'^#\s+(.+)$', raw_jina_content, re.MULTILINE)
+                if title_match:
+                    page_title = title_match.group(1).strip()
+                
+                # Try to extract title from the === underline format too
+                if not page_title:
+                    title_match2 = re.search(r'\n([^\n]+)\n=+\n', raw_jina_content)
+                    if title_match2:
+                        page_title = title_match2.group(1).strip()
+        except Exception as je:
+            print(f"DEBUG: Jina failed: {je}")
+            raw_jina_content = None
+        
+        # --- CHUNKED GEMINI PROCESSING ---
+        # Process content in chunks to avoid truncation while keeping Gemini's excellent formatting
+        body_content = ""
+        
+        if raw_jina_content and len(raw_jina_content) > 500:
+            # Pre-process: Remove footer sections before chunking
+            content = raw_jina_content
+            footer_markers = [
+                # Keep only truly generic footer items. 
+                # user reported 'Complete Your Routine' cuts off Ingredients/FAQ which follow it.
+                r'\nJoin Our Community\n.*',
+                r'\n## Footer\n.*',
+            ]
+            for pattern in footer_markers:
+                match = re.search(pattern, content, flags=re.DOTALL)
+                if match:
+                    content = content[:match.start()]
+            
+            # Remove image markdown links
+            content = re.sub(r'!\[Image \d+:[^\]]*\]\(https?://[^\)]+\)', '', content)
+            content = re.sub(r'!\[[^\]]*\]\([^\)]+\)', '', content)
+            
+            print(f"DEBUG: Pre-cleaned content: {len(content)} chars")
+            
+            # Split into chunks (15K each to leave room for prompt)
+            chunk_size = 15000
+            chunks = []
+            for i in range(0, len(content), chunk_size):
+                chunks.append(content[i:i + chunk_size])
+            
+            print(f"DEBUG: Processing {len(chunks)} chunks with Gemini")
+            
+            processed_chunks = []
+            for idx, chunk in enumerate(chunks):
+                try:
+                    if idx == 0:
+                        # First chunk: Smart Start Detection + Formatting
+                        prompt = f"""You are a precise content extractor. Your goal is to identify the MAIN PRODUCT CONTENT within this raw text and format it as clean Markdown.
+
+CRITICAL INSTRUCTIONS:
+
+1. **FIND THE START**: 
+   - Skip "Cart", "Browse our Bestsellers" lists, Navigation menus, and Header links.
+   - Start extracting from the **Main Product Title** (e.g., "Turmeric Shield | SPF 40 PA+++").
+
+2. **FIND THE END**:
+   - Keep ALL sections: Description, Benefits, Ingredients, How to Use, Clinical Results, Verified Reviews, FAQ.
+   - Stop ONLY when you reach the generic site-wide footer (e.g. "Subscribe", "About 82°E", "Follow us").
+
+3. **STRICT PRESERVATION**:
+   - **NO CUTTING**: Do NOT remove any text within the main content boundaries.
+   - **NO SUMMARIZING**: Output the content word-for-word.
+   - **NO REORDERING**: Keep sections in their original sequence.
+
+4. **FORMATTING**:
+   - Use `#` for the Main Title.
+   - Use `##` or `###` for section headers.
+   - Use `**bold**` for labels.
+   - Format lists with `-`.
+
+CONTENT (Part {idx + 1} of {len(chunks)}):
+{chunk}
+
+Return the extracted and formatted markdown:"""
+                    else:
+                        # Subsequent chunks: Continuation with strict rules
+                        prompt = f"""Continue processing this content.
+RULES:
+1. **NO HEADER/NAV REMOVAL** (This is a continuation chunk, so treat as body content).
+2. **NO CUTTING / NO SUMMARIZING**.
+3. **Format as clean Markdown**.
+4. **Keep all Reviews, FAQs, Ingredients**.
+
+CONTENT (Part {idx + 1} of {len(chunks)}):
+{chunk}
+
+Return the formatted markdown:"""
+                    
+                    result = gemini_client.generate_content(
+                        prompt=prompt,
+                        model_name="gemini-2.5-flash"
+                    )
+                    
+                    if result:
+                        cleaned = result.strip().replace('```markdown', '').replace('```', '').strip()
+                        processed_chunks.append(cleaned)
+                        print(f"DEBUG: Chunk {idx + 1}: {len(chunk)} chars -> {len(cleaned)} chars")
+                    else:
+                        # Fallback: use raw chunk
+                        processed_chunks.append(chunk)
+                        print(f"DEBUG: Chunk {idx + 1}: Gemini failed, using raw")
+                        
+                except Exception as e:
+                    print(f"DEBUG: Chunk {idx + 1} error: {e}")
+                    processed_chunks.append(chunk)
+            
+            # Concatenate all processed chunks
+            body_content = "\n\n".join(processed_chunks)
+            
+            # Final cleanup
+            body_content = re.sub(r'\n{4,}', '\n\n\n', body_content)
+            
+            print(f"DEBUG: Final content: {len(body_content)} chars")
+        
+        # --- FALLBACK: BeautifulSoup + Gemini ---
+        if not body_content or len(body_content) < 200:
+            print("DEBUG: Jina content insufficient, falling back to BeautifulSoup...")
+            
+            # Use Robust Scraper Helper
+            content, status_code, final_url = fetch_html_robust(url)
+            
+            if status_code == 200 and content:
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                # Extract Title
+                if not page_title:
+                    if soup.title:
+                        page_title = soup.title.get_text(strip=True)
+                    elif soup.find('meta', attrs={'property': 'og:title'}):
+                        page_title = soup.find('meta', attrs={'property': 'og:title'}).get('content')
+                    elif soup.find('h1'):
+                        page_title = soup.find('h1').get_text(strip=True)
+                
+                # Extract Meta Description
+                meta_desc = soup.find('meta', attrs={'name': 'description'}) or soup.find('meta', attrs={'property': 'og:description'})
+                if meta_desc:
+                    meta_description = meta_desc.get('content', '')
+                
+                # Extract JSON-LD
+                json_ld_content = ""
+                try:
+                    json_scripts = soup.find_all('script', type='application/ld+json')
+                    for script in json_scripts:
+                        if script.string:
+                            try:
+                                data = json.loads(script.string)
+                                if isinstance(data, list):
+                                    for item in data:
+                                        if item.get('@type') == 'Product':
+                                            json_ld_content += f"\nProduct: {item.get('name')}\nDescription: {item.get('description')}\n"
+                                elif isinstance(data, dict) and data.get('@type') == 'Product':
+                                    json_ld_content += f"\nProduct: {data.get('name')}\nDescription: {data.get('description')}\n"
+                            except: pass
+                except: pass
+                
+                # Clean and extract text
+                for unwanted in soup(["script", "style", "svg", "noscript", "iframe", "nav", "footer", "aside"]):
+                    unwanted.decompose()
+                
+                body_content = soup.get_text(separator='\n', strip=True)
+                
+                # Use Gemini for intelligent extraction if content is messy
+                if len(body_content) > 1000:
+                    try:
+                        extraction_prompt = f"""Extract the main product/page content from this text. 
+Remove navigation, headers, footers, and promotional noise.
+Return clean markdown with:
+- Product/Page Title
+- Description
+- Key features/benefits
+- Ingredients (if product)
+- How to use (if applicable)
+
+Text:
+{body_content[:8000]}"""
+                        
+                        gemini_result = gemini_client.generate_content(
+                            prompt=extraction_prompt,
+                            model_name="gemini-2.5-flash"
+                        )
+                        if gemini_result and len(gemini_result) > 200:
+                            body_content = gemini_result.strip()
+                            body_content = body_content.replace('```markdown', '').replace('```', '').strip()
+                    except Exception as ge:
+                        print(f"DEBUG: Gemini extraction failed: {ge}")
+        
+        # Final fallback for title
+        if not page_title:
+            page_title = url.split('/')[-1].replace('-', ' ').replace('_', ' ').title()
+        
+        if not body_content:
+            body_content = "Could not extract meaningful content"
+        
+        return {
+            "title": page_title,
+            "body_content": body_content,
+            "meta_description": meta_description,
+            "json_ld": ""
+        }
+
+    except Exception as e:
+        print(f"Scraping error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+# --- generate_content_via_rest (L4254-4294) ---
+def generate_content_via_rest(prompt, api_key, model="gemini-2.5-pro", use_grounding=True):
+    """
+    Generate content using Gemini REST API directly to avoid SDK crashes.
+    Supports Google Search Grounding.
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    
+    headers = {
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
+    }
+    
+    if use_grounding:
+        data["tools"] = [{
+            "google_search": {}  # Enable Google Search Grounding
+        }]
+        
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=60)
+        response.raise_for_status()
+        result = response.json()
+        
+        # Extract text
+        try:
+            text = result['candidates'][0]['content']['parts'][0]['text']
+            print(f"DEBUG: REST API Success. Text length: {len(text)}", flush=True)
+            return text
+        except (KeyError, IndexError):
+            print(f"DEBUG: Unexpected REST response structure: {result}", flush=True)
+            return None
+            
+    except Exception as e:
+        print(f"DEBUG: REST API call failed: {e}")
+        if 'response' in locals() and response is not None:
+             print(f"DEBUG: Response content: {response.text}")
+        raise e
+
+
+# --- perform_seo_analysis (L4300-4453) ---
+def perform_seo_analysis(page_id):
+    """
+    Analyzes a page for SEO issues and returns structured recommendations.
+    Returns JSON with critical_issues, ai_search_gaps, content_gaps, structure_issues, overall_score.
+    """
+    print(f"DEBUG: Starting SEO Analysis for page_id: {page_id}", flush=True)
+    
+    # Fetch page data
+    page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+    if not page_res.data:
+        return {"error": "Page not found"}
+    
+    page = page_res.data
+    page_type = page.get('page_type', 'page')
+    tech_data = page.get('tech_audit_data', {})
+    body_content = tech_data.get('body_content', '')
+    page_title = tech_data.get('title', page.get('url', ''))
+    meta_desc = tech_data.get('meta_description', '')
+    
+    # Fetch project settings
+    project_loc = 'US'
+    project_lang = 'English'
+    try:
+        project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
+        if project_res.data:
+            project_loc = project_res.data.get('location', 'US')
+            project_lang = project_res.data.get('language', 'English')
+    except Exception as e:
+        print(f"DEBUG: Error fetching project settings: {e}")
+    
+    if not body_content or len(body_content) < 100:
+        return {
+            "error": "Insufficient content for analysis. Scrape content first.",
+            "overall_score": 0
+        }
+    
+    # Build SEO Analysis Prompt
+    prompt = f"""You are an expert SEO Analyst. Analyze this {page_type.upper()} page for SEO issues and gaps.
+
+**PAGE DETAILS**:
+- URL: {page.get('url', '')}
+- Page Type: {page_type}
+- Title: {page_title}
+- Meta Description: {meta_desc}
+- Location Target: {project_loc}
+- Language: {project_lang}
+
+**CURRENT PAGE CONTENT**:
+{body_content[:8000]}
+
+**ANALYZE FOR**:
+
+1. **CRITICAL SEO ISSUES** (Must Fix):
+   - Missing or poor H1 tag
+   - Missing/weak meta description (should be 150-160 chars)
+   - Keyword stuffing or no keyword focus
+   - Missing alt text on images
+   - Thin content (<300 words for products, <800 for articles)
+   
+2. **AI SEARCH OPTIMIZATION** (For Google AI Overview, Bing Copilot):
+   - Missing FAQ sections (crucial for AI snippets)
+   - No clear answer paragraphs (AI pulls concise answers)
+   - Missing structured data opportunities
+   - Lack of E-E-A-T signals (Experience, Expertise, Authority, Trust)
+   
+3. **CONTENT GAPS** (Based on {page_type}):
+   - For Products: Missing specs, benefits, use cases, social proof
+   - For Categories: Missing comparison points, buyer guides
+   - For Blogs: Missing depth, citations, actionable advice
+   
+4. **INTERNAL LINKING**:
+   - Missing opportunities to link to other pages
+   
+5. **STRUCTURE ISSUES**:
+   - Poor heading hierarchy (H2, H3)
+   - Wall of text without breaks
+   - Missing bullet points or lists
+
+**OUTPUT FORMAT** (Return ONLY valid JSON):
+{{
+    "critical_issues": [
+        {{"issue": "...", "severity": "high|medium|low", "fix": "..."}}
+    ],
+    "ai_search_gaps": [
+        {{"gap": "...", "recommendation": "..."}}
+    ],
+    "content_gaps": [
+        {{"gap": "...", "suggestion": "..."}}
+    ],
+    "structure_issues": [
+        {{"issue": "...", "fix": "..."}}
+    ],
+    "overall_score": 65,
+    "summary": "Brief 2-sentence summary of the biggest problems"
+}}
+"""
+    
+    try:
+        result = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash",
+            use_grounding=False  # Pure analysis, no web search
+        )
+        
+        if not result:
+            return {"error": "SEO Analysis failed - empty response", "overall_score": 0}
+        
+        # Clean and parse JSON
+        text = result.strip()
+        if text.startswith('```json'): text = text[7:]
+        if text.startswith('```'): text = text[3:]
+        if text.endswith('```'): text = text[:-3]
+        
+        analysis = json.loads(text.strip())
+        print(f"DEBUG: SEO Analysis complete. Score: {analysis.get('overall_score', 'N/A')}", flush=True)
+        
+        return analysis
+        
+    except json.JSONDecodeError as e:
+        print(f"DEBUG: Failed to parse SEO analysis JSON: {e}")
+        return {"error": f"Failed to parse analysis: {e}", "overall_score": 0}
+    except Exception as e:
+        print(f"DEBUG: SEO Analysis error: {e}")
+        return {"error": str(e), "overall_score": 0}
+
+
+@app.route('/api/analyze-seo', methods=['POST'])
+def analyze_seo_endpoint():
+    """Endpoint to analyze a page for SEO issues."""
+    if not supabase:
+        return jsonify({"error": "Supabase not configured"}), 500
+    
+    try:
+        data = request.json
+        page_id = data.get('page_id')
+        
+        if not page_id:
+            return jsonify({"error": "page_id required"}), 400
+        
+        # Perform analysis
+        analysis = perform_seo_analysis(page_id)
+        
+        if "error" in analysis and analysis.get("overall_score") == 0:
+            return jsonify(analysis), 400
+        
+        # Save analysis to database
+        supabase.table('pages').update({
+            'seo_analysis': analysis
+        }).eq('id', page_id).execute()
+        
+        return jsonify(analysis)
+        
+    except Exception as e:
+        print(f"ERROR in analyze-seo: {e}")
+
+
+# --- batch_update_pages (L4456-5767) ---
+@app.route('/api/batch-update-pages', methods=['POST'])
+def batch_update_pages():
+    print(f"====== BATCH UPDATE PAGES CALLED ======", flush=True)
+    log_debug("Entered batch_update_pages route")
+    log_debug(f"Entered batch_update_pages route")
+    if not supabase: return jsonify({"error": "Supabase not configured"}), 500
+    
+    try:
+        data = request.json
+        log_debug(f"Received batch update data: {data}")
+        page_ids = data.get('page_ids', [])
+        action = data.get('action')
+        
+        if not page_ids or not action:
+            return jsonify({"error": "page_ids and action required"}), 400
+            
+        if action == 'trigger_audit':
+            # In a real app, this would trigger a background job
+            supabase.table('pages').update({"audit_status": "Pending"}).in_('id', page_ids).execute()
+            
+        elif action == 'trigger_classification':
+            supabase.table('pages').update({"classification_status": "Pending"}).in_('id', page_ids).execute()
+            
+        elif action == 'approve_strategy':
+            supabase.table('pages').update({"approval_status": True}).in_('id', page_ids).execute()
+            
+        elif action == 'scrape_content':
+            # Scrape existing content for selected pages
+            for page_id in page_ids:
+                page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+                if not page_res.data: continue
+                page = page_res.data
+                
+                try:
+                    scraped_data = scrape_page_content(page['url'])
+                    
+                    if scraped_data:
+                        # Update tech_audit_data with body_content AND title
+                        current_tech_data = page.get('tech_audit_data', {})
+                        current_tech_data['body_content'] = scraped_data['body_content']
+                        
+                        if not current_tech_data.get('title') or current_tech_data.get('title') == 'Untitled':
+                             current_tech_data['title'] = scraped_data['title'] or get_title_from_url(page['url'])
+                        
+                        supabase.table('pages').update({
+                            "tech_audit_data": current_tech_data
+                        }).eq('id', page_id).execute()
+                        print(f"✓ Scraped content for {page['url']}")
+                    else:
+                        print(f"⚠ Failed to scrape {page['url']}")
+                        
+                except Exception as e:
+                    print(f"Error scraping page {page_id}: {e}")
+            
+            return jsonify({"message": "Content scraped successfully"})
+        elif action == 'generate_content':
+            # Product/Category pages use gemini_client for SEO verification
+            # Topic pages use gemini_client (no grounding needed - they have research already)
+            
+            api_key = os.environ.get("GEMINI_API_KEY")
+            if not api_key:
+                return jsonify({"error": "GEMINI_API_KEY not found"}), 500
+
+            def process_content_generation_background(page_ids, api_key):
+                print(f"====== GENERATE_CONTENT BACKGROUND THREAD STARTED ======", flush=True)
+                
+                for page_id in page_ids:
+                    try:
+                        # 1. Get Page Data
+                        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+                        if not page_res.data: continue
+                        page = page_res.data
+                        
+                        # 2. Get existing content
+                        existing_content = page.get('tech_audit_data', {}).get('body_content', '')
+                        if not existing_content:
+                            # If no body content, try to scrape it now
+                            try:
+                                logging.info(f"DEBUG: No existing content for {page['url']}, attempting fresh scrape...")
+                                scraped_data = scrape_page_content(page['url'])
+                                if scraped_data and scraped_data.get('body_content'):
+                                    existing_content = scraped_data['body_content']
+                                    logging.info(f"DEBUG: Fresh scrape successful ({len(existing_content)} bytes)")
+                                else:
+                                    existing_content = "No content available"
+                                    logging.info("DEBUG: Fresh scrape returned no content")
+                            except Exception as e:
+                                logging.error(f"Error scraping content for {page['url']}: {e}")
+                                existing_content = "No content available"
+                        
+                        # 3. Generate improved content
+                        page_title = page.get('tech_audit_data', {}).get('title', page.get('url', ''))
+                        page_type = page.get('page_type', 'page')
+
+                        # Fetch Project Settings for Localization
+                        project_loc = 'US'
+                        project_lang = 'English'
+                        try:
+                            log_debug(f"Fetching project settings for {page['project_id']}...")
+                            project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
+                            if project_res.data:
+                                project_loc = project_res.data.get('location', 'US')
+                                project_lang = project_res.data.get('language', 'English')
+                            log_debug(f"Project settings: Loc={project_loc}, Lang={project_lang}")
+                        except Exception as proj_err:
+                            log_debug(f"Error fetching project settings: {proj_err}")
+                        
+                        try:
+                            log_debug(f"Checking page type for branching: '{page_type}'")
+                            
+                            # Fetch Parent Page Context (for Internal Linking)
+                            parent_context = ""
+                            if page.get('source_page_id'):
+                                try:
+                                    # 1. Fetch Parent (MoFu)
+                                    parent_res = supabase.table('pages').select('id, url, tech_audit_data, source_page_id').eq('id', page['source_page_id']).single().execute()
+                                    if parent_res.data:
+                                        p_data = parent_res.data
+                                        p_title = p_data.get('tech_audit_data', {}).get('title', 'Related Page')
+                                        p_url = p_data.get('url', '#')
+                                        
+                                        # 2. Fetch Grandparent (Product) if exists
+                                        gp_context = ""
+                                        if p_data.get('source_page_id'):
+                                            try:
+                                                gp_res = supabase.table('pages').select('url, tech_audit_data').eq('id', p_data['source_page_id']).single().execute()
+                                                if gp_res.data:
+                                                    gp_data = gp_res.data
+                                                    gp_title = gp_data.get('tech_audit_data', {}).get('title', 'Main Product')
+                                                    gp_url = gp_data.get('url', '#')
+                                                    gp_context = f"\n    - ALSO link to the Main Product: [{gp_title}]({gp_url}) (Context: The ultimate solution)."
+                                            except Exception:
+                                                pass # Ignore grandparent errors
+
+                                        parent_context = f"\n    **INTERNAL LINKING REQUIREMENT**:\n    - You MUST organically mention and link to the parent page: [{p_title}]({p_url}) (Context: Next step in learning).\n{gp_context}"
+                                except Exception as parent_err:
+                                    log_debug(f"Error fetching parent context: {parent_err}")
+
+                            # ==============================================
+                            # AUTO SEO ANALYSIS (for Product/Category pages)
+                            # ==============================================
+                            seo_issues_str = ""
+                            seo_analysis = None
+                            if page_type and page_type.lower().strip() in ['product', 'category']:
+                                print(f"DEBUG: Running auto SEO analysis for {page_type} page...", flush=True)
+                                try:
+                                    seo_analysis = perform_seo_analysis(page_id)
+                                    
+                                    if seo_analysis and not seo_analysis.get('error'):
+                                        # Format issues for the prompt
+                                        issues_list = []
+                                        
+                                        # Critical issues
+                                        for item in seo_analysis.get('critical_issues', []):
+                                            issues_list.append(f"- {item.get('issue')}: {item.get('fix')}")
+                                        
+                                        # AI search gaps
+                                        for item in seo_analysis.get('ai_search_gaps', []):
+                                            issues_list.append(f"- {item.get('gap')}: {item.get('recommendation')}")
+                                        
+                                        # Content gaps
+                                        for item in seo_analysis.get('content_gaps', []):
+                                            issues_list.append(f"- {item.get('gap')}: {item.get('suggestion')}")
+                                        
+                                        # Structure issues
+                                        for item in seo_analysis.get('structure_issues', []):
+                                            issues_list.append(f"- {item.get('issue')}: {item.get('fix')}")
+                                        
+                                        if issues_list:
+                                            seo_issues_str = "\n**SEO ISSUES TO FIX** (from analysis):\n" + "\n".join(issues_list[:10])  # Limit to top 10
+                                            print(f"DEBUG: Found {len(issues_list)} SEO issues to fix. Score: {seo_analysis.get('overall_score')}", flush=True)
+                                        
+                                        # Save analysis to DB
+                                        supabase.table('pages').update({
+                                            'seo_analysis': seo_analysis
+                                        }).eq('id', page_id).execute()
+                                        
+                                except Exception as seo_err:
+                                    print(f"DEBUG: SEO analysis failed (non-blocking): {seo_err}", flush=True)
+                                    seo_issues_str = ""
+
+                            # BRANCHING LOGIC: Product vs Category vs Topic
+                            generated_text = ""
+                            if page_type and page_type.lower().strip() == 'product':
+                                log_debug("Entered Product generation block")
+                                # PRODUCT PROMPT (Sales & Conversion Focused - Conservative + Grounded)
+                                prompt = f"""You are an expert E-commerce Copywriter with access to live Google Search.
+                                
+            **TASK**: Polish and enhance the content for this **PRODUCT PAGE**. 
+            **CRITICAL GOAL**: Improve clarity and persuasion WITHOUT changing the original length or structure significantly.
+
+            **CONTEXT**:
+            - Target Audience Location: {project_loc}
+            - Target Language: {project_lang}
+
+            **LOCALIZATION RULES (CRITICAL)**:
+            1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India). Convert prices if needed.
+            2. **Units**: Use the measurement system standard for **{project_loc}**.
+            3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India).
+            4. **Cultural Context**: Use examples relevant to **{project_loc}**.
+
+            **PAGE DETAILS**:
+            - URL: {page['url']}
+            - Title: {page_title}
+            - Product Name: {page_title}
+
+            **EXISTING CONTENT** (Source of Truth):
+            ```
+            {existing_content if existing_content else "No content"}
+            ```
+            {seo_issues_str}
+
+            **INSTRUCTIONS**:
+            1.  **Strict Polish (NO RESTRUCTURING)**: 
+                -   Keep the **exact** original section order (Intro -> Benefits -> Clinical -> Ingredients -> FAQ -> Reviews).
+                -   Do NOT merge sections or move them around.
+                -   Do NOT remove any reviews or list items. If there are 10 reviews, keep 10.
+
+            2.  **Maintain Length & Detail**: 
+                -   The output must be **at least** the same length as the original. 
+                -   Do NOT summarize or condense text.
+                -   **CRITICAL**: If there is a list of details (e.g., "Ingredient X: Definition Y"), KEEP THE ENTIRE LIST. Do not turn it into a paragraph.
+                -   Keep all technical details, ingredient lists, and specs exactly as is.
+
+            3.  **Enhance, Don't Rewrite**: 
+                -   Only fix grammar, flow, and punchiness.
+                -   Add SEO keywords naturally where they fit, but don't rewrite entire paragraphs just to fit them.
+
+            4.  **STRICT ACCURACY**: 
+                -   **DO NOT CHANGE** technical specs, ingredients, dimensions, or "What's Inside".
+                -   **DO NOT INVENT** features.
+
+            5.  **Competitive Intelligence** (USE GROUNDING):
+                -   Search for similar products to understand competitive positioning
+                -   Verify any comparative claims ("best", "top-rated") against live data
+                -   Identify unique selling points vs competitors
+
+            **OUTPUT FORMAT** (Markdown):
+            -   Return the full page content in Markdown.
+            -   Include a **Meta Description** at the top.
+            -   Keep the original formatting (H1, H2, bullets) but polished.
+            """
+                                # Use REST API for Products
+                                print(f"DEBUG: Generating content for Product: {page_title} using gemini-2.5-pro (REST)", flush=True)
+                                generated_text = generate_content_via_rest(
+                                    prompt=prompt,
+                                    api_key=api_key,
+                                    model="gemini-2.5-pro",
+                                    use_grounding=True
+                                )
+                            
+                            elif page_type and page_type.lower() == 'category':
+                                # CATEGORY PROMPT (Research-Backed SEO Enhancement - Grounded + Respect Length)
+                                prompt = f"""You are an expert E-commerce Copywriter & SEO Specialist.
+
+            **TASK**: Enhance this **CATEGORY/COLLECTION PAGE** using real-time search data.
+            **CRITICAL GOAL**: infuse the content with high-value SEO keywords and competitive insights while respecting the original length and structure.
+
+            **CONTEXT**:
+            - Target Audience Location: {project_loc}
+            - Target Language: {project_lang}
+
+            **LOCALIZATION RULES (CRITICAL)**:
+            1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India). Convert prices if needed.
+            2. **Units**: Use the measurement system standard for **{project_loc}**.
+            3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India).
+            4. **Cultural Context**: Use examples relevant to **{project_loc}**.
+
+            **PAGE DETAILS**:
+            - URL: {page['url']}
+            - Title: {page_title}
+            - Category Name: {page_title}
+
+            **EXISTING CONTENT** (Source of Truth):
+            ```
+            {existing_content}
+            ```
+            {seo_issues_str}
+
+            **INSTRUCTIONS**:
+            1.  **Research First (USE GROUNDING)**:
+                -   Search for top-ranking competitors for "{page_title}" in **{project_loc}**.
+                -   Identify the **primary intent** (e.g., "buy cheap", "luxury", "guide") and align the copy.
+                -   Find 3-5 **semantic keywords** competitors are using that are missing here.
+
+            2.  **Enhance & Optimize (The "Better" Part)**:
+                -   Rewrite the existing text to include these new keywords naturally.
+                -   Improve the value proposition based on what competitors offer.
+                -   Make it **better SEO-wise**: clearer headings, stronger hook, better keyword density.
+
+            3.  **Respect Constraints**:
+                -   **Length**: Keep it roughly the same length (+/- 10%). Do NOT add massive new sections (like FAQs) unless the original had them.
+                -   **Structure**: Maintain the existing flow (Intro -> Products -> Outro).
+
+            4.  **Meta Description**:
+                -   Write a new, high-CTR Meta Description (150-160 chars).
+
+            **OUTPUT FORMAT** (Markdown):
+            -   Return the full page content in Markdown.
+            -   Include a **Meta Description** at the top.
+            """
+                                # Use REST API for Categories
+                                generated_text = generate_content_via_rest(
+                                    prompt=prompt,
+                                    api_key=api_key,
+                                    model="gemini-2.5-pro",
+                                    use_grounding=True
+                                )
+                                
+                            elif page_type == 'Topic':
+                                # CHUNKED GENERATION LOGIC (New "Best-in-Class" Workflow)
+                                print(f"DEBUG: Starting Chunked Workflow for {page_title}...", flush=True)
+                                
+                                # Get research data
+                                research_data = page.get('research_data', {})
+                                keyword_cluster = research_data.get('keyword_cluster', [])
+                                primary_keyword = research_data.get('primary_keyword', page_title)
+                                perplexity_research = research_data.get('perplexity_research', '')
+                                citations = research_data.get('citations', [])
+                                funnel_stage = page.get('funnel_stage', '')
+                                source_page_id = page.get('source_page_id')
+                                
+                                # Internal Links Logic
+                                internal_links = []
+                                cta_url = None # URL for the final CTA
+                                
+                                if source_page_id:
+                                    try:
+                                        parent_res = supabase.table('pages').select('id, url, tech_audit_data, source_page_id').eq('id', source_page_id).single().execute()
+                                        if parent_res.data:
+                                            parent = parent_res.data
+                                            parent_title = parent.get('tech_audit_data', {}).get('title', parent.get('url'))
+                                            if funnel_stage == 'MoFu':
+                                                internal_links.append(f"- {parent_title} (Main Product): {parent['url']}")
+                                                cta_url = parent['url']
+                                            elif funnel_stage == 'ToFu':
+                                                # ToFu links: MoFu parent (2x) + Product grandparent (2-3x)
+                                                internal_links.append(f"- {parent_title} (In-Depth Guide - USE 2 TIMES): {parent['url']}")
+                                                grandparent_id = parent.get('source_page_id')
+                                                if grandparent_id:
+                                                    gp_res = supabase.table('pages').select('url, tech_audit_data').eq('id', grandparent_id).single().execute()
+                                                    if gp_res.data:
+                                                        gp_title = gp_res.data.get('tech_audit_data', {}).get('title', gp_res.data.get('url'))
+                                                        internal_links.append(f"- {gp_title} (Main Product - USE 2-3 TIMES): {gp_res.data['url']}")
+                                                        cta_url = gp_res.data['url'] # Prefer Grandparent (Product) for ToFu CTA
+                                                
+                                                if not cta_url: cta_url = parent['url'] # Fallback to Parent if no GP
+                                    except Exception as e:
+                                        print(f"Error fetching internal links: {e}")
+                                links_str = '\n'.join(internal_links) if internal_links else "No internal links available"
+                                
+                                # Format keywords & citations
+                                if keyword_cluster:
+                                    kw_list = '\n'.join([f"- {kw['keyword']} ({kw['volume']}/mo, Score: {kw.get('score', 0)})" for kw in keyword_cluster[:15]])
+                                else:
+                                    kw_list = f"- {primary_keyword}"
+                                citations_str = '\n'.join([f"[{i+1}] {cite}" for i, cite in enumerate(citations[:10])]) if citations else "No citations available"
+                                
+                                # Research Section
+                                research_section = ""
+                                if perplexity_research:
+                                    research_section = f"# DEEP RESEARCH BRIEF (Source: Perplexity):\n{perplexity_research}\n\n# CITATIONS:\n{citations_str}"
+
+                                # 1. Generate Dynamic Outline
+                                outline = generate_dynamic_outline(page_title, research_section, project_loc, gemini_client)
+                                if not outline:
+                                    raise Exception("Failed to generate outline")
+                                
+                                # 2. Generate Sections (Chunked)
+                                full_content = generate_sections_chunked(page_title, outline, research_section, project_loc, gemini_client, links_str)
+                                
+                                # 3. Final Polish (Intro/Outro/Meta)
+                                generated_text = final_polish(full_content, page_title, primary_keyword, cta_url, project_loc, gemini_client)
+
+                            if not generated_text:
+                                raise Exception("Content generation returned empty string")
+
+                            # Humanizer removed — fix AI-detection at the prompt level instead
+
+                            # Parse Meta Description if present
+
+                            # Parse Meta Description if present
+                            # PRESERVE existing scraped meta_description as default
+                            existing_meta = page.get('tech_audit_data', {}).get('meta_description', '')
+                            meta_desc = existing_meta if existing_meta else "No description available"
+                            
+                            # Parse Meta Description using Regex (More Robust)
+                            try:
+                                # Primary: Look for XML tags <meta-description>...</meta-description>
+                                meta_match = re.search(r'<meta-description>\s*(.+?)\s*</meta-description>', generated_text, re.IGNORECASE | re.DOTALL)
+                                
+                                # Fallback: Look for "Meta Description:" text label
+                                if not meta_match:
+                                    meta_match = re.search(r'Meta Description.*:\s*(.+)', generated_text, re.IGNORECASE)
+
+                                if meta_match:
+                                    extracted_meta = meta_match.group(1).strip()
+                                    extracted_meta = extracted_meta.strip('*# ') # Cleanup
+                                    if extracted_meta:
+                                        meta_desc = extracted_meta
+                            except Exception as e:
+                                log_debug(f"Meta extraction failed: {e}")
+                            
+                            # Update Page
+                            supabase.table('pages').update({
+                                "content": generated_text,
+                                "status": "Generated",
+                                "product_action": "Idle",
+                                "tech_audit_data": {
+                                    **page.get('tech_audit_data', {}),
+                                    "meta_description": meta_desc
+                                }
+                            }).eq('id', page_id).execute()
+                            
+                            log_debug(f"Content generated successfully for {page_title}")
+
+                        except Exception as gen_err:
+                            log_debug(f"Generation error for {page_title}: {gen_err}")
+                            import traceback
+                            traceback.print_exc()
+                            # Reset status
+                            supabase.table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
+                            
+                    except Exception as e:
+                        log_debug(f"Outer error for {page_id}: {e}")
+                        try:
+                            supabase.table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
+                        except: pass
+
+            # Update status to Processing IMMEDIATELY (Before thread starts)
+            # This ensures frontend sees the loading state
+            for pid in page_ids:
+                try:
+                    supabase.table('pages').update({
+                        "product_action": "Processing Content..."
+                    }).eq('id', pid).execute()
+                except: pass
+
+            # Start background thread
+            log_debug("Starting background Content Generation thread...")
+            thread = threading.Thread(target=process_content_generation_background, args=(page_ids, api_key))
+            thread.start()
+            
+            return jsonify({"message": "Content generation started in background."}), 202
+
+
+        elif action == 'conduct_research':
+            # SIMPLIFIED: Perplexity Research Brief ONLY
+            # (Keywords/Competitors are already done in generate_mofu)
+            
+            def process_research_background(page_ids, api_key):
+                print(f"====== CONDUCT_RESEARCH BACKGROUND THREAD STARTED ======", flush=True)
+                log_debug(f"CONDUCT_RESEARCH: Starting for {len(page_ids)} pages")
+                
+                for page_id in page_ids:
+                    print(f"DEBUG: Processing page_id: {page_id}", flush=True)
+                    try:
+                        # Get the Topic page
+                        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+                        if not page_res.data: continue
+                        
+                        page = page_res.data
+                        topic_title = page.get('tech_audit_data', {}).get('title', '')
+                        research_data = page.get('research_data') or {}
+                        
+                        if not topic_title: continue
+                        
+                        log_debug(f"Researching topic (Perplexity): {topic_title}")
+                        
+                        # Get existing keywords/competitors
+                        keywords = research_data.get('ranked_keywords', [])
+                        competitor_urls = research_data.get('competitor_urls', [])
+                        
+                        # Fetch Project Settings for Localization
+                        project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
+                        project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
+                        project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+                        
+                        # Get funnel stage
+                        funnel_stage = page.get('funnel_stage') or 'MoFu'
+                        
+                        # Fallback: If no keywords (maybe old page), run Gemini now
+                        if not keywords:
+                            log_debug(f"No keywords found for {topic_title}. Running Gemini fallback (Loc: {project_loc})...")
+                            gemini_result = perform_gemini_research(topic_title, location=project_loc, language=project_lang)
+                            if gemini_result:
+                                keywords = gemini_result.get('keywords', [])
+                                competitor_urls = [c['url'] for c in gemini_result.get('competitors', [])]
+                                # Update research data immediately
+                                research_data.update({
+                                    "competitor_urls": competitor_urls,
+                                    "ranked_keywords": keywords,
+                                    "formatted_keywords": '\n'.join([f"{kw.get('keyword', '')} | {kw.get('intent', 'informational')} |" for kw in keywords])
+                                })
+                        
+                        # Prepare query for Perplexity
+                        keyword_list = ", ".join([k.get('keyword', '') for k in keywords[:15]])
+                        competitor_list = ", ".join(competitor_urls)
+                        
+                        research_query = f"""
+                        Research Topic: {topic_title}
+                        Top Competitors: {competitor_list}
+                        Top Keywords: {keyword_list}
+                        
+                        Create a detailed Content Research Brief for this topic.
+                        Analyze the competitors and keywords to find content gaps.
+                        Focus on User Pain Points, Key Subtopics, and Scientific/Technical details.
+                        """
+                        
+                        log_debug(f"Starting Perplexity Research for brief (Loc: {project_loc}, Stage: {funnel_stage})...")
+                        perplexity_result = research_with_perplexity(research_query, location=project_loc, language=project_lang, stage=funnel_stage)
+                        
+                        # Update research data with brief
+                        research_data.update({
+                            "stage": "complete",
+                            "mode": "hybrid",
+                            "perplexity_research": perplexity_result.get('research', ''),
+                            "citations": perplexity_result.get('citations', [])
+                        })
+                        
+                        # Update page
+                        supabase.table('pages').update({
+                            "research_data": research_data,
+                            "product_action": "Idle"
+                        }).eq('id', page_id).execute()
+                        
+                        log_debug(f"Research complete for {topic_title}")
+                        
+                    except Exception as e:
+                        log_debug(f"Research error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # Reset status on error
+                        try:
+                            supabase.table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
+                        except: pass
+
+            # Update status to Processing IMMEDIATELY (Before thread starts)
+            # This ensures frontend sees the loading state
+            for pid in page_ids:
+                try:
+                    supabase.table('pages').update({
+                        "product_action": "Processing Research..."
+                    }).eq('id', pid).execute()
+                except: pass
+
+            # Start background thread
+            log_debug("Starting background Research thread...")
+            thread = threading.Thread(target=process_research_background, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
+            thread.start()
+            
+            return jsonify({"message": "Research started in background. The status will update to 'Processing...' in the table."}), 202
+
+
+            return jsonify({"message": "Content generated successfully"})
+
+        elif action == 'generate_mofu':
+            print(f"====== GENERATE MOFU ACTION ======", flush=True)
+            log_debug(f"GENERATE_MOFU: Starting for {len(page_ids)} pages")
+            print(f"DEBUG: Received generate_mofu action for page_ids: {page_ids}")
+            print(f"DEBUG: Received generate_mofu action for page_ids: {page_ids}")
+            # Use gemini_client with Grounding (ENABLED!)
+            # This helps verify that the topic angles are actually trending/relevant.
+            # client = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY")) # REMOVED
+            # tool = types.Tool(google_search=types.GoogleSearch()) # REMOVED
+            
+            def process_mofu_generation(page_ids, api_key):
+                log_debug(f"Background MoFu thread started for pages: {page_ids}")
+                try:
+                    # Use gemini_client with Grounding (ENABLED!)
+                    # client = genai_new.Client(api_key=api_key) # REMOVED
+                    # tool = types.Tool(google_search=types.GoogleSearch()) # REMOVED
+                    
+                    for pid in page_ids:
+                        print(f"DEBUG: Processing page_id: {pid}")
+                        # Get Product Page Data
+                        res = supabase.table('pages').select('*').eq('id', pid).single().execute()
+                        if not res.data: 
+                            print(f"DEBUG: Page {pid} not found")
+                            continue
+                        product = res.data
+                        product_tech = product.get('tech_audit_data', {})
+
+
+                        
+                        print(f"Researching MoFu opportunities for {product.get('url')}...")
+                        
+                        # === NEW DATA-FIRST WORKFLOW ===
+                        
+                        # Step 0: Ensure Content Context (Fix for "Memoir vs Candles")
+                        body_content = product_tech.get('body_content', '')
+                        product_title = product_tech.get('title', 'Untitled')
+                        
+                        # FIX: If title is "Pending Scan" or generic, force scrape to get REAL title
+                        is_bad_title = not product_title or 'pending' in product_title.lower() or 'untitled' in product_title.lower() or 'scan' in product_title.lower()
+                        
+                        if not body_content or len(body_content) < 100 or is_bad_title:
+                            log_debug(f"Content/Title missing or bad ('{product_title}') for {product['url']}, scraping now...")
+                            scraped = scrape_page_content(product['url'])
+                            if scraped:
+                                body_content = scraped['body_content']
+                                # Use scraped title if current is bad
+                                if is_bad_title and scraped.get('title'):
+                                    product_title = scraped['title']
+                                    log_debug(f"Updated title from '{product_tech.get('title')}' to '{product_title}'")
+                                
+                                # Update DB so we don't scrape again
+                                current_tech = product.get('tech_audit_data', {})
+                                current_tech['body_content'] = body_content
+                                current_tech['title'] = product_title # Save real title
+                                
+                                supabase.table('pages').update({
+                                    "tech_audit_data": current_tech
+                                }).eq('id', pid).execute()
+                                product_tech = current_tech # Update local var
+                        
+                        log_debug(f"Using Product Title: {product_title}")
+
+                        # Fetch Source Product Page
+                        product_res = supabase.table('pages').select('*').eq('id', pid).single().execute()
+                        if not product_res.data:
+                            print(f"DEBUG: Product page not found for ID: {pid}", flush=True)
+                            continue
+                        product = product_res.data
+                        product_title = product.get('tech_audit_data', {}).get('title', '')
+                        print(f"DEBUG: Processing Product: {product_title}", flush=True)
+                        
+                        # Fetch Project Settings
+                        project_res = supabase.table('projects').select('location, language').eq('id', product['project_id']).single().execute()
+                        project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
+                        project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+                        print(f"DEBUG: Project Settings: {project_loc}, {project_lang}", flush=True)
+
+                        # Step 1: Get Keywords
+                        keywords = []
+                        # (Skipping to where I can inject prints easily)
+                        # I'll just add prints around the Gemini call in the next block
+                        # Step 1: Generate MULTIPLE Broad Seed Keywords for DataForSEO
+                        # Strategy: Don't search for specific product - search for CATEGORY + common queries
+                        if not product_title:
+                            product_title = get_title_from_url(product['url'])
+
+                        print(f"DEBUG: Analyzing context for: {product_title} (Loc: {project_loc}, Lang: {project_lang})")
+                        
+                        try:
+                            # NEW STRATEGY: Generate multiple broad seeds
+                            context_prompt = f"""Analyze this product to generate 3-5 BROAD keyword seeds for DataForSEO research.
+
+        Product Title: "{product_title}"
+        Page Content: {body_content[:2000]}
+
+        Task:
+        1. Identify the product CATEGORY (e.g., "carrier oils", "lipstick", "sunscreen", "candles")
+        2. Generate 3-5 BROAD search terms that people use when researching this category in **{project_loc}**.
+        3. DO NOT use the specific product name - use GENERIC category terms
+
+        Examples:
+        - Product: "Apricot Kernel Oil" → Seeds: ["carrier oil benefits", "oil for skin", "facial oils", "natural oils skincare"]
+        - Product: "MAC Ruby Woo Lipstick" → Seeds: ["red lipstick", "matte lipstick", "long lasting lipstick", "lipstick shades"]
+        - Product: "Supergoop Sunscreen" → Seeds: ["face sunscreen", "spf for skin", "sunscreen benefits", "daily sunscreen"]
+
+        OUTPUT: Return ONLY a comma-separated list of 3-5 broad keywords. No explanations.
+        Example output: carrier oil benefits, oil for skin, facial oils, natural oils"""
+                            
+                            seed_res_text = gemini_client.generate_content(
+                                prompt=context_prompt,
+                                model_name="gemini-2.5-flash",
+                                use_grounding=True
+                            )
+                            seeds_str = seed_res_text.strip().replace('"', '').replace("'", "") if seed_res_text else ""
+                            broad_seeds = [s.strip() for s in seeds_str.split(',') if s.strip()]
+                            
+                            # Fallback if AI fails
+                            if not broad_seeds:
+                                broad_seeds = [product_title]
+                            
+                            log_debug(f"Generated {len(broad_seeds)} broad seeds: {broad_seeds}")
+                            print(f"DEBUG: Broad seed keywords: {broad_seeds}")
+                            
+                        except Exception as e:
+                            print(f"⚠ Seed generation failed: {e}. Using product title.")
+                            broad_seeds = [product_title]
+
+                        
+                        # NEW: Use Gemini 2.0 Flash with Grounding as PRIMARY source (User Request)
+                        print(f"DEBUG: Using Gemini 2.0 Flash for keyword research (Primary)...")
+                        log_debug("Calling perform_gemini_research as PRIMARY source")
+                        
+                        gemini_result = perform_gemini_research(product_title, location=project_loc, language=project_lang)
+                        keywords = []
+                        
+                        if gemini_result and gemini_result.get('keywords'):
+                            print(f"✓ Gemini Research successful. Found {len(gemini_result['keywords'])} keywords.")
+                            for k in gemini_result['keywords']:
+                                keywords.append({
+                                    'keyword': k.get('keyword'),
+                                    'volume': 100, # Placeholder volume since Gemini doesn't provide it
+                                    'score': 100,
+                                    'cpc': 0,
+                                    'competition': 0,
+                                    'intent': k.get('intent', 'Commercial')
+                                })
+                        else:
+                            print(f"⚠ Gemini Research failed. Using fallback.")
+                            keywords = [{'keyword': product_title, 'volume': 0, 'score': 0, 'cpc': 0, 'competition': 0}]
+
+
+                        
+                        # Step 2: Prepare Data for Topic Generation (No Deep Research yet)
+                        log_debug("Skipping deep research (will be done in 'Conduct Research' stage).")
+                        
+                        # Format keyword list for prompt
+                        keyword_list = '\n'.join([f"- {k['keyword']} ({k['volume']} searches/month)" for k in keywords[:50]])
+                        
+                        # Minimal research data for now
+                        research_data = {
+                            "keywords": keywords,
+                            "stage": "research_pending"
+                        }
+
+
+                        # Step 4: Generate Topics from REAL DATA
+                        import datetime
+                        current_year = datetime.datetime.now().year
+                        next_year = current_year + 1
+                        
+                        topic_prompt = f"""You are an SEO Content Strategist. Generate 6 MoFu (Middle-of-Funnel) article topics based on REAL keyword data.
+
+        **Product**: {product_title}
+        **Target Audience**: {project_loc} ({project_lang})
+
+        **VERIFIED HIGH-VOLUME KEYWORDS** (Scored by Opportunity):
+        {keyword_list}
+
+        **YOUR TASK**:
+        Create 6 MoFu topics. For EACH topic, assign ALL semantically relevant keywords from the list above (could be 3-15 keywords per topic - include as many as naturally fit the angle).
+
+        **Requirements**:
+        1. Each topic must target a primary keyword (highest opportunity score for that angle)
+        2. Include ALL secondary keywords that semantically match the topic angle
+        3. Topics should be Middle-of-Funnel (Comparison, Best Of, Guide, vs)
+
+        **Topic Types**:
+        - "Best X for Y in {current_year}" (roundup/comparison)
+        - "Product vs Competitor" (head-to-head comparison)
+        - "Top Alternatives to X" (alternative guides)  
+        - Use cases backed by research
+
+        **Output Format** (JSON):
+        {{
+          "topics": [
+            {{
+              "title": "[Exact title - include year {current_year} if relevant]",
+              "slug": "url-friendly-slug",
+              "description": "2-sentence description of content angle",
+              "keyword_cluster": [
+                {{"keyword": "[keyword1]", "volume": [INTEGER_FROM_INPUT], "is_primary": true}},
+                {{"keyword": "[keyword2]", "volume": [INTEGER_FROM_INPUT], "is_primary": false}},
+                ...
+              ],
+              "research_notes": "Why this topic (reference SERP competitor or research insight)"
+            }}
+          ]
+        }}
+
+        CRITICAL: 
+        1. Use EXACT integers for volume from the provided list. DO NOT write "Estimated".
+        2. Assign keywords based on semantic relevance. Don't artificially limit - if 12 keywords fit a topic, include all 12.
+        """
+
+
+                        
+                        try:
+                            text = gemini_client.generate_content(
+                                prompt=topic_prompt,
+                                model_name="gemini-2.5-flash",
+                                use_grounding=True
+                            )
+                            if not text: raise Exception("Empty response from Gemini")
+                            text = text.strip()
+                            if text.startswith('```json'): text = text[7:]
+                            if text.startswith('```'): text = text[3:]
+                            if text.endswith('```'): text = text[:-3]
+                            text = text.strip()
+                            
+                            # Parse JSON with error handling
+                            try:
+                                data = json.loads(text)
+                            except json.JSONDecodeError as json_err:
+                                log_debug(f"JSON parse error: {json_err}. Response: {text[:300]}")
+                                print(f"✗ Gemini returned invalid JSON. Skipping MoFu for {product_title}")
+                                continue  # Skip to next product
+                            
+                            topics = data.get('topics', [])
+                            if not topics:
+                                log_debug("No topics in AI response")
+                                continue
+                            
+                            new_pages = []
+                            for t in topics:
+                                # Handle keyword cluster (multiple keywords per topic)
+                                keyword_cluster = t.get('keyword_cluster', [])
+                                
+                                if keyword_cluster:
+                                    # NEW FORMAT: "keyword | intent | secondary intent" (no volume)
+                                    # Classify intent based on keyword patterns
+                                    def classify_intent(kw_text):
+                                        kw_lower = kw_text.lower()
+                                        # Transactional indicators
+                                        if any(word in kw_lower for word in ['buy', 'price', 'shop', 'purchase', 'best', 'top', 'review', 'vs', 'alternative']):
+                                            return 'transactional'
+                                        # Commercial indicators
+                                        elif any(word in kw_lower for word in ['benefits', 'how to', 'uses', 'guide', 'comparison', 'difference']):
+                                            return 'commercial'
+                                        # Default: informational
+                                        else:
+                                            return 'informational'
+                                    
+                                    keywords_str = '\n'.join([
+                                        f"{kw['keyword']} | {classify_intent(kw['keyword'])} |"
+                                        for kw in keyword_cluster
+                                    ])
+                                    # Get primary keyword for research reference
+                                    primary_kw = next((kw for kw in keyword_cluster if kw.get('is_primary')), keyword_cluster[0] if keyword_cluster else {})
+                                else:
+                                    keywords_str = ""
+                                    primary_kw = {}
+                                
+                                # Combine general research with topic-specific notes
+                                topic_research = research_data.copy()
+                                topic_research['notes'] = t.get('research_notes', '')
+                                topic_research['keyword_cluster'] = keyword_cluster
+                                topic_research['primary_keyword'] = primary_kw.get('keyword', '')
+                                
+                                new_pages.append({
+                                    "project_id": product['project_id'],
+                                    "source_page_id": pid,
+                                    "url": f"{product['url'].rstrip('/')}/{t['slug']}",
+                                    "page_type": "Topic",
+                                    "funnel_stage": "MoFu",
+                                    "product_action": "Idle",
+                                    "tech_audit_data": {
+                                        "title": t['title'],
+                                        "meta_description": t['description'],
+                                        "meta_title": t['title']
+                                    },
+                                    "content_description": t['description'],
+                                    "keywords": keywords_str,  # Data-backed keywords with volume
+                                    "slug": t['slug'],
+                                    "research_data": topic_research  # Store all research including citations
+                                })
+                            
+                            
+                            
+                            if new_pages:
+                                print(f"DEBUG: Attempting to insert {len(new_pages)} MoFu topics...", file=sys.stderr)
+                                try:
+                                    insert_res = supabase.table('pages').insert(new_pages).execute()
+                                    print("DEBUG: ✓ MoFu topics inserted successfully.", file=sys.stderr)
+                                    
+                                    # AUTO-KEYWORD RESEARCH (Gemini)
+                                    if insert_res.data:
+                                        print(f"DEBUG: Starting Auto-Keyword Research for {len(insert_res.data)} topics...", file=sys.stderr)
+                                        for inserted_page in insert_res.data:
+                                            try:
+                                                p_id = inserted_page['id']
+                                                # Handle tech_audit_data being a string or dict
+                                                t_data = inserted_page.get('tech_audit_data', {})
+                                                if isinstance(t_data, str):
+                                                    try: t_data = json.loads(t_data)
+                                                    except: t_data = {}
+                                                    
+                                                p_title = t_data.get('title', '')
+                                                if not p_title: continue
+                                                
+                                                log_debug(f"Auto-Researching keywords for: {p_title} (Loc: {project_loc})")
+                                                gemini_result = perform_gemini_research(p_title, location=project_loc, language=project_lang)
+                                                
+                                                if gemini_result:
+                                                    keywords = gemini_result.get('keywords', [])
+                                                    formatted_keywords = '\n'.join([
+                                                        f"{kw.get('keyword', '')} | {kw.get('intent', 'informational')} |"
+                                                        for kw in keywords if kw.get('keyword')
+                                                    ])
+                                                    
+                                                    # Create research data (partial)
+                                                    research_data = {
+                                                        "stage": "keywords_only", 
+                                                        "mode": "hybrid",
+                                                        "competitor_urls": [c['url'] for c in gemini_result.get('competitors', [])],
+                                                        "ranked_keywords": keywords,
+                                                        "formatted_keywords": formatted_keywords
+                                                    }
+                                                    
+                                                    supabase.table('pages').update({
+                                                        "keywords": formatted_keywords,
+                                                        "research_data": research_data
+                                                    }).eq('id', p_id).execute()
+                                                    log_debug(f"✓ Keywords saved for {p_title}")
+                                            except Exception as research_err:
+                                                log_debug(f"Auto-Research failed for {p_title}: {research_err}")
+                                except Exception as insert_error:
+                                    print(f"DEBUG: Error inserting with research_data: {insert_error}", file=sys.stderr)
+                                    # Fallback: Try inserting without research_data (if column missing)
+                                    if 'research_data' in str(insert_error) or 'column' in str(insert_error):
+                                        print("DEBUG: Retrying insert without research_data column...", file=sys.stderr)
+                                        for p in new_pages:
+                                            p.pop('research_data', None)
+                                        supabase.table('pages').insert(new_pages).execute()
+                                        print("DEBUG: ✓ MoFu topics inserted (without research data).", file=sys.stderr)
+                                    else:
+                                        raise insert_error
+                            else:
+                                print("DEBUG: No new pages to insert (topics list empty).", file=sys.stderr)
+                            
+                            # Update Source Page Status
+                            supabase.table('pages').update({"product_action": "MoFu Generated"}).eq('id', pid).execute()
+                        
+                        except Exception as e:
+                            print(f"DEBUG: Error generating MoFu topics: {e}", file=sys.stderr)
+                            import traceback
+                            traceback.print_exc()
+                            # Reset status on error so frontend doesn't hang
+                            supabase.table('pages').update({"product_action": "Failed"}).eq('id', pid).execute()
+                            
+                except Exception as e:
+                    log_debug(f"MoFu Thread Error: {e}")
+                    # Ensure we try to reset status for all pages if the whole thread crashes
+                    try:
+                        supabase.table('pages').update({"product_action": "Failed"}).in_('id', page_ids).execute()
+                    except: pass
+                            
+                except Exception as e:
+                    log_debug(f"MoFu Thread Error: {e}")
+
+            # Set status to Processing immediately
+            try:
+                log_debug(f"Updating status to Processing for {page_ids}")
+                supabase.table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
+            except Exception as e:
+                log_debug(f"Failed to update status to Processing: {e}")
+
+            # Start background thread
+            log_debug("Starting background MoFu thread...")
+            thread = threading.Thread(target=process_mofu_generation, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
+            thread.start()
+            
+            return jsonify({"message": "MoFu generation started in background. The status will update to 'Processing...' in the table."})
+
+
+        elif action == 'conduct_research':
+            # SIMPLIFIED: Perplexity Research Brief ONLY
+            # (Keywords/Competitors are already done in generate_mofu)
+            
+            def process_research_background(page_ids, api_key):
+                print(f"====== CONDUCT_RESEARCH BACKGROUND THREAD STARTED ======", flush=True)
+                log_debug(f"CONDUCT_RESEARCH: Starting for {len(page_ids)} pages")
+                
+                for page_id in page_ids:
+                    print(f"DEBUG: Processing page_id: {page_id}", flush=True)
+                    try:
+                        # Update status to Processing
+                        supabase.table('pages').update({
+                            "product_action": "Processing Research..."
+                        }).eq('id', page_id).execute()
+
+                        # Get the Topic page
+                        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+                        if not page_res.data: continue
+                        
+                        page = page_res.data
+                        topic_title = page.get('tech_audit_data', {}).get('title', '')
+                        research_data = page.get('research_data') or {}
+                        
+                        if not topic_title: continue
+                        
+                        log_debug(f"Researching topic (Perplexity): {topic_title}")
+                        
+                        # Get existing keywords/competitors
+                        keywords = research_data.get('ranked_keywords', [])
+                        competitor_urls = research_data.get('competitor_urls', [])
+                        
+                        # Fetch Project Settings for Localization
+                        project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
+                        project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
+                        project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+                        
+                        # Fallback: If no keywords (maybe old page), run Gemini now
+                        if not keywords:
+                            log_debug(f"No keywords found for {topic_title}. Running Gemini fallback (Loc: {project_loc})...")
+                            gemini_result = perform_gemini_research(topic_title, location=project_loc, language=project_lang)
+                            if gemini_result:
+                                keywords = gemini_result.get('keywords', [])
+                                competitor_urls = [c['url'] for c in gemini_result.get('competitors', [])]
+                                # Update research data immediately
+                                research_data.update({
+                                    "competitor_urls": competitor_urls,
+                                    "ranked_keywords": keywords,
+                                    "formatted_keywords": '\n'.join([f"{kw.get('keyword', '')} | {kw.get('intent', 'informational')} |" for kw in keywords])
+                                })
+                        
+                        # Prepare query for Perplexity
+                        keyword_list = ", ".join([k.get('keyword', '') for k in keywords[:15]])
+                        competitor_list = ", ".join(competitor_urls)
+                        
+                        research_query = f"""
+                        Research Topic: {topic_title}
+                        Top Competitors: {competitor_list}
+                        Top Keywords: {keyword_list}
+                        
+                        Create a detailed Content Research Brief for this topic.
+                        Analyze the competitors and keywords to find content gaps.
+                        Focus on User Pain Points, Key Subtopics, and Scientific/Technical details.
+                        """
+                        
+                        log_debug(f"Starting Perplexity Research for brief (Loc: {project_loc})...")
+                        perplexity_result = research_with_perplexity(research_query, location=project_loc, language=project_lang)
+                        
+                        # Update research data with brief
+                        research_data.update({
+                            "stage": "complete",
+                            "mode": "hybrid",
+                            "perplexity_research": perplexity_result.get('research', ''),
+                            "citations": perplexity_result.get('citations', [])
+                        })
+                        
+                        # Update page
+                        supabase.table('pages').update({
+                            "research_data": research_data,
+                            "product_action": "Idle"
+                        }).eq('id', page_id).execute()
+                        
+                        log_debug(f"Research complete for {topic_title}")
+                        
+                    except Exception as e:
+                        log_debug(f"Research error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # Reset status on error
+                        try:
+                            supabase.table('pages').update({"product_action": "Idle"}).eq('id', page_id).execute()
+                        except: pass
+
+            # Start background thread
+            log_debug("Starting background Research thread...")
+            thread = threading.Thread(target=process_research_background, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
+            thread.start()
+            
+            return jsonify({"message": "Research started in background. The status will update to 'Processing...' in the table."}), 202
+
+
+        elif action == 'generate_tofu':
+            # AI ToFu Topic Generation
+            
+            def process_tofu_generation(page_ids, api_key):
+                log_debug(f"Background ToFu thread started for pages: {page_ids}")
+                try:
+
+                    
+                    for pid in page_ids:
+                        # Fetch Source MoFu Page
+                        mofu_res = supabase.table('pages').select('*').eq('id', pid).single().execute()
+                        if not mofu_res.data: continue
+                        mofu = mofu_res.data
+                        mofu_tech = mofu.get('tech_audit_data') or {}
+                        
+                        print(f"Researching ToFu opportunities for MoFu topic: {mofu_tech.get('title')}...")
+                        
+                        # === NEW DATA-FIRST WORKFLOW FOR TOFU ===
+                        
+                        # Fetch Project Settings for Localization (Moved UP)
+                        project_res = supabase.table('projects').select('location, language').eq('id', mofu['project_id']).single().execute()
+                        project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
+                        project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+
+                        # Step 1: Get broad keyword ideas based on MoFu topic
+                        mofu_title = mofu_tech.get('title', '')
+                        print(f"Researching ToFu opportunities for: {mofu_title} (Loc: {project_loc})")
+                        
+                        # Get keyword opportunities from DataForSEO
+                        # For ToFu, we want broader terms, so we might strip "Best" or "Review" from the seed
+                        seed_keyword = mofu_title.replace('Best ', '').replace('Review', '').replace(' vs ', ' ').strip()
+                        # NEW: Use Gemini 2.0 Flash with Grounding as PRIMARY source (User Request)
+                        print(f"DEBUG: Using Gemini 2.0 Flash for ToFu keyword research (Primary)...")
+                        
+                        gemini_result = perform_gemini_research(seed_keyword, location=project_loc, language=project_lang)
+                        keywords = []
+                        
+                        if gemini_result and gemini_result.get('keywords'):
+                            print(f"✓ Gemini Research successful. Found {len(gemini_result['keywords'])} keywords.")
+                            for k in gemini_result['keywords']:
+                                keywords.append({
+                                    'keyword': k.get('keyword'),
+                                    'volume': 100, # Placeholder
+                                    'score': 100,
+                                    'cpc': 0,
+                                    'competition': 0,
+                                    'intent': k.get('intent', 'Informational')
+                                })
+                        else:
+                            print(f"⚠ Gemini Research failed. Using fallback.")
+                            keywords = [{'keyword': seed_keyword, 'volume': 0, 'score': 0, 'cpc': 0, 'competition': 0}]
+                        
+                        print(f"DEBUG: Proceeding to Topic Generation with {len(keywords)} keywords...", flush=True)
+                        
+                        # Step 2: Analyze SERP for top 5 keywords (Optional - keeping for context if fast enough, or remove for speed)
+                        # For now, we'll keep it lightweight or rely on Gemini Grounding in the prompt.
+                        # Let's SKIP DataForSEO SERP to save time/cost, and rely on Gemini Grounding.
+                        serp_summary = "Relied on Gemini Grounding for current SERP context."
+                        
+                        # Step 3: Generate Topics (Lightweight - No Perplexity)
+                        import datetime
+                        current_year = datetime.datetime.now().year
+                        
+                        # Format keyword list for prompt
+                        keyword_list = '\n'.join([f"- {k['keyword']} ({k['volume']}/mo, Score: {k.get('score', 0)})" for k in keywords[:100]])
+
+                        topic_prompt = f"""
+                        You are an SEO Strategist. Generate 5 High-Value Top-of-Funnel (ToFu) topic ideas that lead to: {mofu_tech.get('title')}
+                        
+                        **CONTEXT**:
+                        - Target Audience: People at the beginning of their journey (Problem Aware).
+                        - Location: {project_loc}
+                        - Language: {project_lang}
+                        - Goal: Educate them and naturally lead them to the solution (the MoFu topic).
+                        
+                        **HIGH-OPPORTUNITY KEYWORDS**:
+                        {keyword_list}
+                        
+                        **INSTRUCTIONS**:
+                        1.  **Use Grounding**: Search Google to ensure these topics are currently relevant and not already saturated in **{project_loc}**.
+                        2.  **Focus**: "What is", "How to", "Guide to", "Benefits of", "Mistakes to Avoid".
+                        3.  **Variety**: specific angles, not just generic guides.
+                        
+                        **LOCALIZATION RULES (CRITICAL)**:
+                        1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India). Convert prices if needed.
+                        2. **Units**: Use the measurement system standard for **{project_loc}**.
+                        3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India).
+                        4. **Cultural Context**: Use examples relevant to **{project_loc}**.
+                        
+                        Current Date: {datetime.datetime.now().strftime("%B %Y")}
+                        
+                        Return a JSON object with a key "topics" containing a list of objects:
+                        - "title": Topic Title (Must include a primary keyword)
+                        - "slug": URL friendly slug
+                        - "description": Brief content description (intent)
+                        - "keyword_cluster": List of ALL semantically relevant keywords from the list (aim for 30+ per topic if relevant)
+                        - "primary_keyword": The main keyword targeted
+                        """
+                        
+                        try:
+                            text = gemini_client.generate_content(
+                                prompt=topic_prompt,
+                                model_name="gemini-2.5-flash",
+                                use_grounding=True
+                            )
+                            if not text: raise Exception("Empty response from Gemini")
+                            text = text.strip()
+                            if text.startswith('```json'): text = text[7:]
+                            if text.startswith('```'): text = text[3:]
+                            if text.endswith('```'): text = text[:-3]
+                            
+                            data = json.loads(text)
+                            topics = data.get('topics', [])
+                            
+                            new_pages = []
+                            for t in topics:
+                                # Map selected keywords back to their data
+                                cluster_data = []
+                                for k_str in t.get('keyword_cluster', []):
+                                    match = next((k for k in keywords if k['keyword'].lower() == k_str.lower()), None)
+                                    if match: cluster_data.append(match)
+                                    else: cluster_data.append({'keyword': k_str, 'volume': 0, 'score': 0, 'intent': 'Informational'})
+                                
+                                # Standardized Format: "keyword | intent |" (Matches MoFu style)
+                                keywords_str = '\n'.join([
+                                    f"{k['keyword']} | {k.get('intent', 'Informational')} |"
+                                    for k in cluster_data
+                                ])
+                                
+                                # Minimal research data (No Perplexity yet)
+                                topic_research = {
+                                    "stage": "topic_generated",
+                                    "keyword_cluster": cluster_data,
+                                    "primary_keyword": t.get('primary_keyword')
+                                }
+
+                                new_pages.append({
+                                    "project_id": mofu['project_id'],
+                                    "source_page_id": pid,
+                                    "url": f"{mofu['url'].rsplit('/', 1)[0]}/{t['slug']}", 
+                                    "page_type": "Topic",
+                                    "funnel_stage": "ToFu",
+                                    "product_action": "Idle", # Ready for manual "Conduct Research"
+                                    "tech_audit_data": {
+                                        "title": t['title'],
+                                        "meta_description": t['description'],
+                                        "meta_title": t['title']
+                                    },
+                                    "content_description": t['description'],
+                                    "keywords": keywords_str,
+                                    "slug": t['slug'],
+                                    "research_data": topic_research
+                                })
+                            
+                            if new_pages:
+                                print(f"Attempting to insert {len(new_pages)} ToFu topics...")
+                                insert_res = supabase.table('pages').insert(new_pages).execute()
+                                print("✓ ToFu topics inserted successfully.")
+                                
+                                # AUTO-KEYWORD RESEARCH (Gemini) - Architecture Parity with MoFu
+                                if insert_res.data:
+                                    print(f"DEBUG: Starting Auto-Keyword Research for {len(insert_res.data)} ToFu topics...")
+                                    for inserted_page in insert_res.data:
+                                        try:
+                                            p_id = inserted_page['id']
+                                            t_data = inserted_page.get('tech_audit_data', {})
+                                            if isinstance(t_data, str):
+                                                try: t_data = json.loads(t_data)
+                                                except: t_data = {}
+                                                
+                                            p_title = t_data.get('title', '')
+                                            if not p_title: continue
+                                            
+                                            log_debug(f"Auto-Researching keywords for ToFu: {p_title}")
+                                            # Use project location/language for research
+                                            gemini_result = perform_gemini_research(p_title, location=project_loc, language=project_lang)
+                                            
+                                            if gemini_result:
+                                                keywords = gemini_result.get('keywords', [])
+                                                formatted_keywords = '\n'.join([
+                                                    f"{kw.get('keyword', '')} | {kw.get('intent', 'informational')} |"
+                                                    for kw in keywords if kw.get('keyword')
+                                                ])
+                                                
+                                                # Create research data (partial)
+                                                research_data = {
+                                                    "stage": "keywords_only", 
+                                                    "mode": "hybrid",
+                                                    "competitor_urls": [c['url'] for c in gemini_result.get('competitors', [])],
+                                                    "ranked_keywords": keywords,
+                                                    "formatted_keywords": formatted_keywords
+                                                }
+                                                
+                                                supabase.table('pages').update({
+                                                    "keywords": formatted_keywords,
+                                                    "research_data": research_data
+                                                }).eq('id', p_id).execute()
+                                            log_debug(f"✓ Keywords saved for {p_title}")
+                                        except Exception as research_err:
+                                            log_debug(f"Auto-Research failed for {p_title}: {research_err}")
+                            
+                            log_debug(f"ToFu generation complete for {pid}. Updating status...")
+                            # Update Source Page Status
+                            supabase.table('pages').update({"product_action": "ToFu Generated"}).eq('id', pid).execute()
+                            log_debug(f"Status updated to 'ToFu Generated' for {pid}")
+                            
+                        except Exception as e:
+                            print(f"Error generating ToFu topics: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            # Reset status on error so frontend doesn't hang
+                            supabase.table('pages').update({"product_action": "Failed"}).eq('id', pid).execute()
+                
+                except Exception as e:
+                    log_debug(f"ToFu Thread Error: {e}")
+                    # Ensure we try to reset status for all pages if the whole thread crashes
+                    try:
+                        supabase.table('pages').update({"product_action": "Failed"}).in_('id', page_ids).execute()
+                    except: pass
+
+            # Set status to Processing immediately
+            try:
+                log_debug(f"Updating status to Processing for {page_ids}")
+                supabase.table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
+            except Exception as e:
+                log_debug(f"Failed to update status to Processing: {e}")
+
+            # Start background thread
+            log_debug("Starting background ToFu thread...")
+            thread = threading.Thread(target=process_tofu_generation, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
+            thread.start()
+            
+            return jsonify({"message": "ToFu generation started in background. The status will update to 'Processing...' in the table."})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def get_page_details():
+    if not supabase: return jsonify({"error": "Supabase not configured"}), 500
+    
+    try:
+        page_id = request.args.get('page_id')
+        if not page_id: return jsonify({"error": "page_id required"}), 400
+        
+        res = supabase.table('pages').select('*').eq('id', page_id).execute()
+        if not res.data: return jsonify({"error": "Page not found"}), 404
+        
+        return jsonify(res.data[0])
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    except Exception as e:
+        print(f"Error in crawl_project: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+
+
+
+# --- get_pages (L1611-1637) ---
+@app.route('/api/get-pages', methods=['GET'])
+def get_pages():
+    if not supabase:
+        return jsonify({"error": "Supabase not configured"}), 500
+    
+    try:
+        project_id = request.args.get('project_id')
+        if not project_id:
+            return jsonify({"error": "project_id is required"}), 400
+        
+        # Optimize: Select only necessary columns for the list view
+        # We need tech_audit_data for the status/title, but we don't need the full body_content if it's huge.
+        # However, Supabase select doesn't support "exclude".
+        # Let's select explicit columns.
+        response = supabase.table('pages').select('id, project_id, url, page_type, created_at, tech_audit_data, funnel_stage, source_page_id, content_description, keywords, product_action, research_data, content, seo_analysis').eq('project_id', project_id).order('id').execute()
+        
+        import sys
+        print(f"DEBUG: get_pages for {project_id} found {len(response.data) if response.data else 0} pages.", file=sys.stderr)
+        
+        # DEBUG: Check data structure
+        if response.data:
+            print(f"DEBUG: get_pages first row keys: {response.data[0].keys()}", file=sys.stderr)
+            print(f"DEBUG: get_pages first row tech_audit_data: {response.data[0].get('tech_audit_data')}", file=sys.stderr)
+            
+        return jsonify({"pages": response.data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# --- delete_page (L1639-1665) ---
+@app.route('/api/delete-page', methods=['DELETE'])
+def delete_page():
+    if not supabase:
+        return jsonify({"error": "Supabase not configured"}), 500
+    
+    page_id = request.args.get('page_id')
+    if not page_id:
+        return jsonify({"error": "page_id is required"}), 400
+        
+    try:
+        # Recursive delete function to handle children manually
+        def delete_children(pid):
+            # Find all children
+            children = supabase.table('pages').select('id').eq('source_page_id', pid).execute()
+            if children.data:
+                for child in children.data:
+                    delete_children(child['id'])
+            
+            # Delete the page itself
+            supabase.table('pages').delete().eq('id', pid).execute()
+
+        delete_children(page_id)
+        
+        return jsonify({"message": "Page and all children deleted successfully"})
+    except Exception as e:
+        print(f"Error deleting page: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# --- get_page_status (L1667-1687) ---
+@app.route('/api/get-page-status', methods=['GET'])
+def get_page_status():
+    if not supabase:
+        return jsonify({"error": "Supabase not configured"}), 500
+    
+    try:
+        page_id = request.args.get('page_id')
+        if not page_id:
+            return jsonify({"error": "page_id is required"}), 400
+            
+        response = supabase.table('pages').select('id, product_action, audit_status').eq('id', page_id).single().execute()
+        
+        if not response.data:
+            return jsonify({"error": "Page not found"}), 404
+            
+        # Log the status being returned (to debug premature closing)
+        print(f"DEBUG: get_page_status for {page_id}: {response.data.get('product_action')}", file=sys.stderr)
+        
+        return jsonify(response.data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# --- webflow_sites (L6220-6229) ---
+@app.route('/api/webflow/sites', methods=['POST'])
+def webflow_list_sites():
+    try:
+        data = request.json
+        api_key = data.get('api_key')
+        if not api_key: return jsonify({"error": "Missing API Key"}), 400
+        sites = webflow_client.list_sites(api_key)
+        return jsonify({"sites": sites})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# --- webflow_collections (L6231-6241) ---
+@app.route('/api/webflow/collections', methods=['POST'])
+def webflow_list_collections():
+    try:
+        data = request.json
+        api_key = data.get('api_key')
+        site_id = data.get('site_id')
+        if not api_key or not site_id: return jsonify({"error": "Missing API Key or Site ID"}), 400
+        collections = webflow_client.list_collections(api_key, site_id)
+        return jsonify({"collections": collections})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# --- generate_blog_image (L6243-6285) ---
+@app.route('/api/generate-blog-image', methods=['POST'])
+def generate_blog_image_endpoint():
+    data = request.json
+    page_id = data.get('page_id')
+    custom_prompt = data.get('prompt')
+    
+    if not page_id: return jsonify({"error": "page_id required"}), 400
+    
+    try:
+        # Fetch page
+        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+        if not page_res.data: return jsonify({"error": "Page not found"}), 404
+        page = page_res.data
+        
+        tech_data = page.get('tech_audit_data') or {}
+        topic = tech_data.get('title') or page.get('url') or 'Untitled'
+        content = page.get('content') or ''
+        summary = content[:500] if content else ''
+        
+        # Generate Prompt if not provided
+        if not custom_prompt:
+            prompt = generate_image_prompt(topic, summary)
+        else:
+            prompt = custom_prompt
+            
+        # Generate Image
+        image_url = nano_banana_client.generate_image(prompt)
+        
+        # Update Page
+        supabase.table('pages').update({
+            'main_image_url': image_url,
+            'image_prompt': prompt
+        }).eq('id', page_id).execute()
+        
+        return jsonify({
+            "message": "Image generated successfully",
+            "image_url": image_url,
+            "prompt": prompt
+        })
+        
+    except Exception as e:
+        print(f"Error generating blog image: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# --- get_html_content (L6287-6397) ---
+@app.route('/api/get-html-content', methods=['POST'])
+def get_html_content():
+    """Get HTML-formatted content for copy-paste (same logic as Webflow publish)"""
+    data = request.json
+    page_id = data.get('page_id')
+    
+    if not page_id:
+        return jsonify({"error": "Missing page_id"}), 400
+        
+    try:
+        # Fetch page
+        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+        if not page_res.data: 
+            return jsonify({"error": "Page not found"}), 404
+        page = page_res.data
+        
+        # Get raw markdown content
+        content_md = page.get('content', '')
+        if not content_md:
+            return jsonify({"error": "No content to convert"}), 400
+        
+        # ==== SAME MARKDOWN PRE-PROCESSING AS WEBFLOW PUBLISH ====
+        import re
+        
+        # 0. Fix space between ] and ( in markdown links
+        content_md = re.sub(r'\]\s+\(', '](', content_md)
+        content_md = re.sub(r'\*\*\s*\]', '**]', content_md)
+        
+        # 1. Fix malformed links with asterisks
+        def clean_link_text(match):
+            link_text = match.group(1)
+            url = match.group(2)
+            clean_text = link_text.replace('*', '')
+            return f'[{clean_text}]({url})'
+        content_md = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', clean_link_text, content_md)
+        
+        # 2. Fix raw URL display after links
+        content_md = re.sub(r'\]\(([^)]+)\)\s*\(\1\)', r'](\1)', content_md)
+        
+        # 3. Fix raw URLs displayed in parentheses after links
+        content_md = re.sub(r'\]\(([^)]+)\)\s*\(https?://[^)]+\)', r'](\1)', content_md)
+        
+        # 4. Ensure headings have proper spacing
+        content_md = re.sub(r'([^\n])\n(#{1,6}\s)', r'\1\n\n\2', content_md)
+        
+        # 5. Fix excessive heading levels
+        content_md = re.sub(r'^#{5,}\s', '### ', content_md, flags=re.MULTILINE)
+        content_md = re.sub(r'^#{4}\s', '### ', content_md, flags=re.MULTILINE)
+        
+        # 6. Table formatting: ensure blank lines before/after tables
+        lines = content_md.split('\n')
+        processed_lines = []
+        in_table = False
+        
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            is_table_line = stripped.startswith('|') and stripped.endswith('|') and '|' in stripped[1:-1]
+            
+            if is_table_line and not in_table:
+                if processed_lines and processed_lines[-1].strip():
+                    processed_lines.append('')
+                in_table = True
+            elif not is_table_line and in_table:
+                if stripped:
+                    processed_lines.append('')
+                in_table = False
+            
+            processed_lines.append(line)
+        
+        content_md = '\n'.join(processed_lines)
+        
+        # 7. Fix bullet points
+        content_md = re.sub(r'^(\s*)\*\s+', r'\1- ', content_md, flags=re.MULTILINE)
+        
+        # Convert to HTML
+        content_html = markdown.markdown(
+            content_md, 
+            extensions=['tables', 'nl2br', 'fenced_code', 'sane_lists']
+        )
+        
+        # POST-PROCESSING: Fix links appearing on own line
+        content_html = re.sub(r'<br\s*/?>\s*(<a\s)', r'\1', content_html)
+        content_html = re.sub(r'<br\s*/?>(s*<a\s)', r'\1', content_html)
+        content_html = re.sub(r'(</a>)\s*<br\s*/?>', r'\1', content_html)
+        content_html = re.sub(r'(</a>)<br\s*/?>\s*', r'\1 ', content_html)
+        content_html = re.sub(r'\n\s*(<a\s)', r' \1', content_html)
+        content_html = re.sub(r'(</a>)\s*\n', r'\1 ', content_html)
+        
+        # Force display:inline on all anchor tags
+        content_html = re.sub(r'<a href=', r'<a style="display:inline;" href=', content_html)
+        
+        # Add inline styles for tables
+        content_html = content_html.replace(
+            '<table>', 
+            '<table style="width:100%;border-collapse:collapse;margin:20px 0;">'
+        )
+        content_html = content_html.replace(
+            '<th>', 
+            '<th style="border:1px solid #ddd;padding:12px;text-align:left;background-color:#f5f5f5;font-weight:bold;">'
+        )
+        content_html = content_html.replace(
+            '<td>', 
+            '<td style="border:1px solid #ddd;padding:12px;text-align:left;">'
+        )
+        
+        return jsonify({"html": content_html, "title": page.get('tech_audit_data', {}).get('title', '')})
+        
+    except Exception as e:
+        print(f"Error getting HTML content: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+
+# --- publish_webflow (L6616-6855) ---
+@app.route('/api/publish-webflow', methods=['POST'])
+def webflow_publish():
+    data = request.json
+    page_id = data.get('page_id')
+    api_key = data.get('api_key')
+    collection_id = data.get('collection_id')
+    field_mapping = data.get('field_mapping', {}) # { 'wf_field_slug': 'data_key' }
+    
+    if not all([page_id, api_key, collection_id]):
+        return jsonify({"error": "Missing required fields"}), 400
+        
+    try:
+        # Fetch page
+        page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+        if not page_res.data: return jsonify({"error": "Page not found"}), 404
+        page = page_res.data
+        
+        # Prepare content
+        content_md = page.get('content', '')
+        
+        # ==== COMPREHENSIVE MARKDOWN PRE-PROCESSING (Ported from seo-saas-brain) ====
+        # Fix common Gemini output issues before converting to HTML
+        import re
+        
+        # 0. Fix space between ] and ( in markdown links: [text] (url) -> [text](url)
+        content_md = re.sub(r'\]\s+\(', '](', content_md)
+        content_md = re.sub(r'\*\*\s*\]', '**]', content_md) # Bold inside link fix sometimes
+        
+        # 1. Fix malformed links with asterisks: [*text*](url) or [text*](url) -> [text](url)
+        # Pattern: Find markdown links and clean asterisks from the link text
+        def clean_link_text(match):
+            link_text = match.group(1)
+            url = match.group(2)
+            # Remove asterisks from link text
+            clean_text = link_text.replace('*', '')
+            return f'[{clean_text}]({url})'
+        content_md = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', clean_link_text, content_md)
+        
+        # 2. Fix raw URL display after links: [text](url) (url) -> [text](url)
+        content_md = re.sub(r'\]\(([^)]+)\)\s*\(\1\)', r'](\1)', content_md)
+        
+        # 3. Fix raw URLs displayed in parentheses after links
+        content_md = re.sub(r'\]\(([^)]+)\)\s*\(https?://[^)]+\)', r'](\1)', content_md)
+        
+        # 4. Ensure headings have proper spacing (add newline before if missing)
+        content_md = re.sub(r'([^\n])\n(#{1,6}\s)', r'\1\n\n\2', content_md)
+        
+        # 5. Fix #### raw heading chars appearing as text
+        # Replace multiple # followed by space at start of line with proper H2/H3
+        content_md = re.sub(r'^#{5,}\s', '### ', content_md, flags=re.MULTILINE)
+        content_md = re.sub(r'^#{4}\s', '### ', content_md, flags=re.MULTILINE)
+        
+        # 6. Table formatting: ensure blank lines before/after tables
+        lines = content_md.split('\n')
+        processed_lines = []
+        in_table = False
+        
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            is_table_line = stripped.startswith('|') and stripped.endswith('|') and '|' in stripped[1:-1]
+            
+            if is_table_line and not in_table:
+                # Starting a table - add blank line before if previous line isn't blank
+                if processed_lines and processed_lines[-1].strip():
+                    processed_lines.append('')
+                in_table = True
+            elif not is_table_line and in_table:
+                # Ending a table - add blank line after
+                if stripped:  # Only add blank if next line isn't already blank
+                    processed_lines.append('')
+                in_table = False
+            
+            processed_lines.append(line)
+        
+        content_md = '\n'.join(processed_lines)
+        
+        # 7. Ensure proper list formatting (bullet points need consistent spacing)
+        # Fix asterisk-as-text becoming bullet: line starting with * followed by space
+        content_md = re.sub(r'^(\s*)\*\s+', r'\1- ', content_md, flags=re.MULTILINE)
+        
+        # Use extensions: tables, nl2br (for line breaks in lists), fenced_code, sane_lists
+        content_html = markdown.markdown(
+            content_md, 
+            extensions=['tables', 'nl2br', 'fenced_code', 'sane_lists']
+        )
+        
+        # POST-PROCESSING: Aggressive fix for links appearing on their own line
+        # 1. Remove <br> or <br/> right BEFORE anchor tags
+        content_html = re.sub(r'<br\s*/?>\s*(<a\s)', r'\1', content_html)
+        content_html = re.sub(r'<br\s*/?>(\s*<a\s)', r'\1', content_html)
+        
+        # 2. Remove <br> or <br/> right AFTER closing anchor tags  
+        content_html = re.sub(r'(</a>)\s*<br\s*/?>', r'\1', content_html)
+        content_html = re.sub(r'(</a>)<br\s*/?>\s*', r'\1 ', content_html)
+        
+        # 3. Remove literal newlines around anchor tags in the HTML itself
+        content_html = re.sub(r'\n\s*(<a\s)', r' \1', content_html)
+        content_html = re.sub(r'(</a>)\s*\n', r'\1 ', content_html)
+        
+        # 4. Force display:inline on all anchor tags - Webflow Rich Text may render them as block
+        content_html = re.sub(r'<a href=', r'<a style="display:inline;" href=', content_html)
+        
+        # Add inline styles for tables (Webflow rich text needs inline styles)
+        content_html = content_html.replace(
+            '<table>', 
+            '<table style="width:100%;border-collapse:collapse;margin:20px 0;">'
+        )
+        content_html = content_html.replace(
+            '<th>', 
+            '<th style="border:1px solid #ddd;padding:12px;text-align:left;background-color:#f5f5f5;font-weight:bold;">'
+        )
+        content_html = content_html.replace(
+            '<td>', 
+            '<td style="border:1px solid #ddd;padding:12px;text-align:left;">'
+        )
+        
+        # Prepare fields
+        site_id = data.get('site_id')  # Frontend needs to pass this
+        image_wf_field = None
+        image_url = None
+        
+        fields = {}
+        for wf_field, data_key in field_mapping.items():
+            value = None
+            if data_key == 'title':
+                value = page.get('tech_audit_data', {}).get('title') or page.get('url')
+            elif data_key == 'slug':
+                value = page.get('slug')
+            elif data_key == 'content':
+                value = content_html
+            elif data_key == 'meta_description':
+                value = page.get('tech_audit_data', {}).get('meta_description')
+            elif data_key == 'main_image':
+                # Store for later processing - we need to upload the image first
+                image_wf_field = wf_field
+                image_url = page.get('main_image_url')
+                continue  # Don't add to fields yet
+            
+            if value:
+                fields[wf_field] = value
+        
+        # Handle image upload if present
+        if image_url and site_id and image_wf_field:
+            try:
+                import tempfile
+                import requests as req
+                
+                # Download image from Supabase URL
+                print(f"DEBUG: Downloading image from {image_url}", flush=True)
+                img_response = req.get(image_url, timeout=30)
+                img_response.raise_for_status()
+                
+                # Save to temp file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp:
+                    tmp.write(img_response.content)
+                    tmp_path = tmp.name
+                
+                print(f"DEBUG: Image downloaded to {tmp_path}", flush=True)
+                
+                # Upload to Webflow
+                asset = webflow_client.upload_asset(api_key, site_id, tmp_path)
+                
+                # Use asset ID (or URL) in the field
+                # Webflow v2 API might use 'fileId' or 'url' - check the asset response
+                if 'id' in asset:
+                    fields[image_wf_field] = asset['id']
+                    print(f"DEBUG: Using asset ID: {asset['id']}", flush=True)
+                elif 'url' in asset:
+                    fields[image_wf_field] = asset['url']
+                    print(f"DEBUG: Using asset URL: {asset['url']}", flush=True)
+                
+                # Clean up temp file
+                import os
+                os.unlink(tmp_path)
+                
+            except Exception as img_error:
+                print(f"WARNING: Failed to upload image to Webflow: {img_error}", flush=True)
+                # Continue without image rather than failing entire publish
+                
+        # Publish
+        with open('debug_payload.json', 'w') as f:
+            json.dump(fields, f, indent=2)
+        print(f"DEBUG: Webflow Payload: {json.dumps(fields, indent=2)}", flush=True)
+        try:
+            res = webflow_client.create_item(api_key, collection_id, fields, is_draft=True)
+        except Exception as e:
+            # Check for 409 Conflict (Slug already exists)
+            error_msg = str(e)
+            if "409" in error_msg or "Conflict" in error_msg:
+                print(f"DEBUG: Slug conflict detected. Searching for existing item to update...", flush=True)
+                
+                target_slug = fields.get('slug')
+                existing_item = None
+                
+                # Paginate through items to find the conflicting one
+                limit = 100
+                offset = 0
+                max_pages = 20 # Search up to 2000 items (safety limit)
+                
+                for _ in range(max_pages):
+                    print(f"DEBUG: Searching items offset={offset}...", flush=True)
+                    items = webflow_client.list_items(api_key, collection_id, limit=limit, offset=offset)
+                    
+                    if not items:
+                        break # End of list
+                        
+                    found = False
+                    for item in items:
+                        # Webflow V2: check fieldData.slug
+                        if item.get('fieldData', {}).get('slug') == target_slug:
+                            existing_item = item
+                            found = True
+                            break
+                    
+                    if found:
+                        break
+                        
+                    if len(items) < limit:
+                        break # Last page
+                        
+                    offset += limit
+
+                if existing_item:
+                    print(f"DEBUG: Found existing item {existing_item['id']}. Updating to Draft...", flush=True)
+                    res = webflow_client.update_item(api_key, collection_id, existing_item['id'], fields, is_draft=True)
+                else:
+                    raise Exception(f"Conflict detected for slug '{target_slug}' but could not find existing item (checked {offset + limit} items). Please manually delete the item in Webflow or change the slug.")
+            else:
+                raise e
+
+        
+        # Update status
+        supabase.table('pages').update({'status': 'Published'}).eq('id', page_id).execute()
+        
+        return jsonify({"message": "Published successfully", "webflow_response": res})
+        
+    except Exception as e:
+        print(f"Error publishing to Webflow: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 
 

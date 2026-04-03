@@ -1818,6 +1818,41 @@ def save_audit_results():
             logger.error(f"Dual-write update to projects failed (non-fatal): {dual_err}")
         # ---- END DUAL WRITE ----
         
+        # ---- AUTO-SYNC TO CONTENT SYSTEM ----
+        try:
+            campaign_id = audit_record.get('campaign_id')
+            if campaign_id and pages:
+                existing_res = client.table('pages').select('url').eq('project_id', campaign_id).execute()
+                existing_urls = {p['url'] for p in existing_res.data} if existing_res.data else set()
+                
+                new_inserts = []
+                for p in pages:
+                    url = p.get('url')
+                    if url and isinstance(url, str) and url not in existing_urls:
+                        tech_data = {
+                            "title": p.get('title', ''),
+                            "meta_description": p.get('description', ''),
+                            "word_count": p.get('word_count', 0),
+                            "body_content": ""
+                        }
+                        
+                        new_inserts.append({
+                            "project_id": campaign_id,
+                            "url": url,
+                            "page_type": "product",
+                            "tech_audit_data": tech_data,
+                            "content_description": "Auto-synced from audit"
+                        })
+                        existing_urls.add(url)
+                
+                if new_inserts:
+                    for i in range(0, len(new_inserts), 50):
+                        client.table('pages').insert(new_inserts[i:i+50]).execute()
+                    logger.info(f"Auto-synced {len(new_inserts)} pages to Content engine for campaign {campaign_id}")
+        except Exception as sync_err:
+            logger.error(f"Auto-sync to Content engine failed (non-fatal): {sync_err}")
+        # ---- END AUTO-SYNC ----
+        
         return jsonify({"success": True, "message": "Results saved"})
         
     except Exception as e:
@@ -2208,6 +2243,82 @@ def log_debug(message):
         print(f"[{timestamp}] {message}", file=sys.stderr, flush=True)
     except Exception as e:
         print(f"Logging failed: {e}", file=sys.stderr)
+
+
+# --- get_title_from_url ---
+def get_title_from_url(url):
+    try:
+        from urllib.parse import urlparse
+        path = urlparse(url).path
+        segments = [s for s in path.split('/') if s]
+        if not segments: return "Home"
+        slug = segments[-1]
+        return slug.replace('-', ' ').replace('_', ' ').title()
+    except:
+        return "Untitled Page"
+
+
+# --- perform_gemini_research ---
+def perform_gemini_research(topic, location="US", language="English"):
+    """
+    Uses Gemini 2.5 Flash with Google Search Grounding to perform free research.
+    Returns structured data: {
+        "competitors": [{"url": "...", "title": "...", "domain": "..."}],
+        "keywords": [{"keyword": "...", "intent": "..."}],
+    }
+    """
+    log_debug(f"Starting Gemini 2.5 Flash Grounded Research for: {topic} (Loc: {location}, Lang: {language})")
+    
+    try:
+        prompt = f"""
+        Research the SEO topic: "{topic}"
+        
+        **CONTEXT**:
+        - Target Audience Location: {location}
+        - Target Language: {language}
+        
+        Perform a deep analysis using Google Search to find:
+        1. Top 3 Competitor URLs ranking for this topic in **{location}**.
+        2. **At least 30 SEO Keywords** relevant to this topic (include Search Intent).
+           - Focus on keywords trending in **{location}**.
+           - Mix of short-tail and long-tail.
+           - Include "People Also Ask" style questions relevant to this region.
+           
+        **PRIORITIZATION RULES**:
+        1. **Primary Focus**: Prioritize keywords specifically trending in **{location}**.
+        2. **Global Keywords**: You MAY include high-volume US/Global keywords if they are highly relevant, but they must be secondary to local terms.
+        3. **Relevance**: Ensure all keywords are actionable for a user in {location}.
+        
+        Output strictly in JSON format:
+        {{
+            "competitors": [
+                {{"url": "https://...", "title": "Page Title", "domain": "domain.com"}}
+            ],
+            "keywords": [
+                {{"keyword": "keyword phrase", "intent": "Informational/Commercial/Transactional"}}
+            ]
+        }}
+        """
+        
+        text = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash",
+            use_grounding=True
+        )
+        
+        if not text:
+            raise Exception("Empty response from Gemini REST API")
+        
+        # Clean markdown code blocks if present
+        if text.startswith('```json'): text = text[7:]
+        if text.startswith('```'): text = text[3:]
+        if text.endswith('```'): text = text[:-3]
+            
+        return json.loads(text.strip())
+        
+    except Exception as e:
+        log_debug(f"Gemini Research Failed: {e}")
+        return None
 
 
 # --- generate_image_prompt (L3229-3248) ---
@@ -2730,10 +2841,11 @@ def perform_seo_analysis(page_id):
     project_loc = 'US'
     project_lang = 'English'
     try:
-        project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
+        project_res = supabase.table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
         if project_res.data:
-            project_loc = project_res.data.get('location', 'US')
-            project_lang = project_res.data.get('language', 'English')
+            _settings = project_res.data.get('settings', {}) or {}
+            project_loc = _settings.get('location', 'US')
+            project_lang = _settings.get('language', 'English')
     except Exception as e:
         print(f"DEBUG: Error fetching project settings: {e}")
     
@@ -2963,10 +3075,11 @@ def batch_update_pages():
                         project_lang = 'English'
                         try:
                             log_debug(f"Fetching project settings for {page['project_id']}...")
-                            project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
+                            project_res = supabase.table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
                             if project_res.data:
-                                project_loc = project_res.data.get('location', 'US')
-                                project_lang = project_res.data.get('language', 'English')
+                                _settings = project_res.data.get('settings', {}) or {}
+                                project_loc = _settings.get('location', 'US')
+                                project_lang = _settings.get('language', 'English')
                             log_debug(f"Project settings: Loc={project_loc}, Lang={project_lang}")
                         except Exception as proj_err:
                             log_debug(f"Error fetching project settings: {proj_err}")
@@ -3338,9 +3451,10 @@ def batch_update_pages():
                         competitor_urls = research_data.get('competitor_urls', [])
                         
                         # Fetch Project Settings for Localization
-                        project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
-                        project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
-                        project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+                        project_res = supabase.table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
+                        _settings = (project_res.data.get('settings', {}) or {}) if project_res.data else {}
+                        project_loc = _settings.get('location', 'US')
+                        project_lang = _settings.get('language', 'English')
                         
                         # Get funnel stage
                         funnel_stage = page.get('funnel_stage') or 'MoFu'
@@ -3492,9 +3606,10 @@ def batch_update_pages():
                         print(f"DEBUG: Processing Product: {product_title}", flush=True)
                         
                         # Fetch Project Settings
-                        project_res = supabase.table('projects').select('location, language').eq('id', product['project_id']).single().execute()
-                        project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
-                        project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+                        project_res = supabase.table('campaigns').select('settings').eq('id', product['project_id']).single().execute()
+                        _settings = (project_res.data.get('settings', {}) or {}) if project_res.data else {}
+                        project_loc = _settings.get('location', 'US')
+                        project_lang = _settings.get('language', 'English')
                         print(f"DEBUG: Project Settings: {project_loc}, {project_lang}", flush=True)
 
                         # Step 1: Get Keywords
@@ -3847,9 +3962,10 @@ def batch_update_pages():
                         competitor_urls = research_data.get('competitor_urls', [])
                         
                         # Fetch Project Settings for Localization
-                        project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
-                        project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
-                        project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+                        project_res = supabase.table('campaigns').select('settings').eq('id', page['project_id']).single().execute()
+                        _settings = (project_res.data.get('settings', {}) or {}) if project_res.data else {}
+                        project_loc = _settings.get('location', 'US')
+                        project_lang = _settings.get('language', 'English')
                         
                         # Fallback: If no keywords (maybe old page), run Gemini now
                         if not keywords:
@@ -3935,9 +4051,10 @@ def batch_update_pages():
                         # === NEW DATA-FIRST WORKFLOW FOR TOFU ===
                         
                         # Fetch Project Settings for Localization (Moved UP)
-                        project_res = supabase.table('projects').select('location, language').eq('id', mofu['project_id']).single().execute()
-                        project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
-                        project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+                        project_res = supabase.table('campaigns').select('settings').eq('id', mofu['project_id']).single().execute()
+                        _settings = (project_res.data.get('settings', {}) or {}) if project_res.data else {}
+                        project_loc = _settings.get('location', 'US')
+                        project_lang = _settings.get('language', 'English')
 
                         # Step 1: Get broad keyword ideas based on MoFu topic
                         mofu_title = mofu_tech.get('title', '')
@@ -4692,6 +4809,42 @@ def webflow_publish():
 
 
 
+
+
+@app.route('/api/debug/sync-supergoop')
+def debug_sync_supergoop():
+    import traceback
+    try:
+        from api.dataforseo_client import get_page_issues
+        res = supabase.table('projects').select('*').execute()
+        pid = None
+        for p in res.data:
+            if p.get('target_domain') and 'supergoop' in p.get('target_domain').lower():
+                pid = p['id']
+                break
+                
+        if not pid: return jsonify({"error": "No Supergoop"}), 404
+        
+        audits = supabase.table('audits').select('*').eq('project_id', pid).execute()
+        audit = audits.data[-1] if audits.data else None
+        if not audit: return jsonify({"error": "No audit"}), 404
+        
+        issues = get_page_issues(audit.get('dataforseo_task_id'), limit=100)
+        items = issues.get('items', [])
+        
+        count = 0
+        for page in items:
+            url = page.get('url')
+            if not url: continue
+            tech_audit_data = {"title": page.get('meta', {}).get('title', url)}
+            existing = supabase.table('pages').select('id').eq('url', url).eq('project_id', pid).execute()
+            if not existing.data:
+                supabase.table('pages').insert({"project_id": pid, "url": url, "page_type": "product", "tech_audit_data": tech_audit_data, "content_description": "Auto-synced from audit"}).execute()
+                count += 1
+                
+        return jsonify({"success": True, "count": count})
+    except Exception as e:
+        return jsonify({"error": str(e), "trace": traceback.format_exc()})
 
 if __name__ == '__main__':
     print("Starting server...")

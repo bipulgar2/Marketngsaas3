@@ -2774,6 +2774,231 @@ Text:
 
 
 # --- generate_content_via_rest (L4254-4294) ---
+# --- generate_dynamic_outline (Chunked Workflow) ---
+def generate_dynamic_outline(topic, research_context, project_loc, gemini_client):
+    """Generates a structured JSON outline for the article based on research."""
+    print(f"DEBUG: Generating Dynamic Outline for '{topic}'...", flush=True)
+    
+    prompt = f"""
+    You are an expert Content Strategist. Create a detailed Outline for a "Best-in-Class" SEO article.
+    TOPIC: {topic}
+    TARGET AUDIENCE: {project_loc}
+    RESEARCH BRIEF:
+    {research_context[:15000]} 
+    TASK:
+    Create a logical H2 structure for a comprehensive 2500-4500 word article.
+    REQUIRED SECTIONS:
+    1. "Introduction" - Hook with a relatable problem, Quick Answer box (2-3 sentence TL;DR), then thesis
+    2. A "Common Problems/Mistakes" section - Frame as USER problems (e.g., "Why Most X Fail"), NOT as "How This Article Is Different"
+    3. A "Self-Diagnosis/Framework" section - Actionable tool for readers to identify their situation
+    4. "Detailed Breakdown" - Models/Types/Categories with specific comparisons
+    5. "ROI & Hidden Costs" - Financials/Risks/Realistic timelines
+    6. "Conclusion & Action Steps" - Clear next steps, NOT generic summary
+    7. "FAQ" (Schema-ready) - 3-5 questions people actually search
+    CRITICAL RULES:
+    - Frame ALL headers as USER PROBLEMS, not self-promotion
+    - BAD: "Why This Article Is Different" / "How We Provide Better Advice"
+    - GOOD: "Why Most Vegan Eye Creams Don't Work for Indian Skin" / "Common Mistakes When Choosing X"
+    - NO meta-commentary about the article itself
+    - Headers should be search-query-aligned (what users would type in Google)
+    OUTPUT FORMAT (JSON ARRAY):
+    [
+        {{"title": "Introduction", "instructions": "Hook with relatable problem. Include **Quick Answer:** box with 2-3 sentence summary. State thesis."}},
+        {{"title": "Why Most X Fail for [Audience]", "instructions": "Problem-focused section. Use research data to explain common issues."}},
+        ...
+    ]
+    """
+    
+    try:
+        response = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-pro",
+            use_grounding=False # Logic only
+        )
+        
+        # Clean JSON
+        if not response: return []
+        cleaned = response.strip()
+        if cleaned.startswith('```json'): cleaned = cleaned[7:]
+        if cleaned.startswith('```'): cleaned = cleaned[3:]
+        if cleaned.endswith('```'): cleaned = cleaned[:-3]
+        
+        import json
+        return json.loads(cleaned.strip())
+    except Exception as e:
+        print(f"Error generating outline: {e}")
+        # Fallback Outline
+        return [
+            {"title": "Introduction", "instructions": "Introduction to the topic."},
+            {"title": "Key Concepts", "instructions": "Explain the core concepts."},
+            {"title": "Detailed Analysis", "instructions": "Deep dive into the details."},
+            {"title": "Comparison", "instructions": "Compare options."},
+            {"title": "Conclusion", "instructions": "Wrap up."}
+        ]
+
+# --- generate_sections_chunked (Chunked Workflow) ---
+def generate_sections_chunked(topic, outline, research_context, project_loc, gemini_client, links_str):
+    """Generates the article section by section based on the outline."""
+    full_content = []
+    import re
+    
+    print(f"DEBUG: Starting Chunked Generation for '{topic}' ({len(outline)} sections)...", flush=True)
+    
+    # Context Window Management (Keep it relevant)
+    previous_section_summary = "Start of article."
+    
+    # Smart Link Tracking
+    links_inserted_count = 0
+    target_links = 7  # Target 7 internal links across the article
+    link_cap = 8  # Never exceed 8 links
+    
+    for i, section in enumerate(outline):
+        section_title = section.get('title', f"Section {i+1}")
+        instructions = section.get('instructions', '')
+        
+        print(f"  > Generating Section {i+1}/{len(outline)}: {section_title}...", flush=True)
+        
+        # Smart Linking Logic
+        link_instruction = ""
+        if links_str and links_str != "No internal links available":
+            remaining_sections = len(outline) - (i + 1)
+            needed_links = target_links - links_inserted_count
+            
+            if links_inserted_count >= link_cap:
+                link_instruction = "9. **Internal Links**: Do NOT include any more internal links (cap reached)."
+            elif needed_links > 0:
+                if needed_links >= remaining_sections:  # Must insert now to hit target
+                    link_instruction = f"9. **Internal Links (REQUIRED)**: You MUST include EXACTLY 1 internal link in this section from the links below. Use natural, descriptive anchor text (NOT 'click here'). Links: {links_str}"
+                else:  # Encourage but don't force
+                    link_instruction = f"9. **Internal Links (Encouraged)**: Try to naturally include 1 internal link from: {links_str}. Use descriptive anchor text."
+            else:
+                link_instruction = "9. **Internal Links**: Optional - only if highly relevant."
+        else:
+            link_instruction = "9. **Internal Links**: No internal links available."
+        
+        prompt = f"""
+        Write ONE section of a long-form SEO guide. You're a seasoned practitioner, not a textbook.
+        TOPIC: {topic}
+        CURRENT SECTION: {section_title}
+        INSTRUCTIONS: {instructions}
+        CONTEXT:
+        - Audience Location: {project_loc}
+        - Previous Section Summary: {previous_section_summary}
+        RESEARCH DATA (Use strictly):
+        {research_context[:10000]}
+        
+        WRITING STYLE — THIS IS CRITICAL:
+        - Write like a sharp human expert writing a blog post, NOT like an AI assistant.
+        - Vary your sentence lengths dramatically. Mix 5-word punches with 25-word explanations. Some paragraphs should be 1 sentence.
+        - Use contractions naturally ("don't", "it's", "you'll", "that's").
+        - NEVER use these AI giveaway phrases: "It's important to note", "In today's digital landscape", "Let's dive in", "Here's the thing", "When it comes to", "It's worth noting", "In conclusion", "Furthermore", "Moreover", "Additionally", "Consequently", "In order to", "Utilize", "Leverage", "Navigate", "Landscape", "Realm", "Delve".
+        - Start some sentences with "But", "And", "So", or "Look," — real writers do this.
+        - Inject brief, confident opinions: "Honestly, most agencies get this wrong." or "This is where it gets interesting."
+        - Skip the perfectly balanced paragraph structure. Real articles are messy — some sections are dense, others are quick hits.
+        - Reference specific numbers, tools, or examples from the research. Vague generalities = AI red flag.
+        - Occasional rhetorical questions are fine. Over-using them is not.
+        
+        FORMATTING RULES:
+        1. Use Markdown (H2 for section title, H3/H4 for subsections).
+        2. NO INTRO/OUTRO FLUFF. Dive straight into the content.
+        3. Use bullet points, data tables, and bold text for readability.
+        4. If mentioning a competitor/product from research, be specific (Pros/Cons).
+        5. LENGTH: 400-600 words for this section.
+        6. NEVER write self-referential statements like "This article is different" or "This guide provides".
+        7. If this is the INTRODUCTION: Include a "**Quick Answer:**" box at the start with a 2-3 sentence summary.
+        8. Frame problems as USER problems ("Why X fails for you") NOT self-promotion.
+        {link_instruction}
+        """
+        
+        try:
+            section_content = gemini_client.generate_content(
+                prompt=prompt,
+                model_name="gemini-2.5-pro",
+                use_grounding=True 
+            )
+            
+            if section_content:
+                # Clean up
+                if section_content.startswith('```markdown'): section_content = section_content[11:]
+                if section_content.startswith('```'): section_content = section_content[3:]
+                if section_content.endswith('```'): section_content = section_content[:-3]
+                
+                full_content.append(section_content.strip())
+                
+                # Count links inserted in this chunk
+                links_in_chunk = len(re.findall(r'\[.*?\]\(https?://.*?\)', section_content))
+                links_inserted_count += links_in_chunk
+                print(f"DEBUG: Section {i+1} generated {links_in_chunk} links. Total: {links_inserted_count}/{target_links}", flush=True)
+                
+                # Update summary for next chunk (simple context propagation)
+                previous_section_summary = f"Just covered {section_title}. Key points: {section_content[:200]}..."
+            else:
+                full_content.append(f"## {section_title}\n\n(Content generation failed for this section.)")
+                
+        except Exception as e:
+            print(f"Error generating section '{section_title}': {e}")
+            full_content.append(f"## {section_title}\n\n(Error generating content.)")
+            
+        # Rate limit pause
+        import time
+        time.sleep(2)
+        
+    return "\\n\\n".join(full_content)
+
+# --- final_polish (Chunked Workflow) ---
+def final_polish(full_content, topic, primary_keyword, cta_url, project_loc, gemini_client):
+    """Assembles the chunks and adds a cohesive Intro, Outro, and Meta Description."""
+    print(f"DEBUG: Polishing final article for '{topic}'...", flush=True)
+    
+    prompt = f"""
+    You are a sharp editor polishing a long-form article. Your job is to assemble, smooth transitions, and add a killer intro + conclusion. Keep the writer's voice intact — it should sound like a real expert wrote it, not an AI.
+    
+    TOPIC: {topic}
+    PRIMARY KEYWORD: {primary_keyword}
+    CTA URL: {cta_url}
+    LOCATION: {project_loc}
+    
+    RAW CONTENT CHUNKS:
+    {full_content[:25000]} 
+    
+    TASK:
+    1. Write a **Killer Introduction** (H1 Title + Hook + Thesis).
+       - H1 must contain "{primary_keyword}".
+       - Hook should be a bold statement, surprising stat, or provocative question — NOT a generic "In today's world..." opener.
+    2. Review the body content (passed above) and smooth out transitions if needed (keep the bulk of it).
+    3. Write a **High-Conversion Conclusion**.
+       - Must end with a Call-to-Action (CTA) linking to: {cta_url}
+    4. Write a **Meta Description** (155 chars, SEO optimized).
+    
+    CRITICAL EDITING RULES:
+    - PRESERVE the conversational, opinionated tone. Don't flatten it into corporate-speak.
+    - BANNED PHRASES (remove any you find): "It's important to note", "In today's digital landscape", "Let's dive in", "Furthermore", "Moreover", "Additionally", "Consequently", "In order to", "Utilize", "Leverage", "Navigate", "Delve", "robust", "comprehensive", "streamline".
+    - Use contractions naturally throughout ("don't", "it's", "you'll").
+    - Vary sentence lengths. Short punches mixed with longer explanations.
+    
+    OUTPUT FORMAT (Markdown):
+    **Meta Description**: [Your Description Here]
+    
+    # [H1 Title]
+    
+    [Introduction]
+    
+    [Body Content - Inserted/Polished]
+    
+    [Conclusion + CTA]
+    """
+    
+    try:
+        final_text = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-pro",
+            use_grounding=False # Editing task
+        )
+        return final_text if final_text else full_content
+    except Exception as e:
+        print(f"Error in final polish: {e}")
+        return full_content
+
 def generate_content_via_rest(prompt, api_key, model="gemini-2.5-pro", use_grounding=True):
     """
     Generate content using Gemini REST API directly to avoid SDK crashes.

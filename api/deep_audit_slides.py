@@ -1981,13 +1981,14 @@ def _auth_page2_plateau(sid):
         {'createSlide': {'objectId': sid, 'slideLayoutReference': {'predefinedLayout': 'BLANK'}}},
         _as_bg(sid, AC['cream']),
     ]
-    # Left panel: plateau image
-    reqs.extend(_image(f'{sid}_lp', sid, 0, 0, 360, 405, _TEMPLATE_IMGS['plateau']))
-    reqs.extend(_text_box(f'{sid}_stat', sid, 40, 50, 280, 70,
-                          '87%', size=60, color=AC['white'], bold=True))
-    reqs.extend(_text_box(f'{sid}_stxt', sid, 40, 125, 280, 45,
+    # Left panel text placed above the image
+    reqs.extend(_text_box(f'{sid}_stat', sid, 40, 20, 280, 70,
+                          '87%', size=60, color=AC['dark'], bold=True))
+    reqs.extend(_text_box(f'{sid}_stxt', sid, 40, 85, 280, 45,
                           'of SEO campaigns plateau\nor fail within 12 months.',
-                          size=13, color=AC['white'], font='Arial'))
+                          size=13, color=AC['dark'], font='Arial'))
+    # Left panel: plateau image moved down so it doesn't overlap text
+    reqs.extend(_image(f'{sid}_lp', sid, 0, 140, 360, 265, _TEMPLATE_IMGS['plateau']))
 
     # Right side content
     reqs.extend(_text_box(f'{sid}_t', sid, 390, 20, 300, 50,

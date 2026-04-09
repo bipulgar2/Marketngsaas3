@@ -308,6 +308,7 @@ def get_google_metrics():
         data = request.json or {}
         gsc_property = data.get('gsc_property')
         ga4_property = data.get('ga4_property')
+        duration = data.get('duration', '1m')
         
         if not gsc_property and not ga4_property:
             return jsonify({'error': 'Must provide gsc_property or ga4_property'}), 400
@@ -334,14 +335,33 @@ def get_google_metrics():
         results = {'gsc': None, 'ga4': None}
 
         # =====================================================================
-        # Compute date ranges: current 30 days vs previous 30 days
+        # Compute date ranges dynamically
         # =====================================================================
         from datetime import datetime, timedelta
+        
+        duration_days_map = {
+            '1m': 30,
+            '3m': 90,
+            '6m': 180,
+            '12m': 365,
+            'max': 480 # ~16 months for GSC max limit
+        }
+        days = duration_days_map.get(duration, 30)
+        
         today = datetime.now().date()
         current_end = today.isoformat()
-        current_start = (today - timedelta(days=29)).isoformat()
-        prev_end = (today - timedelta(days=30)).isoformat()
-        prev_start = (today - timedelta(days=59)).isoformat()
+        current_start = (today - timedelta(days=days-1)).isoformat()
+        prev_end = (today - timedelta(days=days)).isoformat()
+        prev_start = (today - timedelta(days=(days*2)-1)).isoformat()
+        
+        results['meta'] = {
+            'duration_days': days,
+            'duration_label': f'vs previous {days} days',
+            'current_start': current_start,
+            'current_end': current_end,
+            'prev_start': prev_start,
+            'prev_end': prev_end
+        }
         
         # =====================================================================
         # 1. GSC — Full Data Fetch
@@ -484,7 +504,7 @@ def get_google_metrics():
                 if not ga4_property.startswith('properties/'):
                     ga4_property = f'properties/{ga4_property}'
                 
-                def _ga4_report(metrics, dimensions=None, start='30daysAgo', end='today', limit=10):
+                def _ga4_report(metrics, dimensions=None, start=current_start, end=current_end, limit=10):
                     """Helper to run a GA4 report."""
                     body = {
                         'dateRanges': [{'startDate': start, 'endDate': end}],
@@ -508,7 +528,7 @@ def get_google_metrics():
                     'activeUsers', 'sessions', 'engagedSessions', 'bounceRate',
                     'averageSessionDuration', 'screenPageViews'
                 ]
-                kpi_resp = _ga4_report(core_metrics, start='30daysAgo', end='today', limit=1)
+                kpi_resp = _ga4_report(core_metrics, start=current_start, end=current_end, limit=1)
                 kpi_rows = kpi_resp.get('rows', [])
                 kpi_vals = kpi_rows[0].get('metricValues', []) if kpi_rows else []
                 
@@ -530,7 +550,7 @@ def get_google_metrics():
                 
                 # Try optional e-commerce / key events metrics (may not exist)
                 try:
-                    ecom_resp = _ga4_report(['keyEvents', 'totalRevenue', 'transactions'], start='30daysAgo', end='today', limit=1)
+                    ecom_resp = _ga4_report(['keyEvents', 'totalRevenue', 'transactions'], start=current_start, end=current_end, limit=1)
                     ecom_rows = ecom_resp.get('rows', [])
                     if ecom_rows:
                         ev = ecom_rows[0].get('metricValues', [])
@@ -541,7 +561,7 @@ def get_google_metrics():
                     logger.warning(f"GA4 e-commerce metrics not available: {ecom_err}")
                 
                 # b) KPI Totals — previous period
-                prev_kpi_resp = _ga4_report(core_metrics, start='60daysAgo', end='31daysAgo', limit=1)
+                prev_kpi_resp = _ga4_report(core_metrics, start=prev_start, end=prev_end, limit=1)
                 prev_kpi_rows = prev_kpi_resp.get('rows', [])
                 prev_kpi_vals = prev_kpi_rows[0].get('metricValues', []) if prev_kpi_rows else []
                 
@@ -562,7 +582,7 @@ def get_google_metrics():
                 }
                 
                 # c) Time-series (sessions by day) — current
-                ts_resp = _ga4_report(['sessions', 'activeUsers'], dimensions=['date'], limit=60)
+                ts_resp = _ga4_report(['sessions', 'activeUsers'], dimensions=['date'], limit=None) # Set limit=None for full timeseries
                 ga4_timeseries = []
                 for row in ts_resp.get('rows', []):
                     raw_date = row['dimensionValues'][0]['value']  # YYYYMMDD
@@ -575,7 +595,7 @@ def get_google_metrics():
                 ga4_timeseries.sort(key=lambda x: x['date'])
                 
                 # d) Time-series — previous period
-                prev_ts_resp = _ga4_report(['sessions', 'activeUsers'], dimensions=['date'], start='60daysAgo', end='31daysAgo', limit=60)
+                prev_ts_resp = _ga4_report(['sessions', 'activeUsers'], dimensions=['date'], start=prev_start, end=prev_end, limit=None)
                 ga4_prev_timeseries = []
                 for row in prev_ts_resp.get('rows', []):
                     raw_date = row['dimensionValues'][0]['value']

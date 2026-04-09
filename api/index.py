@@ -720,8 +720,10 @@ def update_task(task_id):
             update_data['status'] = data['status']
         if 'checklist' in data:
             update_data['checklist'] = data['checklist']
-        if 'assigned_to' in data and user['role'] in ['admin', 'campaign_manager']:
+        if 'assigned_to' in data and user.get('role', '').lower() in ['admin', 'administrator', 'campaign_manager']:
             update_data['assigned_to'] = data['assigned_to']
+        if 'assigned_role' in data and user.get('role', '').lower() in ['admin', 'administrator', 'campaign_manager']:
+            update_data['assigned_role'] = data['assigned_role']
         
         response = client.table('tasks').update(update_data).eq('id', task_id).execute()
         
@@ -4629,6 +4631,79 @@ def webflow_list_collections():
         collections = webflow_client.list_collections(api_key, site_id)
         return jsonify({"collections": collections})
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/publish-wordpress', methods=['POST'])
+def publish_wordpress():
+    import requests
+    from requests.auth import HTTPBasicAuth
+    import markdown
+    
+    data = request.json
+    page_id = data.get('page_id')
+    wp_url = data.get('wp_url')
+    wp_username = data.get('wp_username')
+    wp_app_password = data.get('wp_app_password')
+    
+    if not all([page_id, wp_url, wp_username, wp_app_password]):
+        return jsonify({"error": "Missing required fields"}), 400
+        
+    try:
+        # Fetch page for content
+        page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
+        if not page_res.data:
+            return jsonify({"error": "Page not found"}), 404
+        page = page_res.data
+        
+        # Get raw markdown content
+        content_md = page.get('content', '')
+        if not content_md:
+            return jsonify({"error": "No content generated yet for this page"}), 400
+            
+        # Optional: Append main image if it exists
+        main_image = page.get('main_image_url')
+        if main_image:
+            image_tag = f"![Main Image]({main_image})\n\n"
+            content_md = image_tag + content_md
+            
+        # Convert Markdown to HTML
+        # Using markdown library to robustly convert markdown content to HTML
+        html_content = markdown.markdown(content_md, extensions=['tables', 'fenced_code'])
+        
+        # Determine Title
+        tech_data = page.get('tech_audit_data') or {}
+        title = tech_data.get('title') or page.get('url') or 'Untitled generated post'
+        
+        # 1. Structure WordPress API endpoint
+        wp_api_base = wp_url.rstrip('/ ')
+        post_url = f"{wp_api_base}/wp-json/wp/v2/posts"
+        
+        # 2. Build WordPress Payload
+        post_data = {
+            "title": title,
+            "content": html_content,
+            "status": "draft",
+            "format": "standard"
+        }
+        
+        # 3. Send POST to WordPress with Basic Auth (Application Passwords)
+        auth = HTTPBasicAuth(wp_username, wp_app_password)
+        response = requests.post(post_url, auth=auth, json=post_data, timeout=30)
+        
+        if response.status_code in [200, 201]:
+            resp_data = response.json()
+            # Update local DB if we wanted to
+            return jsonify({
+                "message": "Successfully published draft to WordPress",
+                "link": resp_data.get('link', '')
+            })
+        else:
+            return jsonify({
+                "error": f"WordPress API Error ({response.status_code}): {response.text}"
+            }), response.status_code
+            
+    except Exception as e:
+        print(f"Error publishing to WordPress: {e}")
         return jsonify({"error": str(e)}), 500
 
 

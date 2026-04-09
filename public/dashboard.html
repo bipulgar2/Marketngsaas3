@@ -121,7 +121,7 @@
             <!-- Right Side: Client Selector + New Client -->
             <div class="flex items-center gap-3">
                 <select id="clientSelector" onchange="selectClient(this.value)"
-                    class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-1.5 focus:border-violet-500 focus:outline-none min-w-[200px]">
+                    class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-1.5 focus:border-violet-500 focus:outline-none min-w-[200px] pointer-events-none appearance-none">
                     <option value="">Select Client...</option>
                 </select>
                 <button onclick="showNewClientModal()"
@@ -486,6 +486,12 @@
 
         function selectClient(clientId, skipReload = false) {
             currentClient = clients.find(c => c.id === clientId) || null;
+            
+            // Update the display indicator
+            const selector = document.getElementById('clientSelector');
+            if (selector) {
+                selector.value = clientId || '';
+            }
 
             // Update URL
             const url = new URL(window.location);
@@ -528,8 +534,8 @@
                 contentArea.innerHTML = `
                     <div class="flex flex-col items-center justify-center h-64 text-gray-500">
                         <i data-lucide="folder-open" class="w-12 h-12 mb-4 text-gray-600"></i>
-                        <p class="text-lg font-medium">Select a client to view data</p>
-                        <p class="text-sm mt-1">Use the dropdown in the top right corner</p>
+                        <p class="text-lg font-medium">Select a project to view data</p>
+                        <p class="text-sm mt-1">Please select a project from the Dashboard tab</p>
                     </div>`;
                 pageActions.innerHTML = '';
             } else {
@@ -752,6 +758,7 @@
         // =====================================================================
         let _analyticsData = null;
         let _analyticsTemplate = localStorage.getItem('analytics_template') || 'gsc';
+        let _analyticsDuration = localStorage.getItem('analytics_duration') || '1m';
         let _analyticsView = 'overview';
 
         // =====================================================================
@@ -819,7 +826,7 @@
                 const response = await fetch('/api/google/metrics', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ gsc_property: gscProp, ga4_property: ga4Prop })
+                    body: JSON.stringify({ gsc_property: gscProp, ga4_property: ga4Prop, duration: _analyticsDuration })
                 });
 
                 const data = await response.json();
@@ -847,6 +854,11 @@
             _analyticsView = 'overview';
             localStorage.setItem('analytics_template', tpl);
             renderAnalyticsDashboard();
+        }
+        function switchAnalyticsDuration(duration) {
+            _analyticsDuration = duration;
+            localStorage.setItem('analytics_duration', duration);
+            loadAnalyticsDashboard(); // Need to fetch new date range data
         }
         function switchAnalyticsView(view) {
             _analyticsView = view;
@@ -879,14 +891,30 @@
             const ac = cfg.accent;
             const acRgb = cfg.accentRgb;
 
-            // Template selector
+            // Template & Duration selector
             const tplSelector = `
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-[10px] text-gray-600 uppercase tracking-widest mr-1">Template</span>
-                    <button onclick="switchAnalyticsTemplate('gsc')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='gsc' ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="search" class="w-3 h-3 inline mr-1"></i>GSC</button>
-                    <button onclick="switchAnalyticsTemplate('ga4')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='ga4' ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="bar-chart-3" class="w-3 h-3 inline mr-1"></i>GA4</button>
-                    <button onclick="switchAnalyticsTemplate('ecom')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='ecom' ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="shopping-cart" class="w-3 h-3 inline mr-1"></i>E-Commerce</button>
+                <div class="flex flex-wrap items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] text-gray-600 uppercase tracking-widest mr-1">Template</span>
+                        <button onclick="switchAnalyticsTemplate('gsc')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='gsc' ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="search" class="w-3 h-3 inline mr-1"></i>GSC</button>
+                        <button onclick="switchAnalyticsTemplate('ga4')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='ga4' ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="bar-chart-3" class="w-3 h-3 inline mr-1"></i>GA4</button>
+                        <button onclick="switchAnalyticsTemplate('ecom')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='ecom' ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="shopping-cart" class="w-3 h-3 inline mr-1"></i>E-Commerce</button>
+                    </div>
+                    <div class="flex items-center gap-2 mt-2 sm:mt-0">
+                        <span class="text-[10px] text-gray-600 uppercase tracking-widest">Duration</span>
+                        <select onchange="switchAnalyticsDuration(this.value)" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
+                            <option value="1m" ${_analyticsDuration === '1m' ? 'selected' : ''}>1 Month</option>
+                            <option value="3m" ${_analyticsDuration === '3m' ? 'selected' : ''}>3 Months</option>
+                            <option value="6m" ${_analyticsDuration === '6m' ? 'selected' : ''}>6 Months</option>
+                            <option value="12m" ${_analyticsDuration === '12m' ? 'selected' : ''}>12 Months</option>
+                            <option value="max" ${_analyticsDuration === 'max' ? 'selected' : ''}>Max (16 Months)</option>
+                        </select>
+                    </div>
                 </div>`;
+            
+            // Helpful label from the backend if available
+            const durationLabelText = data.meta && data.meta.duration_label ? data.meta.duration_label : '';
+            const durationLabelHtml = durationLabelText ? `<div class="text-[10px] text-gray-500 mt-1 whitespace-nowrap">${durationLabelText}</div>` : '';
 
             // Left sidebar
             const sidebarHtml = cfg.views.map(v => `
@@ -912,14 +940,14 @@
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
                         ${[{l:'Impressions',v:gsc.impressions,p:gscPrev.impressions},{l:'Clicks',v:gsc.clicks,p:gscPrev.clicks},{l:'Site CTR',v:gsc.ctr,p:gscPrev.ctr,fmt:'pct'},{l:'Average Position',v:gsc.position,p:gscPrev.position,inv:true,fmt:'dec'},{l:'Unique Queries',v:(gsc.queries||[]).length},{l:'Unique Pages',v:(gsc.pages||[]).length}].map(m => {
                             let display = m.fmt === 'pct' ? ((m.v||0)*100).toFixed(2)+'%' : m.fmt === 'dec' ? (m.v||0).toFixed(2) : fmtK(m.v||0);
-                            return '<div class="border border-gray-700/60 rounded-lg p-3 text-center" style="background:rgba('+acRgb+',0.04)"><div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div></div>';
+                            return '<div class="border border-gray-700/60 rounded-lg p-3 text-center" style="background:rgba('+acRgb+',0.04)"><div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div>' + durationLabelHtml + '</div>';
                         }).join('')}
                     </div>
                     <div class="border border-gray-700/60 rounded-xl p-4 mb-6" style="background:rgba(${acRgb},0.03)">
                         <div class="flex items-center justify-between mb-2">
                             <div class="flex items-center gap-4">
                                 <span class="flex items-center gap-1.5 text-xs text-gray-400"><span class="w-4 h-[2px] rounded" style="background:${ac}"></span>Impressions</span>
-                                <span class="flex items-center gap-1.5 text-xs text-gray-500"><span class="w-4 h-[2px] rounded border-t border-dashed border-gray-500" style="border-style:dashed"></span>Previous 30d</span>
+                                <span class="flex items-center gap-1.5 text-xs text-gray-500"><span class="w-4 h-[2px] rounded border-t border-dashed border-gray-500" style="border-style:dashed"></span>Previous ${data.meta && data.meta.duration_days ? data.meta.duration_days + 'd' : 'Period'}</span>
                             </div>
                         </div>
                         <canvas id="premiumLineChart" height="110"></canvas>
@@ -974,7 +1002,7 @@
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
                         ${[{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Bounce Rate',v:ga4.bounceRate,p:ga4Prev.bounceRate,fmt:'pctraw',inv:true},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'},{l:'Transactions',v:ga4.transactions,p:ga4Prev.transactions},{l:'Purchaser Rate',v:ga4.purchaserRate,p:ga4Prev.purchaserRate,fmt:'pctraw'}].map(m => {
                             let display = m.fmt === 'pctraw' ? (m.v||0).toFixed(2)+'%' : m.fmt === 'dur' ? formatDuration(m.v||0) : fmtK(m.v||0);
-                            return '<div class="border border-gray-700/60 rounded-lg p-3 text-center" style="background:rgba('+acRgb+',0.04)"><div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div></div>';
+                            return '<div class="border border-gray-700/60 rounded-lg p-3 text-center" style="background:rgba('+acRgb+',0.04)"><div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div>' + durationLabelHtml + '</div>';
                         }).join('')}
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
@@ -1125,8 +1153,10 @@
                             <div class="flex items-center gap-2 text-xs text-gray-500">
                                 <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${gscProp?ac:'#4b5563'}"></span>GSC</span>
                                 <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${ga4Prop?ac:'#4b5563'}"></span>GA4</span>
-                                <span class="text-gray-700 mx-1">|</span>
-                                <span>Last 30 days vs previous</span>
+                                <div class="h-3 w-[1px] bg-gray-700/50"></div>
+                                <div class="flex items-center gap-1 text-[10px] text-gray-500 tracking-wider uppercase">
+                                    <span>${data.meta && data.meta.duration_days ? 'Last ' + data.meta.duration_days + ' days vs previous' : 'Last 30 days vs previous'}</span>
+                                </div>
                             </div>
                         </div>
                         ${viewHtml}
@@ -1165,11 +1195,12 @@
                     dataCurr = (ga4.timeseries||[]).map(r => r.sessions);
                     dataPrev = (ga4.prevTimeseries||[]).map(r => r.sessions);
                 }
-                new Chart(lineEl, {
+                if (window.premiumLineChartInstance) window.premiumLineChartInstance.destroy();
+                window.premiumLineChartInstance = new Chart(lineEl, {
                     type: 'line',
                     data: { labels, datasets: [
                         { label: tpl==='gsc'?'Impressions':'Sessions', data: dataCurr, borderColor: ac, backgroundColor: gradient, fill: true, tension: 0.35, borderWidth: 2, pointRadius: 2, pointBackgroundColor: ac, pointBorderColor: ac, pointHoverRadius: 5 },
-                        { label: 'Previous', data: dataPrev, borderColor: '#4b5563', borderDash: [5,5], fill: false, tension: 0.35, borderWidth: 1.5, pointRadius: 0 }
+                        { label: 'Previous ' + (_analyticsData && _analyticsData.meta && _analyticsData.meta.duration_days ? _analyticsData.meta.duration_days + 'd' : ''), data: dataPrev, borderColor: '#4b5563', borderDash: [5,5], fill: false, tension: 0.35, borderWidth: 1.5, pointRadius: 0 }
                     ]},
                     options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af', borderColor: '#374151', borderWidth: 1 } }, scales: { x: { grid: { color: gridColor }, ticks: { color: tickColor, font: chartFont, maxTicksLimit: 10 } }, y: { grid: { color: gridColor }, ticks: { color: tickColor, font: chartFont, callback: v => fmtK(v) } } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } }
                 });
@@ -1189,7 +1220,8 @@
                     devData = (ga4.devices||[]).map(d => d.sessions);
                     devMetric = 'sessions';
                 }
-                new Chart(donutEl, {
+                if (window.premiumDonutInstance) window.premiumDonutInstance.destroy();
+                window.premiumDonutInstance = new Chart(donutEl, {
                     type: 'doughnut',
                     data: { labels: devLabels, datasets: [{ data: devData, backgroundColor: devLabels.map(l => devColors[l]||'#8b5cf6'), borderWidth: 0, hoverBorderWidth: 2, hoverBorderColor: '#fff' }] },
                     options: { responsive: true, maintainAspectRatio: true, cutout: '68%', plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af' } } }
@@ -1214,7 +1246,8 @@
                 const chColors = [ac, '#6366f1', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#14b8a6', '#ec4899'];
                 const chLabels = (ga4.channels||[]).slice(0,6).map(c => c.channel);
                 const chData = (ga4.channels||[]).slice(0,6).map(c => c.sessions);
-                new Chart(chDonutEl, {
+                if (window.premiumChDonutInstance) window.premiumChDonutInstance.destroy();
+                window.premiumChDonutInstance = new Chart(chDonutEl, {
                     type: 'doughnut',
                     data: { labels: chLabels, datasets: [{ data: chData, backgroundColor: chColors.slice(0, chLabels.length), borderWidth: 0 }] },
                     options: { responsive: true, maintainAspectRatio: true, cutout: '55%', plugins: { legend: { display: false } } }
@@ -1225,7 +1258,8 @@
             const chBarEl = document.getElementById('premiumChannelBar');
             if (chBarEl && ga4.channels) {
                 const chColors2 = [ac, '#6366f1', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#14b8a6', '#ec4899'];
-                new Chart(chBarEl, {
+                if (window.premiumChBarInstance) window.premiumChBarInstance.destroy();
+                window.premiumChBarInstance = new Chart(chBarEl, {
                     type: 'bar',
                     data: { labels: (ga4.channels||[]).map(c => c.channel), datasets: [{ label: 'Sessions', data: (ga4.channels||[]).map(c => c.sessions), backgroundColor: (ga4.channels||[]).map((_,i) => chColors2[i%chColors2.length]), borderRadius: 4, barThickness: 18 }] },
                     options: { responsive: true, maintainAspectRatio: true, indexAxis: 'y', plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937' } }, scales: { x: { grid: { color: gridColor }, ticks: { color: tickColor, font: chartFont, callback: v => fmtK(v) } }, y: { grid: { display: false }, ticks: { color: '#d1d5db', font: { ...chartFont, size: 11 } } } } }
@@ -2771,7 +2805,17 @@
                             ${t.type}
                         </span>
                     </td>
-                    <td class="px-6 py-4 text-gray-400 capitalize">${t.assigned_role?.replace('_', ' ') || '-'}</td>
+                    <td class="px-6 py-4">
+                        <select onchange="updateTaskRole('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500">
+                            <option value="">Unassigned</option>
+                            <option value="Campaign Manager" ${t.assigned_role === 'Campaign Manager' ? 'selected' : ''}>Campaign Manager</option>
+                            <option value="Content Strategist" ${t.assigned_role === 'Content Strategist' ? 'selected' : ''}>Content Strategist</option>
+                            <option value="Content Creator" ${t.assigned_role === 'Content Creator' ? 'selected' : ''}>Content Creator</option>
+                            <option value="Optimization Specialist" ${t.assigned_role === 'Optimization Specialist' ? 'selected' : ''}>Optimization Specialist</option>
+                            <option value="Link Builder" ${t.assigned_role === 'Link Builder' ? 'selected' : ''}>Link Builder</option>
+                            <option value="Reporting Manager" ${t.assigned_role === 'Reporting Manager' ? 'selected' : ''}>Reporting Manager</option>
+                        </select>
+                    </td>
                      <td class="px-6 py-4">
                         ${getPriorityBadge(t.priority)}
                     </td>
@@ -3011,6 +3055,33 @@
             } catch (e) {
                 console.error(e);
                 alert('Task update failed: ' + e.message);
+                window.renderTasksTable();
+            }
+        }
+
+        async function updateTaskRole(taskId, newRole) {
+            try {
+                const res = await fetch(`/api/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ assigned_role: newRole || null })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Failed to update role on server');
+                }
+
+                // Update local state and trigger re-render
+                const taskIndex = currentLoadedTasks.findIndex(t => t.id === taskId);
+                if (taskIndex !== -1) {
+                    currentLoadedTasks[taskIndex].assigned_role = newRole || null;
+                }
+                window.renderTasksTable();
+
+            } catch (e) {
+                console.error(e);
+                alert('Role update failed: ' + e.message);
                 // Revert UI by re-rendering
                 window.renderTasksTable();
             }
@@ -3363,14 +3434,14 @@
             }).join('');
 
             contentArea.innerHTML = `
-                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
                             <tr>
-                                <th class="px-6 py-3 text-left font-medium">Product</th>
+                                <th class="px-6 py-3 text-left font-medium min-w-[300px]">Product</th>
                                 <th class="px-6 py-3 text-left font-medium">URL</th>
                                 <th class="px-6 py-3 text-left font-medium">Existing Content</th>
-                                <th class="px-6 py-3 text-left font-medium">Action</th>
+                                <th class="px-6 py-3 text-left font-medium min-w-[160px]">Action</th>
                                 <th class="px-6 py-3 text-left font-medium">Generated</th>
                                 <th class="px-6 py-3 text-left font-medium">Meta Description</th>
                             </tr>
@@ -3441,13 +3512,14 @@
                                 ${t.keywords || '-'}
                             </td>
                             <td class="px-6 py-4">
-                                <select onchange="handleMoFuAction('${t.id}', this.value)" class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-full">
+                                <select onchange="handleMoFuAction('${t.id}', this.value)" class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-full min-w-[150px]">
                                     <option value="Idle" ${t.product_action === 'Idle' ? 'selected' : ''}>Idle</option>
                                     <option value="Conduct Research" ${t.product_action === 'Conduct Research' ? 'selected' : ''}>Conduct Research</option>
                                     <option value="Generate Content" ${t.product_action === 'Generate Content' ? 'selected' : ''}>Generate Content</option>
                                     <option value="Generate ToFu" ${t.product_action === 'Generate ToFu' ? 'selected' : ''}>Generate ToFu</option>
                                     <option value="Generate Image" ${t.product_action === 'Generate Image' ? 'selected' : ''}>Generate Image</option>
                                     <option value="PushWebflow" ${t.product_action === 'PushWebflow' ? 'selected' : ''}>PushWebflow</option>
+                                    <option value="PushWordpress" ${t.product_action === 'PushWordpress' ? 'selected' : ''}>PushWordpress</option>
                                     <option value="CopyHTML">Copy HTML</option>
                                 </select>
                             </td>
@@ -3468,15 +3540,15 @@
             }
 
             contentArea.innerHTML = `
-                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
                             <tr>
                                 <th class="px-6 py-3 w-12"></th>
-                                <th class="px-6 py-3 text-left font-medium">Topic</th>
+                                <th class="px-6 py-3 text-left font-medium min-w-[300px]">Topic</th>
                                 <th class="px-6 py-3 text-left font-medium">Description</th>
                                 <th class="px-6 py-3 text-left font-medium">Keywords</th>
-                                <th class="px-6 py-3 text-left font-medium">Action</th>
+                                <th class="px-6 py-3 text-left font-medium min-w-[160px]">Action</th>
                                 <th class="px-6 py-3 text-left font-medium">Research</th>
                                 <th class="px-6 py-3 text-left font-medium">Content</th>
                                 <th class="px-6 py-3 text-left font-medium">Meta Title</th>
@@ -3567,12 +3639,13 @@
                                     ${t.keywords || '-'}
                                 </td>
                                 <td class="px-6 py-4">
-                                    <select onchange="handleToFuAction('${t.id}', this.value)" class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-full">
+                                    <select onchange="handleToFuAction('${t.id}', this.value)" class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-full min-w-[150px]">
                                         <option value="Idle" ${t.product_action === 'Idle' ? 'selected' : ''}>Idle</option>
                                         <option value="Conduct Research" ${t.product_action === 'Conduct Research' ? 'selected' : ''}>Conduct Research</option>
                                         <option value="Generate Content" ${t.product_action === 'Generate Content' ? 'selected' : ''}>Generate Content</option>
                                         <option value="Generate Image" ${t.product_action === 'Generate Image' ? 'selected' : ''}>Generate Image</option>
                                         <option value="PushWebflow" ${t.product_action === 'PushWebflow' ? 'selected' : ''}>PushWebflow</option>
+                                        <option value="PushWordpress" ${t.product_action === 'PushWordpress' ? 'selected' : ''}>PushWordpress</option>
                                         <option value="CopyHTML">Copy HTML</option>
                                     </select>
                                 </td>
@@ -3594,15 +3667,15 @@
             }
 
             contentArea.innerHTML = `
-                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
                             <tr>
                                 <th class="px-6 py-3 w-12"></th>
-                                <th class="px-6 py-3 text-left font-medium">Topic</th>
+                                <th class="px-6 py-3 text-left font-medium min-w-[300px]">Topic</th>
                                 <th class="px-6 py-3 text-left font-medium">Description</th>
                                 <th class="px-6 py-3 text-left font-medium">Keywords</th>
-                                <th class="px-6 py-3 text-left font-medium">Action</th>
+                                <th class="px-6 py-3 text-left font-medium min-w-[160px]">Action</th>
                                 <th class="px-6 py-3 text-left font-medium">Research</th>
                                 <th class="px-6 py-3 text-left font-medium">Content</th>
                                 <th class="px-6 py-3 text-left font-medium">Meta Title</th>
@@ -3668,6 +3741,11 @@
             if (action === 'PushWebflow') {
                 currentArticlePageId = pageId;
                 contentOpenWebflowModal();
+                return;
+            }
+            if (action === 'PushWordpress') {
+                currentArticlePageId = pageId;
+                contentOpenWordpressModal();
                 return;
             }
             if (action === 'CopyHTML') {
@@ -3738,6 +3816,11 @@
             if (action === 'PushWebflow') {
                 currentArticlePageId = pageId;
                 contentOpenWebflowModal();
+                return;
+            }
+            if (action === 'PushWordpress') {
+                currentArticlePageId = pageId;
+                contentOpenWordpressModal();
                 return;
             }
             if (action === 'CopyHTML') {
@@ -4142,6 +4225,90 @@
             } catch (e) {
                 console.error(e);
                 alert('Error publishing: ' + e.message);
+            } finally {
+                contentHideLoading();
+            }
+        }
+
+        // --- WordPress Modal ---
+        function contentOpenWordpressModal() {
+            if (!currentArticlePageId) return alert('No article selected to publish');
+
+            let modal = document.getElementById('contentWpModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'contentWpModal';
+                modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[60]';
+                modal.onclick = function(e) { if (e.target === modal) modal.classList.add('hidden'); };
+                document.body.appendChild(modal);
+            }
+
+            const savedUrl = localStorage.getItem('wp_url') || '';
+            const savedUser = localStorage.getItem('wp_username') || '';
+            const savedPass = localStorage.getItem('wp_app_password') || '';
+            
+            modal.innerHTML = `
+                <div class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-white">Publish to WordPress</h3>
+                        <button onclick="document.getElementById('contentWpModal').classList.add('hidden')" class="text-gray-400 hover:text-white">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">WordPress Site URL</label>
+                            <input type="url" id="contentWpUrl" value="${savedUrl}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" placeholder="https://yourdomain.com">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">WordPress Username</label>
+                            <input type="text" id="contentWpUsername" value="${savedUser}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" placeholder="admin">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Application Password</label>
+                            <input type="password" id="contentWpAppPassword" value="${savedPass}" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" placeholder="xxxx xxxx xxxx xxxx">
+                            <p class="text-[10px] text-gray-500 mt-1">Generate inside WP Admin -> Users -> Profile -> Application Passwords</p>
+                        </div>
+                        <button onclick="contentPublishToWordpress()" class="mt-3 w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-2 rounded text-sm font-medium">Publish as Draft</button>
+                    </div>
+                </div>`;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+        }
+
+        async function contentPublishToWordpress() {
+            const wp_url = document.getElementById('contentWpUrl').value.trim();
+            const wp_username = document.getElementById('contentWpUsername').value.trim();
+            const wp_app_password = document.getElementById('contentWpAppPassword').value.trim();
+            
+            if (!wp_url || !wp_username || !wp_app_password) return alert("Please fill out all WordPress credentials.");
+            
+            localStorage.setItem('wp_url', wp_url);
+            localStorage.setItem('wp_username', wp_username);
+            localStorage.setItem('wp_app_password', wp_app_password);
+            
+            contentShowLoading('Publishing to WordPress as Draft...');
+            try {
+                const res = await fetch('/api/publish-wordpress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        page_id: currentArticlePageId,
+                        wp_url: wp_url,
+                        wp_username: wp_username,
+                        wp_app_password: wp_app_password
+                    })
+                });
+                
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Unknown error');
+                
+                alert("Success! Draft posted to WordPress\\n\\nLink: " + (data.link || ""));
+                document.getElementById('contentWpModal').classList.add('hidden');
+            } catch (e) {
+                console.error(e);
+                alert("Error pushing to WordPress: " + e.message);
             } finally {
                 contentHideLoading();
             }

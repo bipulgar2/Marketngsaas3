@@ -1901,6 +1901,79 @@ def save_audit_results():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/audit-links', methods=['GET'])
+@login_required
+def get_audit_links():
+    """Fetch all crawled URLs from the audit results for a campaign."""
+    try:
+        project_id = request.args.get('project_id')
+        if not project_id:
+            return jsonify({"error": "project_id is required"}), 400
+            
+        client = supabase_admin or supabase
+        
+        # We need to find the audit associated with this campaign
+        result = client.table('audits').select('results').eq('campaign_id', project_id).order('created_at', desc=True).limit(1).execute()
+        
+        if not result.data:
+            return jsonify({"pages": []})
+            
+        audit_results = result.data[0].get('results', {}) or {}
+        pages = audit_results.get('pages', [])
+        
+        return jsonify({"pages": pages})
+    except Exception as e:
+        logger.error(f"Error fetching audit links: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/assign-page-type', methods=['POST'])
+@login_required
+def assign_page_type():
+    """Manually assign a page_type (BOFU/MOFU/TOFU) to a URL, adding it to the pages table if needed."""
+    try:
+        data = request.json
+        project_id = data.get('project_id')
+        url = data.get('url')
+        page_type = data.get('page_type')
+        tech_data = data.get('tech_audit_data', {})
+        
+        if not project_id or not url or not page_type:
+            return jsonify({"error": "project_id, url, and page_type are required"}), 400
+            
+        client = supabase_admin or supabase
+        
+        # Check if the page already exists in the pages table
+        existing_res = client.table('pages').select('id, page_type').eq('project_id', project_id).eq('url', url).execute()
+        
+        # Note: We need a mapping for frontend concepts if needed, but 'product' is BOFU
+        db_page_type = page_type
+        if page_type.lower() == 'bofu':
+            db_page_type = 'product'
+        elif page_type.lower() == 'mofu':
+            db_page_type = 'category'
+            
+        if existing_res.data:
+            # Update existing page
+            page_id = existing_res.data[0]['id']
+            client.table('pages').update({
+                'page_type': db_page_type,
+                'tech_audit_data': tech_data
+            }).eq('id', page_id).execute()
+        else:
+            # Insert new page
+            client.table('pages').insert({
+                'project_id': project_id,
+                'url': url,
+                'page_type': db_page_type,
+                'tech_audit_data': tech_data,
+                'content_description': 'Manually assigned from All Links'
+            }).execute()
+            
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.error(f"Error assigning page type: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/deep-audit/slides', methods=['POST'])
 @app.route('/api/deep-audit/generate-slides', methods=['POST'])
 @login_required
@@ -1953,7 +2026,23 @@ def generate_deep_audit_slides_endpoint():
                         except Exception as merge_err:
                             logger.warning(f"Slides: merge from audits failed: {merge_err}")
                 else:
-                    # Fallback to audits table
+                    # Try site_audits table first for global site audits
+                    site_audit_res = client.table('site_audits').select('*').eq('id', audit_id).execute()
+                    if site_audit_res.data:
+                        sa = site_audit_res.data[0]
+                        sa_data = sa.get('audit_data', {}) or {}
+                        domain = sa.get('domain', 'unknown')
+                        
+                        audit_data = {
+                            **sa_data,
+                            'domain': domain,
+                            'organic_keywords': sa_data.get('organic_keywords', sa_data.get('keywords', [])),
+                            'backlinks_summary': sa_data.get('backlinks_summary', {}),
+                            'referring_domains': sa_data.get('referring_domains', [])
+                        }
+                        logger.info(f"Slides: loaded data from site_audits table for audit {audit_id}")
+                    else:
+                        # Fallback to audits table
                     result = client.table('audits').select('*, campaigns(domain)').eq('id', audit_id).execute()
                     if result.data:
                         record = result.data[0]

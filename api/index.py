@@ -1945,18 +1945,26 @@ def assign_page_type():
         # Check if the page already exists in the pages table
         existing_res = client.table('pages').select('id, page_type').eq('project_id', project_id).eq('url', url).execute()
         
-        # Note: We need a mapping for frontend concepts if needed, but 'product' is BOFU
-        db_page_type = page_type
+        # Note: We need to map to frontend concepts
+        db_page_type = 'topic'
+        db_funnel_stage = ''
+        
         if page_type.lower() == 'bofu':
             db_page_type = 'product'
+            db_funnel_stage = 'BoFu'
         elif page_type.lower() == 'mofu':
-            db_page_type = 'category'
+            db_page_type = 'topic'
+            db_funnel_stage = 'MoFu'
+        elif page_type.lower() == 'tofu':
+            db_page_type = 'topic'
+            db_funnel_stage = 'ToFu'
             
         if existing_res.data:
             # Update existing page
             page_id = existing_res.data[0]['id']
             client.table('pages').update({
                 'page_type': db_page_type,
+                'funnel_stage': db_funnel_stage,
                 'tech_audit_data': tech_data
             }).eq('id', page_id).execute()
         else:
@@ -1965,6 +1973,7 @@ def assign_page_type():
                 'project_id': project_id,
                 'url': url,
                 'page_type': db_page_type,
+                'funnel_stage': db_funnel_stage,
                 'tech_audit_data': tech_data,
                 'content_description': 'Manually assigned from All Links'
             }).execute()

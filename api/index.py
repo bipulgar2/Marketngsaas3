@@ -1553,6 +1553,40 @@ def get_project_data(audit_id):
         result = client.table('projects').select('*').eq('audit_id', audit_id).execute()
         
         if not result.data:
+            # ---- CHECK site_audits table first (Global Site Audit feature) ----
+            try:
+                site_audit_res = client.table('site_audits').select('*').eq('id', audit_id).single().execute()
+                if site_audit_res.data:
+                    sa = site_audit_res.data
+                    sa_data = sa.get('audit_data', {}) or {}
+                    domain = sa.get('domain', '')
+                    logger.info(f"Found audit {audit_id} in site_audits table for domain {domain}")
+                    return jsonify({
+                        'success': True,
+                        'project_id': None,
+                        'audit_id': audit_id,
+                        'domain': domain,
+                        'data': {
+                            'task_id': sa.get('task_id', ''),
+                            'domain': domain,
+                            'status': sa.get('status', 'completed'),
+                            'created_at': sa.get('created_at', ''),
+                            'organic_keywords': sa_data.get('organic_keywords', sa_data.get('keywords', [])),
+                            'total_keywords': sa_data.get('total_keywords', 0),
+                            'total_traffic': sa_data.get('total_traffic', 0),
+                            'keywords_at_limit': sa_data.get('keywords_at_limit', False),
+                            'backlinks_summary': sa_data.get('backlinks_summary', {}),
+                            'referring_domains': sa_data.get('referring_domains', []),
+                            'pages': sa_data.get('pages', []),
+                            'pagespeed': sa_data.get('pagespeed', {}),
+                            'max_pages': sa.get('max_pages', 50),
+                            'crawl_summary': sa_data.get('crawl_summary', {}),
+                            'page_issues': sa_data.get('page_issues', [])
+                        }
+                    })
+            except Exception as sa_err:
+                logger.debug(f"site_audits lookup failed for {audit_id}: {sa_err}")
+            
             # ---- BACKFILL: Create project record from existing audit data ----
             logger.info(f"No project found for audit {audit_id}, backfilling from audits table...")
             

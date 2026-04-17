@@ -3777,7 +3777,6 @@ def batch_update_pages():
                             # Update Page
                             (supabase_admin or supabase).table('pages').update({
                                 "content": generated_text,
-                                "status": "Generated",
                                 "product_action": "Idle",
                                 "tech_audit_data": {
                                     **page.get('tech_audit_data', {}),

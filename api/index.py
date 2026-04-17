@@ -1197,28 +1197,48 @@ def get_client_stats():
 
     db = supabase_admin or supabase
     keywords_raw, total_kw, total_traffic = [], 0, 0
+    proj = {}
 
     try:
         if audit_id:
-            # Competitor row: find the project linked to this specific audit
-            proj_res = db.table('projects').select('full_audit_data') \
-                .eq('audit_id', audit_id).limit(1).execute()
+            # Competitor row: find the competitor domain from audits
+            aud_res = db.table('audits').select('results, type').eq('id', audit_id).limit(1).execute()
+            if aud_res.data and aud_res.data[0].get('results'):
+                comp_domain = aud_res.data[0]['results'].get('competitor_domain')
+                if comp_domain:
+                    # Strip http/www
+                    c_dom = comp_domain.replace('https://', '').replace('http://', '').split('/')[0].strip('www.')
+                    sa_res = db.table('site_audits').select('full_audit_data').ilike('domain', f"%{c_dom}%").limit(1).execute()
+                    if sa_res.data:
+                        proj = sa_res.data[0].get('full_audit_data') or {}
+            
+            # Fallback to projects
+            if not proj:
+                proj_res = db.table('projects').select('full_audit_data').eq('audit_id', audit_id).limit(1).execute()
+                if proj_res.data:
+                    proj = proj_res.data[0].get('full_audit_data') or {}
         else:
-            # Client row: find the project linked to the latest technical audit for this campaign
+            # Client row
             if not campaign_id:
                 return jsonify({'error': 'campaign_id or audit_id required'}), 400
-            # Get the latest technical audit id
-            aud_res = db.table('audits').select('id') \
-                .eq('campaign_id', campaign_id).eq('type', 'technical') \
-                .order('created_at', desc=True).limit(1).execute()
-            latest_audit_id = (aud_res.data or [{}])[0].get('id')
-            if not latest_audit_id:
-                return jsonify({'success': True, 'total_keywords': 0, 'total_traffic': 0, 'top10_keywords': []})
-            proj_res = db.table('projects').select('full_audit_data') \
-                .eq('audit_id', latest_audit_id).limit(1).execute()
+            
+            camp_res = db.table('campaigns').select('domain').eq('id', campaign_id).limit(1).execute()
+            domain = (camp_res.data or [{}])[0].get('domain')
+            if domain:
+                c_dom = domain.replace('https://', '').replace('http://', '').split('/')[0].strip('www.')
+                sa_res = db.table('site_audits').select('full_audit_data').ilike('domain', f"%{c_dom}%").limit(1).execute()
+                if sa_res.data:
+                    proj = sa_res.data[0].get('full_audit_data') or {}
+            
+            if not proj:
+                aud_res = db.table('audits').select('id').eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(1).execute()
+                latest_audit_id = (aud_res.data or [{}])[0].get('id')
+                if latest_audit_id:
+                    proj_res = db.table('projects').select('full_audit_data').eq('audit_id', latest_audit_id).limit(1).execute()
+                    if proj_res.data:
+                        proj = proj_res.data[0].get('full_audit_data') or {}
 
-        proj = (proj_res.data or [{}])[0].get('full_audit_data') or {}
-        # Keywords are stored as organic_keywords in projects.full_audit_data
+        # Keywords are stored as organic_keywords in full_audit_data
         keywords_raw = proj.get('organic_keywords') or proj.get('keywords', [])
         total_kw = proj.get('total_keywords', len(keywords_raw))
         total_traffic = proj.get('total_traffic', 0)
@@ -1342,6 +1362,7 @@ def refresh_backlinks():
 
 
 
+@app.route('/api/competitors/gap-analysis', methods=['GET'])
 @login_required
 @permission_required('view_all_campaigns')
 def analyze_competitor_gap():

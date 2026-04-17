@@ -2540,11 +2540,13 @@
                 contentArea.innerHTML += `
                     <div id="addCompetitorModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
                         <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-                            <h3 class="text-lg font-bold text-white mb-2">Analyze Competitor</h3>
-                            <p class="text-sm text-gray-400 mb-4">Enter a competitor's domain. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
+                            <h3 class="text-lg font-bold text-white mb-2">Analyze Competitors</h3>
+                            <p class="text-sm text-gray-400 mb-4">Provide minimum 3 competitors to add. We will run a deep technical audit, check their backlinks, and analyze their architecture.</p>
 
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Competitor Domain</label>
-                            <input type="text" id="competitorDomainInput" placeholder="competitor.com" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Competitors (Minimum 3)</label>
+                            <input type="text" id="competitorDomainInput1" placeholder="Competitor 1 (e.g. competitor1.com)" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-2 focus:outline-none focus:border-violet-500">
+                            <input type="text" id="competitorDomainInput2" placeholder="Competitor 2 (e.g. competitor2.com)" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-2 focus:outline-none focus:border-violet-500">
+                            <input type="text" id="competitorDomainInput3" placeholder="Competitor 3 (e.g. competitor3.com)" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
 
                             <label class="block text-sm font-medium text-gray-300 mb-2">Competitor Country</label>
                             <select id="competitorCountryInput" class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg mb-4 focus:outline-none focus:border-violet-500">
@@ -2563,7 +2565,7 @@
 
                             <div class="flex justify-end gap-3">
                                 <button onclick="document.getElementById('addCompetitorModal').classList.add('hidden')" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
-                                <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audit</button>
+                                <button onclick="handleAddCompetitorSubmit()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors font-medium">Start Audits</button>
                             </div>
                         </div>
                     </div>
@@ -2708,15 +2710,20 @@
         }
 
         async function handleAddCompetitorSubmit() {
-            const input = document.getElementById('competitorDomainInput');
+            const input1 = document.getElementById('competitorDomainInput1');
+            const input2 = document.getElementById('competitorDomainInput2');
+            const input3 = document.getElementById('competitorDomainInput3');
             const limitInput = document.getElementById('competitorPageLimitInput');
-            let domain = input.value.trim();
-            if (!domain) {
-                alert("Please enter a domain.");
+            
+            let domains = [];
+            if (input1 && input1.value.trim()) domains.push(input1.value.trim());
+            if (input2 && input2.value.trim()) domains.push(input2.value.trim());
+            if (input3 && input3.value.trim()) domains.push(input3.value.trim());
+
+            if (domains.length < 3) {
+                alert("Please provide a minimum of 3 competitors to add.");
                 return;
             }
-            // Strip http/https/www
-            domain = domain.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
 
             let maxPages = 200;
             if (limitInput && limitInput.value) {
@@ -2727,8 +2734,12 @@
             // Store competitor country for gap analysis calls
             window.lastCompetitorCountry = (document.getElementById('competitorCountryInput')?.value) || (currentClient?.settings?.location) || 'US';
 
-            // Re-use runAudit logic and pass flags
-            await runAudit(true, domain, maxPages);
+            // Run audit for each domain sequentially
+            for (let d of domains) {
+                // Strip http/https/www
+                let cleanDomain = d.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
+                await runAudit(true, cleanDomain, maxPages);
+            }
         }
 
         async function runCompetitorAnalysis() {

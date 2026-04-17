@@ -21,7 +21,10 @@ from api.dataforseo_client import (
     get_audit_status,
     get_audit_summary,
     get_page_issues,
-    get_domain_rank_overview
+    get_domain_rank_overview,
+    fetch_ranked_keywords,
+    fetch_backlinks_summary,
+    get_referring_domains
 )
 from api.utils import create_tasks_from_audit, categorize_audit_issues
 from api.export import generate_audit_excel
@@ -2065,6 +2068,170 @@ def generate_deep_audit_slides_endpoint():
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Internal Error: {str(e)}"}), 500
+
+# ==========================================
+# SITE AUDIT (GLOBAL) — Full-site audit without project
+# ==========================================
+
+@app.route('/api/site-audit/create', methods=['POST'])
+@login_required
+def site_audit_create():
+    """Start a full-site audit with DataForSEO. Accepts domain + max_pages directly (no project needed)."""
+    if not supabase:
+        return jsonify({"error": "Supabase not configured"}), 500
+
+    data = request.json
+    domain = data.get('domain', '').strip()
+    try:
+        max_pages = int(data.get('max_pages', 50))
+    except (ValueError, TypeError):
+        max_pages = 50
+
+    if not domain:
+        return jsonify({"success": False, "error": "domain is required"}), 400
+
+    domain = domain.replace('https://', '').replace('http://', '').strip('/')
+    domain = domain.split('/')[0]
+
+    client = supabase_admin or supabase
+
+    # Start DataForSEO crawl
+    dfs_result = start_onpage_audit(domain, max_pages)
+    if not dfs_result or not dfs_result.get('success'):
+        return jsonify(dfs_result or {"error": "Audit start failed"}), 500
+
+    task_id = dfs_result.get('task_id')
+
+    # Fetch keywords + backlinks in parallel (non-blocking enrichment)
+    keywords, backlinks_summary_data, referring_domains_data = [], {}, []
+    total_keywords, total_traffic = 0, 0
+    try:
+        keywords_data = fetch_ranked_keywords(domain)
+        keywords = keywords_data.get('keywords', []) if isinstance(keywords_data, dict) else []
+        total_keywords = keywords_data.get('total_count', len(keywords)) if isinstance(keywords_data, dict) else 0
+        total_traffic = keywords_data.get('estimated_traffic', 0) if isinstance(keywords_data, dict) else 0
+    except Exception as e:
+        logger.warning(f"[site-audit] Keywords fetch failed (non-fatal): {e}")
+
+    try:
+        backlinks_summary_data = fetch_backlinks_summary(domain)
+    except Exception as e:
+        logger.warning(f"[site-audit] Backlinks fetch failed (non-fatal): {e}")
+
+    try:
+        referring_domains_data = get_referring_domains(domain)
+    except Exception as e:
+        logger.warning(f"[site-audit] Referring domains fetch failed (non-fatal): {e}")
+
+    # Create a site_audits record in Supabase
+    audit_record = {
+        'domain': domain,
+        'max_pages': max_pages,
+        'task_id': task_id,
+        'status': 'crawling',
+        'created_at': time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        'audit_data': {
+            'task_id': task_id,
+            'domain': domain,
+            'organic_keywords': keywords[:200],
+            'total_keywords': total_keywords,
+            'total_traffic': total_traffic,
+            'backlinks_summary': backlinks_summary_data,
+            'referring_domains': referring_domains_data[:100] if isinstance(referring_domains_data, list) else [],
+            'max_pages': max_pages
+        }
+    }
+
+    audit_id = None
+    try:
+        res = client.table('site_audits').insert(audit_record).execute()
+        audit_id = res.data[0]['id'] if res.data else None
+    except Exception as e:
+        logger.error(f"[site-audit] DB insert failed: {e}")
+
+    return jsonify({
+        "success": True,
+        "task_id": task_id,
+        "audit_id": audit_id,
+        "domain": domain,
+        "max_pages": max_pages,
+        "message": f"Audit started for {domain} ({max_pages} pages)"
+    })
+
+
+@app.route('/api/site-audit/status/<task_id>', methods=['GET'])
+@login_required
+def site_audit_status(task_id):
+    """Check DataForSEO crawl status."""
+    try:
+        status = get_audit_status(task_id)
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/site-audit/save-results', methods=['POST'])
+@login_required
+def site_audit_save_results():
+    """Save completed audit results (summary + pages) to the site_audits record."""
+    if not supabase:
+        return jsonify({"error": "Supabase not configured"}), 500
+
+    data = request.json
+    audit_id = data.get('audit_id')
+    task_id = data.get('task_id')
+
+    if not audit_id or not task_id:
+        return jsonify({"error": "audit_id and task_id required"}), 400
+
+    client = supabase_admin or supabase
+
+    try:
+        summary = get_audit_summary(task_id)
+        pages_result = get_page_issues(task_id, limit=200)
+        pages = pages_result.get('pages', [])
+
+        existing = client.table('site_audits').select('audit_data').eq('id', audit_id).execute()
+        audit_data = existing.data[0].get('audit_data', {}) if existing.data else {}
+
+        audit_data['summary'] = summary.get('summary', {})
+        audit_data['pages'] = pages
+        audit_data['status'] = 'completed'
+
+        client.table('site_audits').update({
+            'status': 'completed',
+            'audit_data': audit_data
+        }).eq('id', audit_id).execute()
+
+        return jsonify({
+            "success": True,
+            "pages_count": len(pages),
+            "summary": summary.get('summary', {})
+        })
+    except Exception as e:
+        logger.error(f"[site-audit] Save results error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/site-audit/list', methods=['GET'])
+@login_required
+def site_audit_list():
+    """List all site audits."""
+    if not supabase:
+        return jsonify({"error": "Supabase not configured"}), 500
+
+    client = supabase_admin or supabase
+
+    try:
+        res = client.table('site_audits').select('id, domain, max_pages, status, task_id, created_at, slides_url').order('created_at', desc=True).limit(50).execute()
+        return jsonify({"success": True, "audits": res.data or []})
+    except Exception as e:
+        logger.error(f"[site-audit] List error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==========================================
+# END SITE AUDIT (GLOBAL)
+# ==========================================
 
 @app.route('/api/audit/<audit_id>/readability', methods=['GET'])
 @login_required

@@ -291,6 +291,7 @@
         // =========================================================================
         const TOP_TABS = [
             { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
+            { id: 'audit-2', label: 'Site Audit', icon: 'scan' },
             { id: 'tech-audit', label: 'Tech Audit', icon: 'search-code' },
             { id: 'content', label: 'Content', icon: 'file-text' },
             { id: 'keywords', label: 'Keywords', icon: 'key' },
@@ -310,6 +311,9 @@
             ],
             'tech-audit': [
                 { id: 'overview', label: 'Audit Overview' }
+            ],
+            'audit-2': [
+                { id: 'overview', label: 'Run Audit' }
             ],
             'content': [
                 { id: 'bofu', label: 'BoFu (Products)' },
@@ -413,6 +417,7 @@
             const titleMap = {
                 'dashboard': 'Dashboard',
                 'tech-audit': 'Tech Issues',
+                'audit-2': 'Site Audit',
                 'content': 'Content',
                 'keywords': 'Keywords',
                 'competitors': 'Competitors',
@@ -530,6 +535,8 @@
             // Load based on current tab
             if (currentTopTab === 'dashboard') {
                 await loadDashboardContent();
+            } else if (currentTopTab === 'audit-2') {
+                await loadAudit2Content();
             } else if (!currentClient) {
                 contentArea.innerHTML = `
                     <div class="flex flex-col items-center justify-center h-64 text-gray-500">
@@ -4312,6 +4319,282 @@
             } finally {
                 contentHideLoading();
             }
+        }
+
+        // =========================================================================
+        // SITE AUDIT (AUDIT 2) — Global, project-independent
+        // =========================================================================
+        let audit2Polls = {};
+
+        async function loadAudit2Content() {
+            const contentArea = document.getElementById('contentArea');
+            const pageActions = document.getElementById('pageActions');
+            pageActions.innerHTML = '';
+
+            contentArea.innerHTML = `
+                <div class="max-w-4xl mx-auto space-y-6">
+                    <!-- Header -->
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="p-2.5 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-xl border border-cyan-500/20">
+                            <i data-lucide="scan" class="w-6 h-6 text-cyan-400"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Site Audit</h2>
+                            <p class="text-xs text-gray-400">Run a full technical audit on any domain — no project required</p>
+                        </div>
+                    </div>
+
+                    <!-- Audit Form -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                        <div class="flex items-end gap-4">
+                            <div class="flex-1">
+                                <label class="block text-xs font-medium text-gray-400 mb-1.5">Domain</label>
+                                <input type="text" id="audit2Domain" placeholder="example.com"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-colors" />
+                            </div>
+                            <div class="w-40">
+                                <label class="block text-xs font-medium text-gray-400 mb-1.5">Max Pages</label>
+                                <select id="audit2PageCount"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none cursor-pointer">
+                                    <option value="10">10 pages</option>
+                                    <option value="25">25 pages</option>
+                                    <option value="50" selected>50 pages</option>
+                                    <option value="100">100 pages</option>
+                                    <option value="200">200 pages</option>
+                                    <option value="500">500 pages</option>
+                                </select>
+                            </div>
+                            <button id="audit2StartBtn" onclick="startAudit2()"
+                                class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-cyan-500/10">
+                                <i data-lucide="play" class="w-4 h-4"></i> Run Audit
+                            </button>
+                        </div>
+                        <div id="audit2Status" class="mt-3 text-sm hidden"></div>
+                    </div>
+
+                    <!-- Recent Audits -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl">
+                        <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                                <i data-lucide="history" class="w-4 h-4 text-gray-400"></i> Recent Audits
+                            </h3>
+                            <button onclick="loadAudit2List()" class="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1">
+                                <i data-lucide="refresh-cw" class="w-3 h-3"></i> Refresh
+                            </button>
+                        </div>
+                        <div id="audit2List" class="divide-y divide-gray-800">
+                            <div class="text-center text-gray-500 py-8 text-sm">Loading...</div>
+                        </div>
+                    </div>
+                </div>`;
+
+            lucide.createIcons();
+            loadAudit2List();
+        }
+
+        async function startAudit2() {
+            const domain = document.getElementById('audit2Domain').value.trim();
+            const maxPages = document.getElementById('audit2PageCount').value;
+            const statusEl = document.getElementById('audit2Status');
+            const btn = document.getElementById('audit2StartBtn');
+
+            if (!domain) { alert('Please enter a domain'); return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Starting...';
+            lucide.createIcons();
+            statusEl.classList.remove('hidden');
+            statusEl.innerHTML = `<span class="text-cyan-400">⏳ Starting audit for ${domain}...</span>`;
+
+            try {
+                const res = await fetch('/api/site-audit/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain, max_pages: parseInt(maxPages) })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    statusEl.innerHTML = `<span class="text-green-400">✅ Audit started: ${data.message}</span>`;
+                    document.getElementById('audit2Domain').value = '';
+
+                    if (data.audit_id && data.task_id) {
+                        pollAudit2Status(data.audit_id, data.task_id);
+                    }
+                    setTimeout(() => loadAudit2List(), 1000);
+                } else {
+                    statusEl.innerHTML = `<span class="text-red-400">❌ ${data.error || 'Failed to start audit'}</span>`;
+                }
+            } catch (e) {
+                statusEl.innerHTML = `<span class="text-red-400">❌ Error: ${e.message}</span>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i> Run Audit';
+                lucide.createIcons();
+            }
+        }
+
+        function pollAudit2Status(auditId, taskId) {
+            if (audit2Polls[auditId]) clearInterval(audit2Polls[auditId]);
+
+            const interval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/site-audit/status/${taskId}`);
+                    const data = await res.json();
+
+                    if (data.ready || data.crawl_status === 'finished') {
+                        clearInterval(interval);
+                        delete audit2Polls[auditId];
+
+                        await fetch('/api/site-audit/save-results', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ audit_id: auditId, task_id: taskId })
+                        });
+
+                        loadAudit2List();
+                    }
+                } catch (e) {
+                    console.warn('[audit2] Poll error:', e);
+                }
+            }, 10000);
+
+            audit2Polls[auditId] = interval;
+        }
+
+        async function loadAudit2List() {
+            const listEl = document.getElementById('audit2List');
+            if (!listEl) return;
+            listEl.innerHTML = '<div class="text-center text-gray-500 py-4 text-sm">Loading...</div>';
+
+            try {
+                const res = await fetch('/api/site-audit/list');
+                const data = await res.json();
+                const audits = data.audits || [];
+
+                if (audits.length === 0) {
+                    listEl.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm">No audits yet. Start one above.</div>';
+                    return;
+                }
+
+                listEl.innerHTML = audits.map(a => {
+                    const statusBadge = a.status === 'completed'
+                        ? '<span class="px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full text-xs font-medium">Completed</span>'
+                        : '<span class="px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full text-xs font-medium animate-pulse">Crawling...</span>';
+
+                    const date = new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+                    const slidesSection = a.status === 'completed' ? `
+                        <div class="flex items-center gap-2">
+                            <select id="tmpl-${a.id}" class="bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-cyan-500 outline-none">
+                                <option value="authority_shift">4-Pillar Authority (19 slides)</option>
+                            </select>
+                            <button onclick="generateAudit2Slides('${a.id}')"
+                                id="slides-btn-${a.id}"
+                                class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shadow-lg shadow-blue-500/10">
+                                <i data-lucide="presentation" class="w-3.5 h-3.5"></i> Create Slides
+                            </button>
+                        </div>
+                    ` : '';
+
+                    if (a.status === 'crawling' && a.task_id) {
+                        pollAudit2Status(a.id, a.task_id);
+                    }
+
+                    return `
+                        <div class="px-6 py-4 flex items-center justify-between hover:bg-gray-800/30 transition-colors">
+                            <div class="flex items-center gap-4">
+                                <div class="p-2 bg-gray-800 rounded-lg">
+                                    <i data-lucide="globe" class="w-4 h-4 text-cyan-400"></i>
+                                </div>
+                                <div>
+                                    <p class="text-white text-sm font-medium">${a.domain}</p>
+                                    <p class="text-gray-500 text-xs">${date} · ${a.max_pages} pages</p>
+                                </div>
+                                ${statusBadge}
+                            </div>
+                            <div class="flex items-center gap-3">
+                                ${slidesSection}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                lucide.createIcons();
+            } catch (e) {
+                listEl.innerHTML = `<div class="text-center text-red-400 py-4 text-sm">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function generateAudit2Slides(auditId) {
+            const templateType = document.getElementById(`tmpl-${auditId}`)?.value || 'authority_shift';
+            const btn = document.getElementById(`slides-btn-${auditId}`);
+
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Generating...';
+                lucide.createIcons();
+            }
+
+            // Use a hidden iframe to render audit-dashboard.html, capture screenshots, and generate slides
+            const iframe = document.createElement('iframe');
+            iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1400px;height:900px;border:none;opacity:0;pointer-events:none;';
+            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}`;
+            document.body.appendChild(iframe);
+
+            const timeout = setTimeout(() => {
+                try { document.body.removeChild(iframe); } catch(e) {}
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="presentation" class="w-3.5 h-3.5"></i> Create Slides';
+                    lucide.createIcons();
+                }
+                alert('Slide generation timed out. Please try again.');
+            }, 300000);
+
+            function handleMessage(event) {
+                if (event.data?.type === 'slides-ready') {
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', handleMessage);
+                    try { document.body.removeChild(iframe); } catch(e) {}
+
+                    if (event.data.presentation_url) {
+                        window.open(event.data.presentation_url, '_blank');
+                        loadAudit2List();
+                    }
+
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Done!';
+                        lucide.createIcons();
+                        setTimeout(() => {
+                            btn.innerHTML = '<i data-lucide="presentation" class="w-3.5 h-3.5"></i> Create Slides';
+                            lucide.createIcons();
+                        }, 3000);
+                    }
+                } else if (event.data?.type === 'slides-error') {
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', handleMessage);
+                    try { document.body.removeChild(iframe); } catch(e) {}
+
+                    const errMsg = event.data.error || 'Unknown error';
+                    if (errMsg.includes('needs_auth') || errMsg.includes('Google')) {
+                        if (confirm('Google sign-in required to create slides. Redirect now?')) {
+                            window.location.href = '/oauth/start?return_path=/dashboard.html';
+                        }
+                    } else {
+                        alert('Slide generation failed: ' + errMsg);
+                    }
+
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i data-lucide="presentation" class="w-3.5 h-3.5"></i> Create Slides';
+                        lucide.createIcons();
+                    }
+                }
+            }
+
+            window.addEventListener('message', handleMessage);
         }
     </script>
 

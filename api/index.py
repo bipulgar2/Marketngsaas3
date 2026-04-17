@@ -2043,7 +2043,7 @@ def generate_deep_audit_slides_endpoint():
                         logger.info(f"Slides: loaded data from site_audits table for audit {audit_id}")
                     else:
                         # Fallback to audits table
-                    result = client.table('audits').select('*, campaigns(domain)').eq('id', audit_id).execute()
+                        result = client.table('audits').select('*, campaigns(domain)').eq('id', audit_id).execute()
                     if result.data:
                         record = result.data[0]
                         results_dict = record.get('results', {}) or {}

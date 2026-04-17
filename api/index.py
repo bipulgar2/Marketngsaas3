@@ -4801,10 +4801,15 @@ def webflow_list_collections():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/publish-wordpress', methods=['POST'])
+@login_required
 def publish_wordpress():
     import requests
     from requests.auth import HTTPBasicAuth
-    import markdown
+    try:
+        import markdown
+        has_markdown = True
+    except ImportError:
+        has_markdown = False
     
     data = request.json
     page_id = data.get('page_id')
@@ -4833,9 +4838,12 @@ def publish_wordpress():
             image_tag = f"![Main Image]({main_image})\n\n"
             content_md = image_tag + content_md
             
-        # Convert Markdown to HTML
-        # Using markdown library to robustly convert markdown content to HTML
-        html_content = markdown.markdown(content_md, extensions=['tables', 'fenced_code'])
+        # Convert Markdown to HTML (with fallback)
+        if has_markdown:
+            html_content = markdown.markdown(content_md, extensions=['tables', 'fenced_code'])
+        else:
+            # Simple fallback: wrap in paragraphs
+            html_content = ''.join(f'<p>{line}</p>' for line in content_md.split('\n') if line.strip())
         
         # Determine Title
         tech_data = page.get('tech_audit_data') or {}
@@ -4859,15 +4867,17 @@ def publish_wordpress():
         
         if response.status_code in [200, 201]:
             resp_data = response.json()
-            # Update local DB if we wanted to
             return jsonify({
                 "message": "Successfully published draft to WordPress",
                 "link": resp_data.get('link', '')
             })
         else:
+            # Truncate response.text to avoid returning HTML
+            error_text = response.text[:500] if response.text else 'Unknown error'
+            logger.error(f"WordPress API error ({response.status_code}): {error_text}")
             return jsonify({
-                "error": f"WordPress API Error ({response.status_code}): {response.text}"
-            }), response.status_code
+                "error": f"WordPress API Error ({response.status_code}): {error_text}"
+            }), 500
             
     except Exception as e:
         print(f"Error publishing to WordPress: {e}")

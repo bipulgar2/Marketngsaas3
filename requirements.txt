@@ -13,3 +13,4 @@ gunicorn>=21.0.0
 openpyxl>=3.1.0
 textstat>=0.7.0
 httplib2>=0.22.0
+markdown>=3.4.0

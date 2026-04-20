@@ -1007,6 +1007,14 @@
 
         async function saveTrackedKeywords() {
             if (!currentClient) return;
+            
+            const btn = document.getElementById('saveTrackedBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...';
+                lucide.createIcons();
+            }
+            
             const checkboxes = document.querySelectorAll('.kw-checkbox:checked');
             const keywords = Array.from(checkboxes).map(cb => cb.value);
 
@@ -1021,11 +1029,28 @@
                     const data = await response.json();
                     currentClient.tracked_keywords = data.keywords;
                     showToast('Tracked keywords saved!', 'success');
+                    
+                    if (btn) {
+                        btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+                        btn.classList.remove('bg-violet-600', 'hover:bg-violet-700');
+                        btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> Saved!';
+                        lucide.createIcons();
+                        
+                        setTimeout(() => {
+                            btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+                            btn.classList.add('bg-violet-600', 'hover:bg-violet-700');
+                            btn.innerHTML = 'Save to Tracked Keywords';
+                            btn.disabled = false;
+                            updateKeywordSelection();
+                        }, 2000);
+                    }
                 } else {
+                    if (btn) { btn.disabled = false; btn.innerHTML = 'Save to Tracked Keywords'; }
                     showToast('Failed to save keywords', 'error');
                 }
             } catch (error) {
                 console.error(error);
+                if (btn) { btn.disabled = false; btn.innerHTML = 'Save to Tracked Keywords'; }
                 showToast('Error saving keywords', 'error');
             }
         }
@@ -1143,7 +1168,7 @@
                     viewHtml = `
                     <div id="keywordActionToolbar" class="hidden mb-4 p-3 bg-gray-800 border border-gray-700 rounded-lg flex items-center justify-between">
                         <div class="text-sm text-gray-300"><span id="selectedKeywordCount" class="font-bold text-white">0</span> keywords selected</div>
-                        <button onclick="saveTrackedKeywords()" class="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition">Save to Tracked Keywords</button>
+                        <button id="saveTrackedBtn" onclick="saveTrackedKeywords()" class="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-1.5">Save to Tracked Keywords</button>
                     </div>
                     
                     <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">

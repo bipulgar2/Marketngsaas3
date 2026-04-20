@@ -127,11 +127,18 @@ def google_callback():
         from api.index import supabase, supabase_admin
         client = supabase_admin or supabase
         
-        # Check if an integration already exists for this user
-        existing = client.table('agency_integrations').select('*').eq('user_id', user_id).eq('provider', 'google').execute()
+        # Get the organization_id from profiles
+        prof = client.table('profiles').select('organization_id').eq('id', user_id).single().execute()
+        if not prof.data or not prof.data.get('organization_id'):
+            return "Organization not found for user", 400
+        org_id = prof.data['organization_id']
+        
+        # Check if an integration already exists for this organization
+        existing = client.table('agency_integrations').select('*').eq('organization_id', org_id).eq('provider', 'google').execute()
         
         data = {
-            'user_id': user_id,
+            'organization_id': org_id,
+            'user_id': user_id,  # store which user connected it
             'provider': 'google',
             'access_token': credentials.token,
             'refresh_token': credentials.refresh_token,
@@ -165,11 +172,11 @@ def sync_google_properties():
         
     try:
         from api.index import supabase, supabase_admin
-        user_id = session['user']['id']
+        org_id = session['user']['organization_id']
         client = supabase_admin or supabase
         
         # Get the integration
-        integration = client.table('agency_integrations').select('*').eq('user_id', user_id).eq('provider', 'google').execute()
+        integration = client.table('agency_integrations').select('*').eq('organization_id', org_id).eq('provider', 'google').execute()
         if not integration.data:
             return jsonify({'error': 'Google integration not found. Please connect your Google account first.'}), 404
             
@@ -268,11 +275,11 @@ def get_google_properties():
         
     try:
         from api.index import supabase, supabase_admin
-        user_id = session['user']['id']
+        org_id = session['user']['organization_id']
         client = supabase_admin or supabase
         
         # Get the integration to find the ID
-        integration = client.table('agency_integrations').select('id').eq('user_id', user_id).eq('provider', 'google').execute()
+        integration = client.table('agency_integrations').select('id').eq('organization_id', org_id).eq('provider', 'google').execute()
         if not integration.data:
             return jsonify({'gsc': [], 'ga4': []})
             
@@ -301,7 +308,7 @@ def get_google_metrics():
         
     try:
         from api.index import supabase, supabase_admin
-        user_id = session['user']['id']
+        org_id = session['user']['organization_id']
         client = supabase_admin or supabase
         
         # Parse request body
@@ -314,7 +321,7 @@ def get_google_metrics():
             return jsonify({'error': 'Must provide gsc_property or ga4_property'}), 400
             
         # Get the integration credentials
-        integration = client.table('agency_integrations').select('*').eq('user_id', user_id).eq('provider', 'google').execute()
+        integration = client.table('agency_integrations').select('*').eq('organization_id', org_id).eq('provider', 'google').execute()
         if not integration.data:
             return jsonify({'error': 'Google integration not found'}), 404
             

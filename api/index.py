@@ -1181,6 +1181,246 @@ Respond ONLY with valid JSON, no markdown:
         logger.error(f"Guest Post Topics Error: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+# =============================================================================
+# SCHEMA MARKUP RECOMMENDATIONS
+# =============================================================================
+
+@app.route('/api/generate-schema-markup', methods=['POST'])
+@login_required
+def generate_schema_markup():
+    """Generate schema markup recommendations using Gemini."""
+    try:
+        data = request.json or {}
+        pages = data.get('pages', [])
+        brand_config = data.get('brand_config', {})
+        domain = data.get('domain', '')
+        
+        if not pages:
+            return jsonify({'error': 'No pages provided'}), 400
+        
+        # Build brand context
+        brand_ctx = ""
+        if brand_config:
+            parts = []
+            if brand_config.get('business_name'): parts.append(f"Business: {brand_config['business_name']}")
+            if brand_config.get('industry'): parts.append(f"Industry: {brand_config['industry']}")
+            if brand_config.get('primary_audience'): parts.append(f"Audience: {brand_config['primary_audience']}")
+            brand_ctx = "\n".join(parts)
+        
+        # Format pages for prompt (max 20)
+        page_list = []
+        for p in pages[:20]:
+            url = p if isinstance(p, str) else p.get('url', '')
+            title = '' if isinstance(p, str) else p.get('title', '')
+            page_list.append(f"- {url}" + (f" | Title: {title}" if title else ""))
+        pages_str = "\n".join(page_list)
+        
+        prompt = f"""You are an SEO schema markup expert. Analyze these pages and recommend the most impactful schema markup for each.
+
+DOMAIN: {domain}
+{f"BRAND:{chr(10)}{brand_ctx}" if brand_ctx else ""}
+
+PAGES:
+{pages_str}
+
+For each page, recommend the best schema type and provide ready-to-use JSON-LD code.
+Consider: Organization, LocalBusiness, Article, BlogPosting, Product, Service, FAQ, HowTo, BreadcrumbList, WebSite (with SearchAction), etc.
+
+Also recommend ONE site-wide Organization/LocalBusiness schema.
+
+Respond ONLY with valid JSON, no markdown:
+{{
+  "site_wide": {{
+    "type": "Organization or LocalBusiness",
+    "description": "Why this schema is recommended site-wide",
+    "json_ld": "{{ complete JSON-LD object as a string }}"
+  }},
+  "pages": [
+    {{
+      "url": "page url",
+      "recommended_schema": "Schema type name",
+      "reason": "Why this schema fits (1 sentence)",
+      "serp_benefit": "What rich result this enables",
+      "json_ld": "{{ complete JSON-LD object as a string }}"
+    }}
+  ]
+}}"""
+
+        result = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash",
+            use_grounding=False
+        )
+        
+        if not result:
+            return jsonify({'error': 'Empty response from AI'}), 500
+        
+        text = result.strip()
+        if text.startswith('```json'): text = text[7:]
+        if text.startswith('```'): text = text[3:]
+        if text.endswith('```'): text = text[:-3]
+        text = text.strip()
+        
+        import json
+        parsed = json.loads(text)
+        
+        return jsonify({'success': True, 'schema': parsed})
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Schema JSON Parse Error: {e}")
+        return jsonify({'error': f'AI returned invalid JSON: {str(e)}'}), 500
+    except Exception as e:
+        logger.error(f"Schema Markup Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# ANCHOR TEXT PLANNER
+# =============================================================================
+
+@app.route('/api/anchor-text-analysis', methods=['POST'])
+@login_required
+def anchor_text_analysis():
+    """Analyze existing anchor text distribution and recommend ideal ratios."""
+    try:
+        data = request.json or {}
+        campaign_id = data.get('campaign_id')
+        brand_config = data.get('brand_config', {})
+        target_keywords = data.get('target_keywords', [])
+        
+        if not campaign_id:
+            return jsonify({'error': 'campaign_id required'}), 400
+        
+        # Fetch backlink data
+        from api.dataforseo_client import get_backlinks_summary
+        db = supabase_admin or supabase
+        campaign = db.table('campaigns').select('domain').eq('id', campaign_id).limit(1).execute()
+        if not campaign.data:
+            return jsonify({'error': 'Campaign not found'}), 404
+        
+        domain = campaign.data[0].get('domain', '')
+        if not domain:
+            return jsonify({'error': 'No domain set'}), 400
+        
+        # Get backlink anchors from DataForSEO
+        from api.dataforseo_client import dataforseo_request
+        anchors_result = dataforseo_request(
+            '/v3/backlinks/anchors/live',
+            [{"target": domain, "limit": 100, "order_by": ["backlinks,desc"]}]
+        )
+        
+        anchors = []
+        if anchors_result and anchors_result.get('tasks'):
+            for task in anchors_result['tasks']:
+                for r in (task.get('result') or []):
+                    for item in (r.get('items') or []):
+                        anchors.append({
+                            'anchor': item.get('anchor', ''),
+                            'backlinks': item.get('backlinks', 0),
+                            'referring_domains': item.get('referring_domains', 0),
+                            'first_seen': item.get('first_seen', ''),
+                        })
+        
+        # Classify anchors
+        brand_name = (brand_config.get('business_name') or domain.split('.')[0]).lower()
+        
+        categories = {
+            'branded': {'count': 0, 'backlinks': 0, 'items': []},
+            'exact_match': {'count': 0, 'backlinks': 0, 'items': []},
+            'partial_match': {'count': 0, 'backlinks': 0, 'items': []},
+            'naked_url': {'count': 0, 'backlinks': 0, 'items': []},
+            'generic': {'count': 0, 'backlinks': 0, 'items': []},
+            'other': {'count': 0, 'backlinks': 0, 'items': []}
+        }
+        
+        generic_terms = ['click here', 'read more', 'learn more', 'visit', 'here', 'this', 'website', 'link', 'source', 'more info']
+        target_kws_lower = [kw.lower() for kw in target_keywords]
+        
+        total_backlinks = 0
+        for anchor_data in anchors:
+            anchor = (anchor_data.get('anchor') or '').lower().strip()
+            bl = anchor_data.get('backlinks', 0)
+            total_backlinks += bl
+            
+            if not anchor:
+                categories['other']['count'] += 1
+                categories['other']['backlinks'] += bl
+                continue
+            
+            if brand_name in anchor or domain.replace('www.', '').split('.')[0] in anchor:
+                categories['branded']['count'] += 1
+                categories['branded']['backlinks'] += bl
+                categories['branded']['items'].append(anchor_data)
+            elif anchor in target_kws_lower:
+                categories['exact_match']['count'] += 1
+                categories['exact_match']['backlinks'] += bl
+                categories['exact_match']['items'].append(anchor_data)
+            elif any(kw in anchor for kw in target_kws_lower):
+                categories['partial_match']['count'] += 1
+                categories['partial_match']['backlinks'] += bl
+                categories['partial_match']['items'].append(anchor_data)
+            elif 'http' in anchor or domain in anchor or '.' in anchor.split(' ')[0]:
+                categories['naked_url']['count'] += 1
+                categories['naked_url']['backlinks'] += bl
+                categories['naked_url']['items'].append(anchor_data)
+            elif anchor in generic_terms:
+                categories['generic']['count'] += 1
+                categories['generic']['backlinks'] += bl
+                categories['generic']['items'].append(anchor_data)
+            else:
+                categories['other']['count'] += 1
+                categories['other']['backlinks'] += bl
+                categories['other']['items'].append(anchor_data)
+        
+        # Calculate percentages
+        distribution = {}
+        for cat, info in categories.items():
+            pct = round((info['backlinks'] / total_backlinks * 100), 1) if total_backlinks > 0 else 0
+            distribution[cat] = {
+                'count': info['count'],
+                'backlinks': info['backlinks'],
+                'percentage': pct,
+                'top_anchors': [{'anchor': i['anchor'], 'backlinks': i['backlinks']} for i in sorted(info['items'], key=lambda x: x['backlinks'], reverse=True)[:5]]
+            }
+        
+        # Ideal ratios
+        ideal = {
+            'branded': {'min': 30, 'max': 50, 'label': 'Brand Name + Variations'},
+            'exact_match': {'min': 1, 'max': 5, 'label': 'Exact Target Keywords'},
+            'partial_match': {'min': 15, 'max': 25, 'label': 'Keyword Variations'},
+            'naked_url': {'min': 10, 'max': 20, 'label': 'Raw URLs'},
+            'generic': {'min': 5, 'max': 15, 'label': 'Click Here, Learn More, etc.'},
+            'other': {'min': 5, 'max': 20, 'label': 'Miscellaneous / Natural'}
+        }
+        
+        # Flag issues
+        warnings = []
+        for cat, rec in ideal.items():
+            actual = distribution.get(cat, {}).get('percentage', 0)
+            if actual > rec['max']:
+                warnings.append(f"{rec['label']} is too high ({actual}% vs ideal {rec['max']}% max)")
+            elif actual < rec['min'] and cat in ['branded']:
+                warnings.append(f"{rec['label']} is too low ({actual}% vs ideal {rec['min']}% min)")
+        
+        if distribution.get('exact_match', {}).get('percentage', 0) > 10:
+            warnings.append("⚠️ Exact match anchors over 10% — over-optimization risk!")
+        
+        return jsonify({
+            'success': True,
+            'domain': domain,
+            'total_anchors': len(anchors),
+            'total_backlinks': total_backlinks,
+            'distribution': distribution,
+            'ideal_ratios': ideal,
+            'warnings': warnings,
+            'raw_anchors': anchors[:50]
+        })
+        
+    except Exception as e:
+        logger.error(f"Anchor Text Analysis Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # =============================================================================
 # TASK ROUTES
 # =============================================================================

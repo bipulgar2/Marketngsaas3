@@ -310,7 +310,8 @@
                 { id: 'settings', label: 'Settings' }
             ],
             'tech-audit': [
-                { id: 'overview', label: 'Audit Overview' }
+                { id: 'overview', label: 'Audit Overview' },
+                { id: 'schema-markup', label: 'Schema Markup' }
             ],
             'audit-2': [
                 { id: 'overview', label: 'Run Audit' }
@@ -738,13 +739,21 @@
             pageActions.innerHTML = '';
 
             if (currentTopTab === 'tech-audit') {
-                await loadAuditContent();
+                if (currentSideTab === 'schema-markup') {
+                    await renderSchemaMarkup();
+                } else {
+                    await loadAuditContent();
+                }
             } else if (currentTopTab === 'competitors') {
                 await loadCompetitorContent();
             } else if (currentTopTab === 'tasks') {
                 await loadTasksContent();
             } else if (currentTopTab === 'links') {
-                await loadLinksContent();
+                if (currentSideTab === 'anchor-planner') {
+                    await renderAnchorPlanner();
+                } else {
+                    await loadLinksContent();
+                }
             } else if (currentTopTab === 'client-settings') {
                 await loadClientSettingsContent();
             } else if (currentTopTab === 'reports' && currentSideTab === 'analytics') {
@@ -3501,6 +3510,389 @@
                     </div>`;
             }
             lucide.createIcons();
+        }
+
+        // =====================================================================
+        // SCHEMA MARKUP RECOMMENDATIONS
+        // =====================================================================
+        let _schemaData = null;
+
+        async function renderSchemaMarkup() {
+            const contentArea = document.getElementById('contentArea');
+            if (!currentClient) {
+                contentArea.innerHTML = '<div class="text-center text-gray-500 py-12">Select a client first.</div>';
+                return;
+            }
+
+            contentArea.innerHTML = `
+                <div class="max-w-6xl mx-auto">
+                    <div class="flex items-center justify-between mb-5">
+                        <div>
+                            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                <i data-lucide="code-2" class="w-5 h-5 text-cyan-400"></i>
+                                Schema Markup Recommendations
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1">AI-generated JSON-LD structured data for your pages to unlock rich results in search.</p>
+                        </div>
+                        <button onclick="generateSchemaMarkup()" id="schemaGenBtn" class="px-5 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i> Generate Schema
+                        </button>
+                    </div>
+                    <div id="schemaResults">
+                        ${_schemaData ? renderSchemaCards(_schemaData) : `
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                                <i data-lucide="code-2" class="w-10 h-10 text-gray-600 mx-auto mb-3"></i>
+                                <p class="text-gray-400">Click Generate to get AI-powered schema markup for your pages.</p>
+                                <p class="text-xs text-gray-500 mt-2">Uses your latest audit data and brand config for context.</p>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function generateSchemaMarkup() {
+            const btn = document.getElementById('schemaGenBtn');
+            const results = document.getElementById('schemaResults');
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating...';
+            lucide.createIcons();
+            results.innerHTML = '<div class="flex items-center justify-center h-24 text-gray-500"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>AI is analyzing pages and generating schema...</div>';
+            lucide.createIcons();
+
+            // Get brand config
+            let brandConfig = {};
+            try {
+                const bcRes = await fetch(`/api/campaigns/${currentClient.id}/brand-config`);
+                const bcData = await bcRes.json();
+                brandConfig = bcData.brand_config || {};
+            } catch(e) {}
+
+            // Get pages from latest audit
+            let pages = [];
+            try {
+                const audRes = await fetch(`/api/audits?campaign_id=${currentClient.id}`);
+                const audData = await audRes.json();
+                const audits = audData.audits || [];
+                if (audits.length > 0) {
+                    const latest = audits[0];
+                    const detRes = await fetch(`/api/audits/${latest.id}`);
+                    const detData = await detRes.json();
+                    const auditPages = detData.audit?.pages || [];
+                    pages = auditPages.slice(0, 20).map(p => ({
+                        url: p.url || '',
+                        title: (p.meta?.title) || ''
+                    }));
+                }
+            } catch(e) {}
+
+            if (pages.length === 0) {
+                // Fallback: use domain homepage
+                pages = [{ url: 'https://' + (currentClient.domain || ''), title: 'Homepage' }];
+            }
+
+            try {
+                const res = await fetch('/api/generate-schema-markup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pages,
+                        brand_config: brandConfig,
+                        domain: currentClient.domain || ''
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                _schemaData = data.schema;
+                results.innerHTML = renderSchemaCards(_schemaData);
+                lucide.createIcons();
+            } catch(error) {
+                results.innerHTML = '<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400">Error:</span> <span class="text-gray-400">' + error.message + '</span></div>';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="sparkles" class="w-4 h-4"></i> Generate Schema';
+                lucide.createIcons();
+            }
+        }
+
+        function renderSchemaCards(schema) {
+            if (!schema) return '';
+            let html = '';
+
+            // Site-wide schema
+            if (schema.site_wide) {
+                const sw = schema.site_wide;
+                const jsonLd = typeof sw.json_ld === 'string' ? sw.json_ld : JSON.stringify(sw.json_ld, null, 2);
+                html += `
+                    <div class="bg-gray-900 border border-cyan-900/50 rounded-xl p-5 mb-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i data-lucide="globe" class="w-5 h-5 text-cyan-400"></i>
+                            <h3 class="text-white font-semibold">Site-Wide Schema: ${sw.type || 'Organization'}</h3>
+                            <span class="px-2 py-0.5 bg-cyan-900/30 text-cyan-400 rounded text-[10px] font-bold">GLOBAL</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mb-3">${sw.description || ''}</p>
+                        <div class="relative">
+                            <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto max-h-[200px] overflow-y-auto"><code>${escapeHtml(jsonLd)}</code></pre>
+                            <button onclick="copySchemaCode(this)" class="absolute top-2 right-2 px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded text-[10px] transition">
+                                <i data-lucide="copy" class="w-3 h-3 inline"></i> Copy
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Per-page schemas
+            const pages = schema.pages || [];
+            if (pages.length > 0) {
+                html += '<h3 class="text-white font-semibold mb-3 flex items-center gap-2"><i data-lucide="file-code" class="w-4 h-4 text-gray-400"></i>Page-Specific Schema</h3>';
+                html += '<div class="space-y-3">';
+                pages.forEach(p => {
+                    const jsonLd = typeof p.json_ld === 'string' ? p.json_ld : JSON.stringify(p.json_ld, null, 2);
+                    html += `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-cyan-900/40 transition">
+                            <div class="flex items-start justify-between mb-2">
+                                <div class="flex-1">
+                                    <div class="text-xs text-gray-500 truncate mb-0.5">${p.url || ''}</div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm text-white font-medium">${p.recommended_schema || ''}</span>
+                                        <span class="px-2 py-0.5 bg-emerald-900/30 text-emerald-400 rounded text-[10px]">${p.serp_benefit || 'Rich Result'}</span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-1">${p.reason || ''}</p>
+                                </div>
+                            </div>
+                            <details class="mt-2">
+                                <summary class="text-xs text-cyan-400 cursor-pointer hover:text-cyan-300">View JSON-LD Code</summary>
+                                <div class="relative mt-2">
+                                    <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto max-h-[200px] overflow-y-auto"><code>${escapeHtml(jsonLd)}</code></pre>
+                                    <button onclick="copySchemaCode(this)" class="absolute top-2 right-2 px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded text-[10px] transition">
+                                        <i data-lucide="copy" class="w-3 h-3 inline"></i> Copy
+                                    </button>
+                                </div>
+                            </details>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function copySchemaCode(btn) {
+            const pre = btn.parentElement.querySelector('pre code');
+            navigator.clipboard.writeText(pre.textContent).then(() => {
+                btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 inline"></i> Copied!';
+                lucide.createIcons();
+                setTimeout(() => {
+                    btn.innerHTML = '<i data-lucide="copy" class="w-3 h-3 inline"></i> Copy';
+                    lucide.createIcons();
+                }, 2000);
+            });
+        }
+
+        // =====================================================================
+        // ANCHOR TEXT PLANNER
+        // =====================================================================
+        let _anchorData = null;
+
+        async function renderAnchorPlanner() {
+            const contentArea = document.getElementById('contentArea');
+            if (!currentClient) {
+                contentArea.innerHTML = '<div class="text-center text-gray-500 py-12">Select a client first.</div>';
+                return;
+            }
+
+            contentArea.innerHTML = `
+                <div class="max-w-6xl mx-auto">
+                    <div class="flex items-center justify-between mb-5">
+                        <div>
+                            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                <i data-lucide="anchor" class="w-5 h-5 text-violet-400"></i>
+                                Anchor Text Planner
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1">Analyze your backlink anchor text distribution and optimize for a natural profile.</p>
+                        </div>
+                        <button onclick="analyzeAnchors()" id="anchorAnalyzeBtn" class="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2">
+                            <i data-lucide="scan" class="w-4 h-4"></i> Analyze Anchors
+                        </button>
+                    </div>
+                    <div id="anchorResults">
+                        ${_anchorData ? renderAnchorDashboard(_anchorData) : `
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                                <i data-lucide="anchor" class="w-10 h-10 text-gray-600 mx-auto mb-3"></i>
+                                <p class="text-gray-400">Click Analyze to see your current anchor text breakdown.</p>
+                                <p class="text-xs text-gray-500 mt-2">Fetches live data from DataForSEO Backlinks API.</p>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function analyzeAnchors() {
+            const btn = document.getElementById('anchorAnalyzeBtn');
+            const results = document.getElementById('anchorResults');
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Analyzing...';
+            lucide.createIcons();
+            results.innerHTML = '<div class="flex items-center justify-center h-24 text-gray-500"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>Fetching anchor text data...</div>';
+            lucide.createIcons();
+
+            let brandConfig = {};
+            try {
+                const bcRes = await fetch(`/api/campaigns/${currentClient.id}/brand-config`);
+                const bcData = await bcRes.json();
+                brandConfig = bcData.brand_config || {};
+            } catch(e) {}
+
+            try {
+                const res = await fetch('/api/anchor-text-analysis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaign_id: currentClient.id,
+                        brand_config: brandConfig,
+                        target_keywords: currentClient.tracked_keywords || []
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                _anchorData = data;
+                results.innerHTML = renderAnchorDashboard(data);
+                lucide.createIcons();
+            } catch(error) {
+                results.innerHTML = '<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400">Error:</span> <span class="text-gray-400">' + error.message + '</span></div>';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="scan" class="w-4 h-4"></i> Analyze Anchors';
+                lucide.createIcons();
+            }
+        }
+
+        function renderAnchorDashboard(data) {
+            const dist = data.distribution || {};
+            const ideal = data.ideal_ratios || {};
+            const warnings = data.warnings || [];
+
+            const catColors = {
+                branded: { bg: 'bg-blue-500', text: 'text-blue-400', border: 'border-blue-900/50', bgLight: 'bg-blue-900/30' },
+                exact_match: { bg: 'bg-red-500', text: 'text-red-400', border: 'border-red-900/50', bgLight: 'bg-red-900/30' },
+                partial_match: { bg: 'bg-amber-500', text: 'text-amber-400', border: 'border-amber-900/50', bgLight: 'bg-amber-900/30' },
+                naked_url: { bg: 'bg-emerald-500', text: 'text-emerald-400', border: 'border-emerald-900/50', bgLight: 'bg-emerald-900/30' },
+                generic: { bg: 'bg-gray-500', text: 'text-gray-400', border: 'border-gray-700', bgLight: 'bg-gray-800' },
+                other: { bg: 'bg-purple-500', text: 'text-purple-400', border: 'border-purple-900/50', bgLight: 'bg-purple-900/30' }
+            };
+
+            const catLabels = {
+                branded: 'Branded', exact_match: 'Exact Match', partial_match: 'Partial Match',
+                naked_url: 'Naked URL', generic: 'Generic', other: 'Other'
+            };
+
+            let html = '';
+
+            // Summary cards
+            html += `
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 text-center">
+                        <div class="text-2xl font-bold text-white">${(data.total_anchors || 0).toLocaleString()}</div>
+                        <div class="text-[10px] text-gray-500 uppercase">Unique Anchors</div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 text-center">
+                        <div class="text-2xl font-bold text-violet-400">${(data.total_backlinks || 0).toLocaleString()}</div>
+                        <div class="text-[10px] text-gray-500 uppercase">Total Backlinks</div>
+                    </div>
+                    <div class="bg-gray-900 border ${warnings.length > 0 ? 'border-amber-900/50' : 'border-emerald-900/50'} rounded-lg p-3 text-center">
+                        <div class="text-2xl font-bold ${warnings.length > 0 ? 'text-amber-400' : 'text-emerald-400'}">${warnings.length}</div>
+                        <div class="text-[10px] ${warnings.length > 0 ? 'text-amber-400/70' : 'text-emerald-400/70'} uppercase">${warnings.length > 0 ? 'Warnings' : 'All Clear'}</div>
+                    </div>
+                </div>
+            `;
+
+            // Warnings
+            if (warnings.length > 0) {
+                html += '<div class="bg-amber-900/10 border border-amber-800/40 rounded-xl p-4 mb-4">';
+                html += '<div class="text-xs text-amber-400 font-semibold mb-2 flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3 h-3"></i> Anchor Profile Warnings</div>';
+                warnings.forEach(w => {
+                    html += '<div class="text-xs text-gray-300 py-0.5">• ' + w + '</div>';
+                });
+                html += '</div>';
+            }
+
+            // Distribution bars — current vs ideal
+            html += '<div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">';
+            html += '<h3 class="text-white font-semibold mb-4 flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-4 h-4 text-gray-400"></i>Anchor Distribution vs Ideal</h3>';
+
+            const cats = ['branded', 'exact_match', 'partial_match', 'naked_url', 'generic', 'other'];
+            cats.forEach(cat => {
+                const d = dist[cat] || { percentage: 0, count: 0, backlinks: 0 };
+                const id = ideal[cat] || { min: 0, max: 100 };
+                const col = catColors[cat];
+                const isOk = d.percentage >= id.min && d.percentage <= id.max;
+                const isOver = d.percentage > id.max;
+
+                html += `
+                    <div class="mb-3">
+                        <div class="flex items-center justify-between mb-1">
+                            <div class="flex items-center gap-2">
+                                <div class="w-3 h-3 rounded ${col.bg}"></div>
+                                <span class="text-xs text-gray-300">${catLabels[cat]}</span>
+                                <span class="text-[10px] text-gray-500">(${d.count} anchors, ${d.backlinks} links)</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold ${isOk ? 'text-emerald-400' : isOver ? 'text-red-400' : 'text-amber-400'}">${d.percentage}%</span>
+                                <span class="text-[10px] text-gray-500">ideal ${id.min}-${id.max}%</span>
+                            </div>
+                        </div>
+                        <div class="relative bg-gray-800 rounded-full h-3">
+                            <div class="${col.bg} rounded-full h-3 transition-all" style="width: ${Math.min(d.percentage, 100)}%"></div>
+                            <!-- Ideal range markers -->
+                            <div class="absolute top-0 h-3 border-l-2 border-dashed border-gray-500 opacity-50" style="left: ${id.min}%"></div>
+                            <div class="absolute top-0 h-3 border-l-2 border-dashed border-gray-500 opacity-50" style="left: ${id.max}%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+
+            // Top anchors per category
+            html += '<div class="grid grid-cols-2 gap-4">';
+            cats.forEach(cat => {
+                const d = dist[cat] || {};
+                const col = catColors[cat];
+                const topAnchors = d.top_anchors || [];
+                if (topAnchors.length === 0) return;
+
+                html += `
+                    <div class="bg-gray-900 border ${col.border} rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="w-2.5 h-2.5 rounded ${col.bg}"></div>
+                            <h4 class="text-sm text-white font-semibold">${catLabels[cat]}</h4>
+                            <span class="text-[10px] ${col.text}">${d.percentage}%</span>
+                        </div>
+                        <div class="space-y-1">
+                            ${topAnchors.map(a => `
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-gray-300 truncate flex-1 mr-2">"${a.anchor}"</span>
+                                    <span class="text-gray-500 flex-shrink-0">${a.backlinks} links</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+
+            return html;
         }
 
         async function loadLinksContent() {

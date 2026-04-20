@@ -718,7 +718,7 @@ def list_campaigns():
 
 @app.route('/api/campaigns', methods=['POST'])
 @login_required
-@permission_required('view_all_campaigns')
+@role_required('admin')
 def create_campaign():
     """Create new campaign."""
     data = request.json

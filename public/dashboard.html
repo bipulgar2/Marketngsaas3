@@ -654,10 +654,10 @@
                     contentArea.innerHTML = `<div class="text-red-400">Error: ${error.message}</div>`;
                 }
             } else if (currentSideTab === 'clients') {
-                pageActions.innerHTML = `
+                pageActions.innerHTML = currentUser.role === 'admin' ? `
                     <button onclick="showNewClientModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
                         <i data-lucide="plus" class="w-4 h-4"></i> New Client
-                    </button>`;
+                    </button>` : '';
 
                 try {
                     const response = await fetch('/api/campaigns');
@@ -668,10 +668,10 @@
                             <div class="flex flex-col items-center justify-center h-64 text-center">
                                 <i data-lucide="folder-plus" class="w-12 h-12 text-gray-600 mb-4"></i>
                                 <h3 class="text-lg font-semibold text-white mb-2">No clients yet</h3>
-                                <p class="text-gray-400 mb-4">Add your first client to get started</p>
-                                <button onclick="showNewClientModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                <p class="text-gray-400 mb-4">${currentUser.role === 'admin' ? 'Add your first client to get started' : 'No clients have been assigned yet.'}</p>
+                                ${currentUser.role === 'admin' ? `<button onclick="showNewClientModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
                                     + Add Client
-                                </button>
+                                </button>` : ''}
                             </div>`;
                     } else {
                         contentArea.innerHTML = `

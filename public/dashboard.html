@@ -894,14 +894,14 @@
                             <tbody>
                                 ${trackedQueries.sort((a,b) => a.position === 0 ? 1 : b.position === 0 ? -1 : a.position - b.position).map(q => {
                                     const rankStatus = q.position > 0 && q.position <= 10 ? '<i data-lucide="zap" class="w-4 h-4 text-emerald-500 mx-auto"></i>' : (q.position > 10 && q.position <= 100 ? '<i data-lucide="trending-up" class="w-4 h-4 text-blue-500 mx-auto"></i>' : '<i data-lucide="minus" class="w-4 h-4 text-gray-500 mx-auto"></i>');
-                                    return \`<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]">
-                                        <td class="py-3 px-4 text-center">\${rankStatus}</td>
-                                        <td class="py-3 px-4 text-white font-medium">\${q.query}</td>
-                                        <td class="py-3 px-4 text-right font-semibold" style="color:\${ac}">\${fmtNum(q.clicks)}</td>
-                                        <td class="py-3 px-4 text-right text-gray-300">\${fmtNum(q.impressions)}</td>
-                                        <td class="py-3 px-4 text-right text-gray-400">\${(q.ctr*100).toFixed(2)}%</td>
-                                        <td class="py-3 px-4 text-right text-white">\${q.position > 0 ? q.position.toFixed(1) : '<span class="text-gray-600 text-xs">Unranked</span>'}</td>
-                                    </tr>\`;
+                                    return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]">
+                                        <td class="py-3 px-4 text-center">${rankStatus}</td>
+                                        <td class="py-3 px-4 text-white font-medium">${q.query}</td>
+                                        <td class="py-3 px-4 text-right font-semibold" style="color:${ac}">${fmtNum(q.clicks)}</td>
+                                        <td class="py-3 px-4 text-right text-gray-300">${fmtNum(q.impressions)}</td>
+                                        <td class="py-3 px-4 text-right text-gray-400">${(q.ctr*100).toFixed(2)}%</td>
+                                        <td class="py-3 px-4 text-right text-white">${q.position > 0 ? q.position.toFixed(1) : '<span class="text-gray-600 text-xs">Unranked</span>'}</td>
+                                    </tr>`;
                                 }).join('')}
                             </tbody>
                         </table>
@@ -1162,15 +1162,15 @@
                             <tbody>
                     ${queries.map((q,i) => {
                         const isTracked = tracked.includes(q.query);
-                        return \`<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]">
-                            <td class="py-2.5 px-4"><input type="checkbox" value="\${q.query}" onchange="updateKeywordSelection()" class="kw-checkbox rounded bg-gray-900 border-gray-600" \${isTracked ? 'checked' : ''}></td>
-                            <td class="py-2.5 px-4 text-gray-500">\${i+1}</td>
-                            <td class="py-2.5 px-4 text-white font-medium">\${q.query}</td>
-                            <td class="py-2.5 px-4 text-right font-semibold" style="color:\${ac}">\${fmtNum(q.clicks)}</td>
-                            <td class="py-2.5 px-4 text-right text-gray-300">\${fmtNum(q.impressions)}</td>
-                            <td class="py-2.5 px-4 text-right text-gray-400">\${(q.ctr*100).toFixed(2)}%</td>
-                            <td class="py-2.5 px-4 text-right text-gray-400">\${q.position.toFixed(1)}</td>
-                        </tr>\`;
+                        return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]">
+                            <td class="py-2.5 px-4"><input type="checkbox" value="${q.query}" onchange="updateKeywordSelection()" class="kw-checkbox rounded bg-gray-900 border-gray-600" ${isTracked ? 'checked' : ''}></td>
+                            <td class="py-2.5 px-4 text-gray-500">${i+1}</td>
+                            <td class="py-2.5 px-4 text-white font-medium">${q.query}</td>
+                            <td class="py-2.5 px-4 text-right font-semibold" style="color:${ac}">${fmtNum(q.clicks)}</td>
+                            <td class="py-2.5 px-4 text-right text-gray-300">${fmtNum(q.impressions)}</td>
+                            <td class="py-2.5 px-4 text-right text-gray-400">${(q.ctr*100).toFixed(2)}%</td>
+                            <td class="py-2.5 px-4 text-right text-gray-400">${q.position.toFixed(1)}</td>
+                        </tr>`;
                     }).join('')}
                     </tbody></table></div>`;
                 } else if (_analyticsView === 'landing-pages') {

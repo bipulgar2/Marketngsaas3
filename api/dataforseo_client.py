@@ -2161,3 +2161,133 @@ def get_backlinks_gap(target_domain: str, competitor_domain: str, limit: int = 1
         "competitor_only_domains": comp_only_domains,
         "gap_count": len(comp_only_keys)
     }
+
+
+# =============================================================================
+# KEYWORD RESEARCH — for Strategy tab
+# =============================================================================
+
+def keyword_suggestions(seed_keyword: str, location_code: int = 2840, language_code: str = "en", limit: int = 700) -> Dict[str, Any]:
+    """
+    Get related keyword suggestions for a seed keyword.
+    Uses DataForSEO Labs Related Keywords API.
+    Returns keywords with volume, difficulty, CPC, intent.
+    """
+    endpoint = f"{DATAFORSEO_API_URL}/dataforseo_labs/google/related_keywords/live"
+    
+    payload = [{
+        "keyword": seed_keyword,
+        "location_code": location_code,
+        "language_code": language_code,
+        "limit": limit,
+        "include_seed_keyword": True,
+        "include_serp_info": False
+    }]
+    
+    try:
+        response = requests.post(
+            endpoint,
+            headers={**get_auth_header(), "Content-Type": "application/json"},
+            json=payload,
+            timeout=60
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('status_code') == 20000 and data.get('tasks'):
+            task = data['tasks'][0]
+            result = (task.get('result') or [{}])[0] or {}
+            items = result.get('items') or []
+            
+            keywords = []
+            for item in items:
+                kd = item.get('keyword_data') or {}
+                ki = kd.get('keyword_info') or {}
+                
+                # Determine search intent
+                intent_info = kd.get('keyword_properties') or {}
+                intent = intent_info.get('keyword_intent') or 'unknown'
+                # Can be a list
+                if isinstance(intent, list):
+                    intent = intent[0] if intent else 'unknown'
+                
+                keywords.append({
+                    'keyword': kd.get('keyword', ''),
+                    'search_volume': ki.get('search_volume') or 0,
+                    'cpc': ki.get('cpc') or 0,
+                    'competition': ki.get('competition') or 0,
+                    'competition_level': ki.get('competition_level') or '',
+                    'keyword_difficulty': kd.get('keyword_properties', {}).get('keyword_difficulty') or 0,
+                    'search_intent': intent,
+                    'monthly_searches': ki.get('monthly_searches') or [],
+                })
+            
+            # Sort by search volume descending
+            keywords.sort(key=lambda x: x['search_volume'], reverse=True)
+            
+            return {
+                'success': True,
+                'seed_keyword': seed_keyword,
+                'total_count': result.get('total_count', len(keywords)),
+                'keywords': keywords,
+                'cost': task.get('cost', 0)
+            }
+        else:
+            error_msg = data.get('tasks', [{}])[0].get('status_message', 'Unknown error') if data.get('tasks') else data.get('status_message', 'Unknown error')
+            return {'success': False, 'error': error_msg}
+            
+    except Exception as e:
+        print(f"Error in keyword_suggestions: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def keyword_search_volume(keywords: List[str], location_code: int = 2840, language_code: str = "en") -> Dict[str, Any]:
+    """
+    Get search volume data for a list of specific keywords.
+    Uses DataForSEO Keywords Data Google Ads Search Volume API.
+    """
+    endpoint = f"{DATAFORSEO_API_URL}/keywords_data/google_ads/search_volume/live"
+    
+    payload = [{
+        "keywords": keywords[:1000],  # API max is 1000
+        "location_code": location_code,
+        "language_code": language_code
+    }]
+    
+    try:
+        response = requests.post(
+            endpoint,
+            headers={**get_auth_header(), "Content-Type": "application/json"},
+            json=payload,
+            timeout=60
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('status_code') == 20000 and data.get('tasks'):
+            task = data['tasks'][0]
+            result = (task.get('result') or [])
+            
+            kw_data = []
+            for item in result:
+                kw_data.append({
+                    'keyword': item.get('keyword', ''),
+                    'search_volume': item.get('search_volume') or 0,
+                    'cpc': item.get('cpc') or 0,
+                    'competition': item.get('competition') or 0,
+                    'competition_level': item.get('competition_level') or '',
+                    'monthly_searches': item.get('monthly_searches') or [],
+                })
+            
+            return {
+                'success': True,
+                'keywords': kw_data,
+                'cost': task.get('cost', 0)
+            }
+        else:
+            error_msg = data.get('tasks', [{}])[0].get('status_message', 'Unknown error') if data.get('tasks') else 'Unknown error'
+            return {'success': False, 'error': error_msg}
+            
+    except Exception as e:
+        print(f"Error in keyword_search_volume: {e}")
+        return {'success': False, 'error': str(e)}

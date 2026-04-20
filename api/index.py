@@ -866,6 +866,37 @@ def manage_brand_config(campaign_id):
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
+# KEYWORD RESEARCH ROUTES
+# =============================================================================
+
+@app.route('/api/keyword-research', methods=['POST'])
+@login_required
+def keyword_research():
+    """Run keyword research using DataForSEO Related Keywords API."""
+    try:
+        from api.dataforseo_client import keyword_suggestions, location_code_for
+        data = request.json or {}
+        seed_keyword = data.get('seed_keyword', '').strip()
+        country = data.get('country', 'US')
+        language = data.get('language', 'en')
+        limit = min(int(data.get('limit', 500)), 700)
+        
+        if not seed_keyword:
+            return jsonify({'error': 'seed_keyword is required'}), 400
+        
+        loc_code = location_code_for(country)
+        result = keyword_suggestions(seed_keyword, location_code=loc_code, language_code=language, limit=limit)
+        
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            return jsonify({'error': result.get('error', 'Unknown error')}), 500
+            
+    except Exception as e:
+        logger.error(f"Keyword Research Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
 # TASK ROUTES
 # =============================================================================
 

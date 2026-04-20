@@ -282,10 +282,19 @@ def login():
     
     try:
         # Authenticate with Supabase
-        response = supabase.auth.sign_in_with_password({
-            'email': email,
-            'password': password
-        })
+        auth_retries = 3
+        for attempt in range(auth_retries):
+            try:
+                response = supabase.auth.sign_in_with_password({
+                    'email': email,
+                    'password': password
+                })
+                break
+            except Exception as auth_e:
+                if attempt == auth_retries - 1:
+                    raise auth_e
+                logger.warning(f"Supabase login attempt {attempt+1} failed: {auth_e}. Retrying in 1s...")
+                time.sleep(1)
         
         user = response.user
         

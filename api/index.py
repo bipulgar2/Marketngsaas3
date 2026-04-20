@@ -785,7 +785,7 @@ def update_campaign(campaign_id):
 # TRACKED KEYWORDS ROUTES
 # =============================================================================
 
-@app.route('/api/campaigns/<campaign_id>/keywords', methods=['GET', 'POST'])
+@app.route('/api/campaigns/<campaign_id>/keywords', methods=['GET', 'POST', 'DELETE'])
 @login_required
 def manage_tracked_keywords(campaign_id):
     """Get or update tracked keywords for a campaign."""
@@ -816,6 +816,21 @@ def manage_tracked_keywords(campaign_id):
             
             response = client.table('campaigns').update({'tracked_keywords': merged}).eq('id', campaign_id).execute()
             out_keywords = response.data[0].get('tracked_keywords', merged) if hasattr(response, 'data') and response.data else merged
+            return jsonify({'success': True, 'keywords': out_keywords})
+            
+        elif request.method == 'DELETE':
+            data = request.json
+            keywords_to_remove = data.get('keywords', [])
+            
+            # Fetch existing tracked keywords
+            existing_res = client.table('campaigns').select('tracked_keywords').eq('id', campaign_id).single().execute()
+            existing_keywords = (existing_res.data.get('tracked_keywords') or []) if existing_res.data else []
+            
+            # Remove specified keywords
+            updated = [kw for kw in existing_keywords if kw not in keywords_to_remove]
+            
+            response = client.table('campaigns').update({'tracked_keywords': updated}).eq('id', campaign_id).execute()
+            out_keywords = response.data[0].get('tracked_keywords', updated) if hasattr(response, 'data') and response.data else updated
             return jsonify({'success': True, 'keywords': out_keywords})
             
     except Exception as e:

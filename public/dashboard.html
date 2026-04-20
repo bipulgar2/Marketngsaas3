@@ -889,18 +889,24 @@
                                     <th class="text-right py-3 px-4">Impressions</th>
                                     <th class="text-right py-3 px-4">CTR</th>
                                     <th class="text-right py-3 px-4">Position</th>
+                                    <th class="text-center py-3 px-4 w-12"></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${trackedQueries.sort((a,b) => a.position === 0 ? 1 : b.position === 0 ? -1 : a.position - b.position).map(q => {
                                     const rankStatus = q.position > 0 && q.position <= 10 ? '<i data-lucide="zap" class="w-4 h-4 text-emerald-500 mx-auto"></i>' : (q.position > 10 && q.position <= 100 ? '<i data-lucide="trending-up" class="w-4 h-4 text-blue-500 mx-auto"></i>' : '<i data-lucide="minus" class="w-4 h-4 text-gray-500 mx-auto"></i>');
-                                    return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]">
+                                    return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02] group">
                                         <td class="py-3 px-4 text-center">${rankStatus}</td>
                                         <td class="py-3 px-4 text-white font-medium">${q.query}</td>
                                         <td class="py-3 px-4 text-right font-semibold" style="color:${ac}">${fmtNum(q.clicks)}</td>
                                         <td class="py-3 px-4 text-right text-gray-300">${fmtNum(q.impressions)}</td>
                                         <td class="py-3 px-4 text-right text-gray-400">${(q.ctr*100).toFixed(2)}%</td>
                                         <td class="py-3 px-4 text-right text-white">${q.position > 0 ? q.position.toFixed(1) : '<span class="text-gray-600 text-xs">Unranked</span>'}</td>
+                                        <td class="py-3 px-4 text-center">
+                                            <button onclick="removeTrackedKeyword('${q.query}')" class="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove keyword">
+                                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                            </button>
+                                        </td>
                                     </tr>`;
                                 }).join('')}
                             </tbody>
@@ -1045,6 +1051,36 @@
                 console.error(error);
                 if (btn) { btn.disabled = false; btn.innerHTML = 'Push to Tracked'; }
                 showToast('Error saving keywords', 'error');
+            }
+        }
+
+        async function removeTrackedKeyword(keyword) {
+            if (!currentClient || !confirm(`Remove "${keyword}" from tracked keywords?`)) return;
+
+            try {
+                const response = await fetch(`/api/campaigns/${currentClient.id}/keywords`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keywords: [keyword] })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentClient.tracked_keywords = data.keywords;
+                    showToast('Keyword removed', 'success');
+                    
+                    // Re-render whatever view we are on
+                    if (currentTopTab === 'reports' && currentSideTab === 'tracked-keywords') {
+                        loadTrackedKeywordsDashboard();
+                    } else if (currentTopTab === 'reports' && currentSideTab === 'analytics') {
+                        renderAnalyticsDashboard();
+                    }
+                } else {
+                    showToast('Failed to remove keyword', 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                showToast('Error removing keyword', 'error');
             }
         }
 

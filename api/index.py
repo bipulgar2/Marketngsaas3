@@ -1343,6 +1343,82 @@ def push_architecture_to_content():
         return jsonify({'error': str(e), 'created': created}), 500
 
 # =============================================================================
+# LINK MARKETPLACE (Linkmanagement.net Portal Integration)
+# =============================================================================
+
+@app.route('/api/link-marketplace/inventory', methods=['GET'])
+@login_required
+def get_link_inventory():
+    """Fetch available inventory with filtering"""
+    niche = request.args.get('niche')
+    min_da = request.args.get('min_da', type=int)
+    
+    client = supabase_admin or supabase
+    query = client.table('link_inventory').select('*').eq('is_active', True)
+    
+    if niche and niche != 'All':
+        query = query.eq('niche', niche)
+    if min_da:
+        query = query.gte('da', min_da)
+        
+    try:
+        res = query.order('da', desc=True).execute()
+        # Obfuscate domains slightly for unpurchased links as per standard practice (e.g. tech***.com)
+        items = res.data
+        for item in items:
+            domain_parts = item['domain'].split('.')
+            if len(domain_parts) >= 2:
+                name, tld = domain_parts[0], domain_parts[-1]
+                if len(name) > 4:
+                    item['display_domain'] = f"{name[:4]}****.{tld}"
+                else:
+                    item['display_domain'] = f"{name[0]}***.{tld}"
+            else:
+                item['display_domain'] = "Private Domain"
+                
+        return jsonify({'success': True, 'inventory': items})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/link-marketplace/checkout', methods=['POST'])
+@login_required
+def process_link_checkout():
+    """Process a shopping cart of links"""
+    data = request.get_json()
+    campaign_id = data.get('campaign_id')
+    cart_items = data.get('items', [])
+    
+    if not campaign_id or not cart_items:
+        return jsonify({'error': 'Missing campaign or cart items'}), 400
+        
+    client = supabase_admin or supabase
+    try:
+        total = sum(float(item.get('price', 0)) for item in cart_items)
+        
+        # Create order
+        order_res = client.table('link_orders').insert({
+            'campaign_id': campaign_id,
+            'total_amount': total,
+            'status': 'processing'
+        }).execute()
+        
+        order_id = order_res.data[0]['id']
+        
+        # Create order items
+        for item in cart_items:
+            client.table('link_order_items').insert({
+                'order_id': order_id,
+                'link_id': item.get('id'),
+                'target_url': item.get('target_url', ''),
+                'anchor_text': item.get('anchor_text', ''),
+                'price': float(item.get('price', 0))
+            }).execute()
+            
+        return jsonify({'success': True, 'order_id': order_id, 'message': 'Order successfully placed. Check placements tab.'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
 # SCHEMA MARKUP RECOMMENDATIONS
 # =============================================================================
 

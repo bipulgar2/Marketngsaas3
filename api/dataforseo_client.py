@@ -2092,13 +2092,13 @@ def get_backlinks_gap(target_domain: str, competitor_domain: str, limit: int = 1
     
     target_dict = {}
     for item in target_domains_raw:
-        dom = item.get('referring_domain')
+        dom = item.get('domain') or item.get('referring_domain')
         if dom:
             target_dict[dom.lower()] = item
             
     comp_dict = {}
     for item in comp_domains_raw:
-        dom = item.get('referring_domain')
+        dom = item.get('domain') or item.get('referring_domain')
         if dom:
             comp_dict[dom.lower()] = item
             

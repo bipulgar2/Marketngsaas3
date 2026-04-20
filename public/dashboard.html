@@ -336,8 +336,7 @@
                 { id: 'overview', label: 'Competitors' },
                 { id: 'content-gap', label: 'Content Gap' },
                 { id: 'backlink-gap', label: 'Backlink Gap' },
-                { id: 'content-library', label: 'Their Content' },
-                { id: 'strategy', label: 'Strategy' }
+                { id: 'content-library', label: 'Their Content' }
             ],
             'links': [
                 { id: 'backlink-profile', label: 'Backlink Profile' },
@@ -2815,7 +2814,7 @@
                                     <tbody class="divide-y divide-gray-800">
                                         ${mutual.length > 0 ? mutual.map(d => `
                                             <tr class="hover:bg-gray-800/50 transition-colors">
-                                                <td class="px-4 py-3 text-white">${d.referring_domain}</td>
+                                                <td class="px-4 py-3 text-white">${d.domain || d.referring_domain || '—'}</td>
                                                 <td class="px-4 py-3 text-right text-emerald-400">${d.target_backlinks}</td>
                                                 <td class="px-4 py-3 text-right text-violet-400">${d.competitor_backlinks}</td>
                                                 <td class="px-4 py-3 text-right">${d.target_backlinks - d.competitor_backlinks > 0 ? '+' + (d.target_backlinks - d.competitor_backlinks) : (d.target_backlinks - d.competitor_backlinks)}</td>
@@ -2837,7 +2836,7 @@
                                     <tbody class="divide-y divide-gray-800">
                                         ${clientOnly.length > 0 ? clientOnly.map(d => `
                                             <tr class="hover:bg-gray-800/50 transition-colors">
-                                                <td class="px-4 py-3 text-white">${d.referring_domain}</td>
+                                                <td class="px-4 py-3 text-white">${d.domain || d.referring_domain || '—'}</td>
                                                 <td class="px-4 py-3 text-right text-emerald-400">${d.backlinks}</td>
                                             </tr>
                                         `).join('') : '<tr><td colspan="2" class="px-4 py-8 text-center">No exclusive domains found.</td></tr>'}
@@ -2857,7 +2856,7 @@
                                     <tbody class="divide-y divide-gray-800">
                                         ${compOnly.length > 0 ? compOnly.map(d => `
                                             <tr class="hover:bg-gray-800/50 transition-colors">
-                                                <td class="px-4 py-3 text-white">${d.referring_domain}</td>
+                                                <td class="px-4 py-3 text-white">${d.domain || d.referring_domain || '—'}</td>
                                                 <td class="px-4 py-3 text-right text-violet-400">${d.backlinks}</td>
                                             </tr>
                                         `).join('') : '<tr><td colspan="2" class="px-4 py-8 text-center">No missing domains gap!</td></tr>'}
@@ -2873,78 +2872,103 @@
                 return;
             }
 
-            if (currentSideTab === 'strategy') {
-                contentArea.innerHTML = `
-                    <div class="flex items-center justify-center h-full text-gray-500">
-                        <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Generating strategy recommendations...
-                    </div>
-                `;
+            // Their Content — show pages from competitor audits
+            if (currentSideTab === 'content-library') {
+                contentArea.innerHTML = '<div class="flex items-center justify-center h-24 text-gray-500"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>Loading competitor content...</div>';
                 lucide.createIcons();
 
                 try {
-                    // Try to get the latest competitor audit
                     const response = await fetch(`/api/audits?campaign_id=${currentClient.id}&type=competitor`);
                     const data = await response.json();
                     const audits = data.audits || [];
 
                     if (audits.length === 0) {
-                        contentArea.innerHTML = `
-                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-                                <i data-lucide="lightbulb" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
-                                <h3 class="text-lg font-semibold text-white mb-2">No Competitors Added</h3>
-                                <p class="text-gray-400">Add a competitor in the Overview tab first to get strategy recommendations.</p>
-                            </div>
-                        `;
+                        contentArea.innerHTML = '<div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center"><i data-lucide="file-text" class="w-10 h-10 text-gray-600 mx-auto mb-3"></i><p class="text-gray-400">Add and audit a competitor first to see their content pages.</p></div>';
                         lucide.createIcons();
                         return;
                     }
 
-                    const compDomain = audits[0].results?.competitor_domain;
-                    if (!compDomain) throw new Error("Competitor domain not found.");
-
-                    // Fetch strategy recommendations
-                    const stratResponse = await fetch(`/api/competitors/strategy?campaign_id=${currentClient.id}&competitor_domain=${compDomain}`);
-                    const stratData = await stratResponse.json();
-
-                    if (!stratData.success) {
-                        throw new Error(stratData.error || "Strategy generation failed");
+                    // Collect pages from all competitor audits
+                    let allCompPages = [];
+                    for (const audit of audits) {
+                        const compDomain = audit.results?.competitor_domain || '';
+                        const pages = audit.results?.pages || [];
+                        pages.forEach(p => {
+                            const url = p.url || '';
+                            const status = p.status_code || 200;
+                            // Only include 200-status content pages (skip redirects, errors, assets)
+                            if (status === 200 && url && !url.match(/\.(jpg|jpeg|png|gif|svg|css|js|woff|pdf|ico|xml|json)(\?|$)/i)) {
+                                allCompPages.push({
+                                    url,
+                                    title: p.meta?.title || p.title || '',
+                                    wordCount: p.meta?.content?.plain_text_word_count || p.word_count || 0,
+                                    h1: (p.meta?.h1 || [])[0] || '',
+                                    domain: compDomain,
+                                    score: p.onpage_score || 0
+                                });
+                            }
+                        });
                     }
 
-                    if (currentSideTab !== 'strategy') return;
+                    // Deduplicate by URL
+                    const seen = new Set();
+                    allCompPages = allCompPages.filter(p => {
+                        if (seen.has(p.url)) return false;
+                        seen.add(p.url);
+                        return true;
+                    });
+
+                    // Sort by word count descending (meatiest content first)
+                    allCompPages.sort((a, b) => (b.wordCount || 0) - (a.wordCount || 0));
+
+                    if (currentSideTab !== 'content-library') return;
 
                     contentArea.innerHTML = `
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
-                            <div class="p-6 border-b border-gray-800">
-                                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                                    <i data-lucide="zap" class="w-5 h-5 text-yellow-400"></i>
-                                    Strategy Recommendations
-                                </h3>
-                                <p class="text-gray-400">How to beat <span class="text-white font-medium">${stratData.competitor_domain}</span> based on current keyword gaps.</p>
-                            </div>
-                            <div class="p-6">
-                                <div class="prose prose-invert max-w-none text-gray-300">
-                                    ${stratData.recommendations_html || 'No recommendations could be generated.'}
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                            <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-white flex items-center gap-2"><i data-lucide="file-text" class="w-5 h-5 text-violet-400"></i>Competitor Content Pages</h3>
+                                    <p class="text-sm text-gray-400">${allCompPages.length} content pages found across ${audits.length} competitor(s)</p>
                                 </div>
                             </div>
-                            <div class="p-4 bg-gray-800 border-t border-gray-700 flex justify-end gap-3">
-                                <button class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                    Convert to Tasks
-                                </button>
+                            <div class="overflow-y-auto max-h-[600px]">
+                                <table class="w-full text-left text-sm text-gray-400">
+                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-300 sticky top-0">
+                                        <tr>
+                                            <th class="px-4 py-3 font-medium">Page</th>
+                                            <th class="px-4 py-3 font-medium">Competitor</th>
+                                            <th class="px-4 py-3 font-medium text-right">Words</th>
+                                            <th class="px-4 py-3 font-medium text-right">Score</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-800">
+                                        ${allCompPages.length > 0 ? allCompPages.map(p => `
+                                            <tr class="hover:bg-gray-800/50 transition-colors">
+                                                <td class="px-4 py-3">
+                                                    <a href="${p.url}" target="_blank" class="text-white hover:text-violet-400 transition-colors flex items-center gap-1 truncate max-w-[400px]" title="${(p.title || p.url).replace(/"/g, '&quot;')}">
+                                                        ${p.title || new URL(p.url).pathname}
+                                                        <i data-lucide="external-link" class="w-3 h-3 opacity-40 flex-shrink-0"></i>
+                                                    </a>
+                                                    <div class="text-[10px] text-gray-500 truncate max-w-[400px]">${p.url}</div>
+                                                </td>
+                                                <td class="px-4 py-3 text-xs text-gray-500">${p.domain}</td>
+                                                <td class="px-4 py-3 text-right font-mono ${p.wordCount > 1000 ? 'text-emerald-400' : p.wordCount > 300 ? 'text-white' : 'text-amber-400'}">${(p.wordCount || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-3 text-right font-mono ${p.score >= 80 ? 'text-emerald-400' : p.score >= 50 ? 'text-white' : 'text-red-400'}">${p.score || '—'}</td>
+                                            </tr>
+                                        `).join('') : '<tr><td colspan="4" class="px-4 py-8 text-center">No content pages found in audits.</td></tr>'}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     `;
                 } catch (error) {
-                    contentArea.innerHTML = `
-                        <div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl"> 
-                            Error loading capabilities: ${error.message}
-                        </div> 
-                    `;
+                    contentArea.innerHTML = `<div class="text-red-400 p-8 text-center">Error: ${error.message}</div>`;
                 }
                 lucide.createIcons();
                 return;
             }
 
-            if (currentSideTab !== 'overview' && currentSideTab !== 'content-gap' && currentSideTab !== 'backlink-gap' && currentSideTab !== 'strategy') {
+            if (currentSideTab !== 'overview' && currentSideTab !== 'content-gap' && currentSideTab !== 'backlink-gap' && currentSideTab !== 'content-library') {
                 contentArea.innerHTML = `
                     <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
                         <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
@@ -2980,7 +3004,7 @@
                     <div class="flex flex-col items-center justify-center h-64 text-center">
                             <i data-lucide="swords" class="w-12 h-12 text-gray-600 mb-4"></i>
                             <h3 class="text-lg font-semibold text-white mb-2">No Competitor Audits</h3>
-                            <p class="text-gray-400 mb-4">Add a competitor domain to run a deep technical comparison.</p>
+                            <p class="text-gray-400 mb-4">Add at least <strong class="text-white">3 competitors</strong> for a meaningful competitive analysis.</p>
                             <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
                                 Add Competitor
                             </button>
@@ -3107,6 +3131,24 @@
                         </div>
                     `;
                     contentArea.innerHTML = tableHTML;
+
+                    // Prompt for minimum 3 competitors
+                    if (audits.length < 3) {
+                        contentArea.innerHTML += `
+                            <div class="bg-amber-900/10 border border-amber-800/40 rounded-xl p-4 mb-4 flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400 flex-shrink-0"></i>
+                                    <div>
+                                        <p class="text-sm text-white font-medium">Add more competitors for better analysis</p>
+                                        <p class="text-xs text-gray-400">You have ${audits.length} competitor(s). We recommend at least <strong class="text-amber-400">3 competitors</strong> for meaningful gap analysis and benchmarking.</p>
+                                    </div>
+                                </div>
+                                <button onclick="document.getElementById('addCompetitorModal').classList.remove('hidden')" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium transition flex-shrink-0">
+                                    + Add More
+                                </button>
+                            </div>
+                        `;
+                    }
                 }
 
                 // Add the modal HTML to contentArea at the end so it's always ready

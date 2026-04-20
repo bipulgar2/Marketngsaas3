@@ -1045,6 +1045,25 @@
                 toolbar.classList.add('hidden');
             }
         }
+        
+        function filterGscKeywords(val) {
+            const searchTerms = val.toLowerCase().trim().split(' ');
+            const rows = document.querySelectorAll('.gsc-keyword-row');
+            
+            rows.forEach(row => {
+                const query = row.getAttribute('data-query');
+                if (!query) return;
+                
+                // Must match ALL search terms (like an AND search)
+                const isMatch = searchTerms.every(term => query.includes(term));
+                
+                if (isMatch) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
 
         function toggleAllTracked(source) {
             const checkboxes = document.querySelectorAll('.tracked-checkbox');
@@ -1261,13 +1280,19 @@
                         </div>
                     </div>`;
                 } else if (_analyticsView === 'keywords') {
-                    const queries = gsc.queries || [];
+                    const queries = gsc.allQueries || gsc.queries || [];
                     const tracked = currentClient.tracked_keywords || [];
                     
                     viewHtml = `
-                    <div id="keywordActionToolbar" class="hidden mb-4 p-3 bg-gray-800 border border-gray-700 rounded-lg flex items-center justify-between">
-                        <div class="text-sm text-gray-300"><span id="selectedKeywordCount" class="font-bold text-white">0</span> keywords selected</div>
-                        <button id="saveTrackedBtn" onclick="saveTrackedKeywords()" class="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-1.5">Push to Tracked</button>
+                    <div class="flex flex-wrap items-center justify-between mb-4 gap-4">
+                        <div id="keywordActionToolbar" class="hidden p-2.5 bg-gray-800 border border-gray-700 rounded-lg flex items-center gap-4">
+                            <div class="text-sm text-gray-300"><span id="selectedKeywordCount" class="font-bold text-white">0</span> selected</div>
+                            <button id="saveTrackedBtn" onclick="saveTrackedKeywords()" class="px-4 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-1.5">Push to Tracked</button>
+                        </div>
+                        <div class="relative flex-1 min-w-[200px] max-w-sm ml-auto">
+                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"></i>
+                            <input type="text" onkeyup="filterGscKeywords(this.value)" placeholder="Search keywords..." class="w-full bg-gray-800/80 border border-gray-700 text-white text-sm rounded-lg pl-9 pr-4 py-2 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 placeholder-gray-500">
+                        </div>
                     </div>
                     
                     <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
@@ -1290,7 +1315,7 @@
                         const statusBadge = isTracked 
                             ? '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full text-[10px] font-semibold uppercase tracking-wider">Tracked</span>' 
                             : '<span class="text-gray-600 text-[10px]">—</span>';
-                        return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]">
+                        return `<tr class="gsc-keyword-row border-t border-gray-800/60 hover:bg-white/[0.02]" data-query="${q.query.toLowerCase().replace(/"/g, '&quot;')}">
                             <td class="py-2.5 px-4"><input type="checkbox" value="${q.query}" onchange="updateKeywordSelection()" class="kw-checkbox rounded bg-gray-900 border-gray-600"></td>
                             <td class="py-2.5 px-4 text-gray-500">${i+1}</td>
                             <td class="py-2.5 px-4 text-white font-medium">${q.query}</td>

@@ -294,7 +294,7 @@
             { id: 'audit-2', label: 'Site Audit', icon: 'scan' },
             { id: 'tech-audit', label: 'Tech Audit', icon: 'search-code' },
             { id: 'content', label: 'Content', icon: 'file-text' },
-            { id: 'keywords', label: 'Keywords', icon: 'key' },
+            { id: 'strategy', label: 'Strategy', icon: 'target' },
             { id: 'competitors', label: 'Competitors', icon: 'users' },
             { id: 'links', label: 'Links', icon: 'link' },
             { id: 'tasks', label: 'Tasks', icon: 'check-square' },
@@ -321,12 +321,13 @@
                 { id: 'mofu', label: 'MoFu (Silo Topics)' },
                 { id: 'tofu', label: 'ToFu (Sub-Silo)' }
             ],
-            'keywords': [
-                { id: 'research', label: 'Research' },
-                { id: 'clusters', label: 'Topic Clusters' },
-                { id: 'tracking', label: 'Rank Tracking' },
-                { id: 'opportunities', label: 'Opportunities' },
-                { id: 'intent-map', label: 'Intent Map' }
+            'strategy': [
+                { id: 'brand-config', label: 'Brand Config' },
+                { id: 'keyword-research', label: 'Keyword Research' },
+                { id: 'opportunity-scoring', label: 'Opportunities' },
+                { id: 'topic-clusters', label: 'Topic Clusters' },
+                { id: 'ai-briefs', label: 'AI Briefs' },
+                { id: 'content-calendar', label: 'Content Calendar' }
             ],
             'competitors': [
                 { id: 'overview', label: 'Competitors' },
@@ -750,6 +751,8 @@
                 await loadTrackedKeywordsDashboard();
             } else if (currentTopTab === 'content') {
                 await loadContentTab();
+            } else if (currentTopTab === 'strategy') {
+                await loadStrategyTab();
             } else {
                 contentArea.innerHTML = `
                     <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
@@ -3942,6 +3945,319 @@
         }
 
         // --- Content Tab Router ---
+        // =====================================================================
+        // STRATEGY TAB — MAIN ROUTER
+        // =====================================================================
+        async function loadStrategyTab() {
+            const contentArea = document.getElementById('contentArea');
+            
+            if (!currentClient || !currentClient.id) {
+                contentArea.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-64 text-gray-500">
+                        <i data-lucide="target" class="w-12 h-12 mb-4 text-gray-600"></i>
+                        <p class="text-lg font-medium">Select a project to configure strategy</p>
+                    </div>`;
+                return;
+            }
+
+            if (currentSideTab === 'brand-config') {
+                await renderBrandConfig();
+            } else {
+                // Placeholder for other strategy sub-tabs
+                const tabLabel = currentSideTab.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                        <i data-lucide="construction" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">${tabLabel}</h3>
+                        <p class="text-gray-400">Strategy module coming soon for ${currentClient?.name || 'this project'}.</p>
+                        <p class="text-xs text-gray-500 mt-3">Set up Brand Config first to unlock AI-powered strategy tools.</p>
+                    </div>`;
+            }
+            lucide.createIcons();
+        }
+
+        // =====================================================================
+        // BRAND CONFIG — FORM
+        // =====================================================================
+        async function renderBrandConfig() {
+            const contentArea = document.getElementById('contentArea');
+            contentArea.innerHTML = `<div class="flex items-center justify-center h-32 text-gray-500">
+                <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading brand config...
+            </div>`;
+            lucide.createIcons();
+
+            // Load existing config
+            let config = {};
+            try {
+                const res = await fetch(`/api/campaigns/${currentClient.id}/brand-config`);
+                const data = await res.json();
+                config = data.brand_config || {};
+            } catch (e) {
+                console.error('Failed to load brand config:', e);
+            }
+
+            const escVal = (v) => (v || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+            const escTA = (v) => (v || '').replace(/</g, '&lt;');
+
+            contentArea.innerHTML = `
+                <div class="max-w-4xl mx-auto">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                <i data-lucide="palette" class="w-5 h-5 text-violet-400"></i>
+                                Brand Configuration
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1">Define your brand identity. This feeds into all AI-generated content, briefs, and strategy recommendations.</p>
+                        </div>
+                        <button onclick="saveBrandConfig()" id="saveBrandConfigBtn" class="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i> Save Configuration
+                        </button>
+                    </div>
+
+                    <!-- Brand Identity -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                        <h3 class="text-sm font-semibold text-violet-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <i data-lucide="fingerprint" class="w-4 h-4"></i> Brand Identity
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Business Name</label>
+                                <input type="text" id="bc_business_name" value="${escVal(config.business_name)}" placeholder="e.g. Breco Real Estate" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Industry / Niche</label>
+                                <input type="text" id="bc_industry" value="${escVal(config.industry)}" placeholder="e.g. Real Estate, SaaS, E-commerce" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Unique Selling Proposition (USP)</label>
+                                <textarea id="bc_usp" rows="2" placeholder="What makes this business different? e.g. 'The only real estate agency in Melbourne's north that specialises in off-market properties'" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600 resize-none">${escTA(config.usp)}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Brand Voice -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                        <h3 class="text-sm font-semibold text-emerald-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <i data-lucide="mic" class="w-4 h-4"></i> Brand Voice & Tone
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Voice Style</label>
+                                <select id="bc_voice_style" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none cursor-pointer">
+                                    <option value="" ${!config.voice_style ? 'selected' : ''}>Select voice style...</option>
+                                    <option value="professional" ${config.voice_style === 'professional' ? 'selected' : ''}>Professional & Authoritative</option>
+                                    <option value="friendly" ${config.voice_style === 'friendly' ? 'selected' : ''}>Friendly & Approachable</option>
+                                    <option value="casual" ${config.voice_style === 'casual' ? 'selected' : ''}>Casual & Conversational</option>
+                                    <option value="technical" ${config.voice_style === 'technical' ? 'selected' : ''}>Technical & Data-Driven</option>
+                                    <option value="luxury" ${config.voice_style === 'luxury' ? 'selected' : ''}>Luxury & Premium</option>
+                                    <option value="witty" ${config.voice_style === 'witty' ? 'selected' : ''}>Witty & Bold</option>
+                                    <option value="educational" ${config.voice_style === 'educational' ? 'selected' : ''}>Educational & Helpful</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Writing Perspective</label>
+                                <select id="bc_perspective" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none cursor-pointer">
+                                    <option value="" ${!config.perspective ? 'selected' : ''}>Select perspective...</option>
+                                    <option value="first_plural" ${config.perspective === 'first_plural' ? 'selected' : ''}>First Person Plural — "We help you..."</option>
+                                    <option value="first_singular" ${config.perspective === 'first_singular' ? 'selected' : ''}>First Person Singular — "I specialise in..."</option>
+                                    <option value="third" ${config.perspective === 'third' ? 'selected' : ''}>Third Person — "The team delivers..."</option>
+                                    <option value="second" ${config.perspective === 'second' ? 'selected' : ''}>Second Person — "You deserve..."</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Tone Guidelines & Do's/Don'ts</label>
+                                <textarea id="bc_tone_notes" rows="3" placeholder="e.g. 'Never use jargon. Always include local suburb names. Avoid clickbait headlines. Use Australian English spelling.'" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600 resize-none">${escTA(config.tone_notes)}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Target Audience -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                        <h3 class="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <i data-lucide="users" class="w-4 h-4"></i> Target Audience
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Primary Audience</label>
+                                <input type="text" id="bc_primary_audience" value="${escVal(config.primary_audience)}" placeholder="e.g. First-home buyers aged 25-40 in Melbourne's northern suburbs" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Secondary Audience</label>
+                                <input type="text" id="bc_secondary_audience" value="${escVal(config.secondary_audience)}" placeholder="e.g. Property investors looking for high-yield suburbs" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Geographic Focus</label>
+                                <input type="text" id="bc_geo_focus" value="${escVal(config.geo_focus)}" placeholder="e.g. Melbourne, Victoria, Australia" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Pain Points / Needs</label>
+                                <input type="text" id="bc_pain_points" value="${escVal(config.pain_points)}" placeholder="e.g. Overwhelmed by market competition, need trustworthy guidance" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Funnel & Sales Journey -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                        <h3 class="text-sm font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <i data-lucide="git-branch" class="w-4 h-4"></i> Funnel & Sales Journey
+                        </h3>
+                        <div class="grid grid-cols-1 gap-4">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1.5 font-medium">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-red-400 mr-1"></span>
+                                        ToFu — Awareness Stage
+                                    </label>
+                                    <textarea id="bc_tofu_description" rows="2" placeholder="What content attracts new visitors? e.g. 'Blog posts about suburb guides, market trends, buying tips'" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600 resize-none">${escTA(config.tofu_description)}</textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1.5 font-medium">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1"></span>
+                                        MoFu — Consideration Stage
+                                    </label>
+                                    <textarea id="bc_mofu_description" rows="2" placeholder="What content builds trust? e.g. 'Area comparison pages, service pages, case studies'" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600 resize-none">${escTA(config.mofu_description)}</textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1.5 font-medium">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-1"></span>
+                                        BoFu — Decision Stage
+                                    </label>
+                                    <textarea id="bc_bofu_description" rows="2" placeholder="What content converts? e.g. 'Product/service landing pages, pricing, testimonials'" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600 resize-none">${escTA(config.bofu_description)}</textarea>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Customer Journey Notes</label>
+                                <textarea id="bc_journey_notes" rows="2" placeholder="Describe the typical path from discovery to purchase. e.g. 'They find us via Google → read suburb guides → check listings → book appraisal'" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600 resize-none">${escTA(config.journey_notes)}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Branding & Competitors -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-4">
+                        <h3 class="text-sm font-semibold text-rose-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <i data-lucide="trophy" class="w-4 h-4"></i> Branding Aspirations & Competitors
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Branding Aspiration</label>
+                                <textarea id="bc_aspiration" rows="2" placeholder="What does the brand aspire to be known for? e.g. 'The most trusted real estate brand in Melbourne's north'" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600 resize-none">${escTA(config.aspiration)}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Top Competitors</label>
+                                <textarea id="bc_competitors" rows="2" placeholder="List main competitors, one per line. e.g.&#10;raywhite.com.au&#10;barryplant.com.au&#10;jellis.com.au" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600 resize-none">${escTA(config.competitors)}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content Guidelines -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
+                        <h3 class="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <i data-lucide="file-check" class="w-4 h-4"></i> Content Guidelines
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Preferred Content Length</label>
+                                <select id="bc_content_length" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none cursor-pointer">
+                                    <option value="" ${!config.content_length ? 'selected' : ''}>Select...</option>
+                                    <option value="short" ${config.content_length === 'short' ? 'selected' : ''}>Short (500-800 words)</option>
+                                    <option value="medium" ${config.content_length === 'medium' ? 'selected' : ''}>Medium (800-1500 words)</option>
+                                    <option value="long" ${config.content_length === 'long' ? 'selected' : ''}>Long-form (1500-3000 words)</option>
+                                    <option value="pillar" ${config.content_length === 'pillar' ? 'selected' : ''}>Pillar (3000+ words)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Internal Linking Strategy</label>
+                                <select id="bc_linking_strategy" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none cursor-pointer">
+                                    <option value="" ${!config.linking_strategy ? 'selected' : ''}>Select...</option>
+                                    <option value="silo" ${config.linking_strategy === 'silo' ? 'selected' : ''}>Silo Structure (strict topic clusters)</option>
+                                    <option value="hub" ${config.linking_strategy === 'hub' ? 'selected' : ''}>Hub & Spoke (pillar + cluster pages)</option>
+                                    <option value="flat" ${config.linking_strategy === 'flat' ? 'selected' : ''}>Flat (cross-link freely)</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs text-gray-400 mb-1.5 font-medium">Additional Notes for AI</label>
+                                <textarea id="bc_ai_notes" rows="3" placeholder="Any special instructions for AI-generated content. e.g. 'Always include a CTA to book a free appraisal. Use Australian English. Reference local landmarks when relevant.'" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none placeholder-gray-600 resize-none">${escTA(config.ai_notes)}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Save -->
+                    <div class="flex justify-end">
+                        <button onclick="saveBrandConfig()" class="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i> Save Configuration
+                        </button>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function saveBrandConfig() {
+            if (!currentClient) return;
+            
+            const btn = document.getElementById('saveBrandConfigBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...';
+                lucide.createIcons();
+            }
+
+            const config = {
+                business_name: document.getElementById('bc_business_name')?.value || '',
+                industry: document.getElementById('bc_industry')?.value || '',
+                usp: document.getElementById('bc_usp')?.value || '',
+                voice_style: document.getElementById('bc_voice_style')?.value || '',
+                perspective: document.getElementById('bc_perspective')?.value || '',
+                tone_notes: document.getElementById('bc_tone_notes')?.value || '',
+                primary_audience: document.getElementById('bc_primary_audience')?.value || '',
+                secondary_audience: document.getElementById('bc_secondary_audience')?.value || '',
+                geo_focus: document.getElementById('bc_geo_focus')?.value || '',
+                pain_points: document.getElementById('bc_pain_points')?.value || '',
+                tofu_description: document.getElementById('bc_tofu_description')?.value || '',
+                mofu_description: document.getElementById('bc_mofu_description')?.value || '',
+                bofu_description: document.getElementById('bc_bofu_description')?.value || '',
+                journey_notes: document.getElementById('bc_journey_notes')?.value || '',
+                aspiration: document.getElementById('bc_aspiration')?.value || '',
+                competitors: document.getElementById('bc_competitors')?.value || '',
+                content_length: document.getElementById('bc_content_length')?.value || '',
+                linking_strategy: document.getElementById('bc_linking_strategy')?.value || '',
+                ai_notes: document.getElementById('bc_ai_notes')?.value || ''
+            };
+
+            try {
+                const res = await fetch(`/api/campaigns/${currentClient.id}/brand-config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ brand_config: config })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    // Update local client object
+                    currentClient.brand_config = data.brand_config;
+                    showToast('Brand configuration saved!', 'success');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> Save Configuration';
+                        lucide.createIcons();
+                    }
+                } else {
+                    throw new Error('Failed to save');
+                }
+            } catch (error) {
+                console.error(error);
+                showToast('Error saving brand config', 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> Save Configuration';
+                    lucide.createIcons();
+                }
+            }
+        }
+
+        // =====================================================================
+        // CONTENT TAB
+        // =====================================================================
         async function loadContentTab() {
             const contentArea = document.getElementById('contentArea');
             contentArea.innerHTML = `<div class="flex items-center justify-center h-32 text-gray-500">

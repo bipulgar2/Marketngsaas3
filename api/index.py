@@ -838,6 +838,34 @@ def manage_tracked_keywords(campaign_id):
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
+# BRAND CONFIG ROUTES
+# =============================================================================
+
+@app.route('/api/campaigns/<campaign_id>/brand-config', methods=['GET', 'POST'])
+@login_required
+def manage_brand_config(campaign_id):
+    """Get or update brand configuration for a campaign."""
+    client = supabase_admin or supabase
+    try:
+        if request.method == 'GET':
+            response = client.table('campaigns').select('brand_config').eq('id', campaign_id).single().execute()
+            if not response.data:
+                return jsonify({'brand_config': {}})
+            return jsonify({'brand_config': response.data.get('brand_config') or {}})
+            
+        elif request.method == 'POST':
+            data = request.json
+            brand_config = data.get('brand_config', {})
+            
+            response = client.table('campaigns').update({'brand_config': brand_config}).eq('id', campaign_id).execute()
+            out = response.data[0].get('brand_config', brand_config) if hasattr(response, 'data') and response.data else brand_config
+            return jsonify({'success': True, 'brand_config': out})
+            
+    except Exception as e:
+        logger.error(f"Brand Config Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
 # TASK ROUTES
 # =============================================================================
 

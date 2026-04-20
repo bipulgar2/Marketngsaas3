@@ -988,6 +988,199 @@ Respond ONLY with valid JSON in this exact format, no markdown:
         logger.error(f"Topic Clusters Error: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+# =============================================================================
+# AI BRIEFS ROUTES
+# =============================================================================
+
+@app.route('/api/generate-content-brief', methods=['POST'])
+@login_required
+def generate_content_brief():
+    """Generate an AI content brief using Gemini."""
+    try:
+        data = request.json or {}
+        keyword = data.get('keyword', '').strip()
+        funnel_stage = data.get('funnel_stage', 'mofu')
+        brand_config = data.get('brand_config', {})
+        cluster_context = data.get('cluster_context', '')
+        
+        if not keyword:
+            return jsonify({'error': 'keyword is required'}), 400
+        
+        # Build brand context
+        brand_ctx = ""
+        if brand_config:
+            parts = []
+            if brand_config.get('business_name'): parts.append(f"Business: {brand_config['business_name']}")
+            if brand_config.get('industry'): parts.append(f"Industry: {brand_config['industry']}")
+            if brand_config.get('usp'): parts.append(f"USP: {brand_config['usp']}")
+            if brand_config.get('primary_audience'): parts.append(f"Audience: {brand_config['primary_audience']}")
+            if brand_config.get('voice_style'): parts.append(f"Voice: {brand_config['voice_style']}")
+            if brand_config.get('perspective'): parts.append(f"Perspective: {brand_config['perspective']}")
+            if brand_config.get('tone_notes'): parts.append(f"Tone: {brand_config['tone_notes']}")
+            if brand_config.get('content_length'): parts.append(f"Length preference: {brand_config['content_length']}")
+            if brand_config.get('ai_notes'): parts.append(f"Notes: {brand_config['ai_notes']}")
+            brand_ctx = "\n".join(parts)
+        
+        funnel_desc = {
+            'tofu': 'Top of Funnel (Awareness) — educational, informational, attracts new visitors',
+            'mofu': 'Middle of Funnel (Consideration) — comparative, builds trust, shows expertise',
+            'bofu': 'Bottom of Funnel (Decision) — conversion-focused, product/service specific'
+        }.get(funnel_stage, 'Middle of Funnel')
+        
+        prompt = f"""You are a senior SEO content strategist. Generate a comprehensive content brief for the following keyword.
+
+TARGET KEYWORD: {keyword}
+FUNNEL STAGE: {funnel_desc}
+{f"CLUSTER CONTEXT: {cluster_context}" if cluster_context else ""}
+{f"BRAND CONTEXT:{chr(10)}{brand_ctx}" if brand_ctx else ""}
+
+Create a detailed content brief. Respond ONLY with valid JSON, no markdown:
+{{
+  "title": "Recommended article/page title (SEO optimized, under 60 chars)",
+  "meta_description": "Meta description (under 155 chars, includes keyword)",
+  "target_keyword": "{keyword}",
+  "secondary_keywords": ["4-6 secondary/LSI keywords to include"],
+  "search_intent": "informational|commercial|transactional|navigational",
+  "funnel_stage": "{funnel_stage}",
+  "recommended_word_count": 1500,
+  "recommended_format": "Guide|Listicle|How-To|Comparison|Review|Landing Page",
+  "outline": [
+    {{
+      "heading": "H2 heading text",
+      "subheadings": ["H3 subheading 1", "H3 subheading 2"],
+      "key_points": ["Main point to cover", "Another point"],
+      "word_count": 300
+    }}
+  ],
+  "competitor_angles": ["What top-ranking pages typically cover — 3 bullet points"],
+  "content_gap": "What competitors miss that this content should include",
+  "internal_linking": ["Suggested pages to link to/from based on topic"],
+  "cta_recommendation": "What CTA to use and where to place it",
+  "visual_suggestions": ["Types of images/charts/infographics to include"],
+  "seo_notes": "Any specific SEO recommendations for this piece"
+}}"""
+
+        result = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash",
+            use_grounding=True
+        )
+        
+        if not result:
+            return jsonify({'error': 'Empty response from AI'}), 500
+        
+        text = result.strip()
+        if text.startswith('```json'): text = text[7:]
+        if text.startswith('```'): text = text[3:]
+        if text.endswith('```'): text = text[:-3]
+        text = text.strip()
+        
+        import json
+        parsed = json.loads(text)
+        
+        return jsonify({'success': True, 'brief': parsed})
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"AI Brief JSON Parse Error: {e}")
+        return jsonify({'error': f'AI returned invalid JSON: {str(e)}'}), 500
+    except Exception as e:
+        logger.error(f"AI Brief Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# GUEST POST TOPICS ROUTES
+# =============================================================================
+
+@app.route('/api/generate-guest-post-topics', methods=['POST'])
+@login_required
+def generate_guest_post_topics():
+    """Use Gemini to identify guest post topics and target sites."""
+    try:
+        data = request.json or {}
+        brand_config = data.get('brand_config', {})
+        tracked_keywords = data.get('tracked_keywords', [])
+        clusters = data.get('clusters', [])
+        
+        # Build context
+        brand_ctx = ""
+        if brand_config:
+            parts = []
+            if brand_config.get('business_name'): parts.append(f"Business: {brand_config['business_name']}")
+            if brand_config.get('industry'): parts.append(f"Industry: {brand_config['industry']}")
+            if brand_config.get('usp'): parts.append(f"USP: {brand_config['usp']}")
+            if brand_config.get('primary_audience'): parts.append(f"Audience: {brand_config['primary_audience']}")
+            if brand_config.get('domain'): parts.append(f"Website: {brand_config['domain']}")
+            if brand_config.get('linking_strategy'): parts.append(f"Link Strategy: {brand_config['linking_strategy']}")
+            brand_ctx = "\n".join(parts)
+        
+        kw_str = ""
+        if tracked_keywords:
+            kw_str = "\n".join([f"- {kw}" for kw in tracked_keywords[:30]])
+        
+        cluster_str = ""
+        if clusters:
+            cluster_str = "\n".join([f"- {c.get('cluster_name', '')} (Pillar: {c.get('pillar_keyword', '')})" for c in clusters[:8]])
+        
+        prompt = f"""You are an expert link building strategist. Generate guest post topic ideas for this business.
+
+{f"BRAND:{chr(10)}{brand_ctx}" if brand_ctx else ""}
+{f"TARGET KEYWORDS:{chr(10)}{kw_str}" if kw_str else ""}
+{f"TOPIC CLUSTERS:{chr(10)}{cluster_str}" if cluster_str else ""}
+
+Generate 8-12 guest post topic ideas. For each, suggest:
+1. A compelling article title that would be accepted by editors
+2. The type of website to pitch it to
+3. A brief pitch angle (why they'd publish it)
+4. The anchor text to use for a backlink
+5. Which internal page it should link to
+6. Difficulty level (easy/medium/hard)
+
+Respond ONLY with valid JSON, no markdown:
+{{
+  "topics": [
+    {{
+      "title": "Guest post article title",
+      "target_site_type": "Type of publication/blog to pitch (e.g. Marketing blog, Industry news site, Local business directory)",
+      "example_sites": ["example-site1.com", "example-site2.com"],
+      "pitch_angle": "Why this site would want to publish this (1-2 sentences)",
+      "anchor_text": "Exact anchor text for backlink",
+      "target_page": "Which page on their site this should link to",
+      "funnel_stage": "tofu|mofu|bofu",
+      "difficulty": "easy|medium|hard",
+      "content_type": "How-To|Opinion|Data Study|Case Study|Expert Roundup|Listicle"
+    }}
+  ]
+}}"""
+
+        result = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash",
+            use_grounding=True
+        )
+        
+        if not result:
+            return jsonify({'error': 'Empty response from AI'}), 500
+        
+        text = result.strip()
+        if text.startswith('```json'): text = text[7:]
+        if text.startswith('```'): text = text[3:]
+        if text.endswith('```'): text = text[:-3]
+        text = text.strip()
+        
+        import json
+        parsed = json.loads(text)
+        
+        return jsonify({'success': True, 'topics': parsed.get('topics', [])})
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Guest Post JSON Parse Error: {e}")
+        return jsonify({'error': f'AI returned invalid JSON: {str(e)}'}), 500
+    except Exception as e:
+        logger.error(f"Guest Post Topics Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # =============================================================================
 # TASK ROUTES
 # =============================================================================

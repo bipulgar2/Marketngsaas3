@@ -526,9 +526,9 @@ def get_current_user():
     
     # Define which top-level tabs each role can see
     ROLE_TABS = {
-        'admin': ['dashboard', 'audit-2', 'tech-audit', 'content', 'keywords', 'competitors', 'links', 'tasks', 'reports', 'client-settings'],
-        'campaign_manager': ['dashboard', 'audit-2', 'tech-audit', 'content', 'keywords', 'competitors', 'links', 'tasks', 'reports', 'client-settings'],
-        'content_strategist': ['dashboard', 'content', 'keywords', 'competitors', 'tasks'],
+        'admin': ['dashboard', 'audit-2', 'tech-audit', 'content', 'strategy', 'competitors', 'links', 'tasks', 'reports', 'client-settings'],
+        'campaign_manager': ['dashboard', 'audit-2', 'tech-audit', 'content', 'strategy', 'competitors', 'links', 'tasks', 'reports', 'client-settings'],
+        'content_strategist': ['dashboard', 'content', 'strategy', 'competitors', 'tasks'],
         'content_creator': ['dashboard', 'content', 'tasks'],
         'optimization_specialist': ['dashboard', 'audit-2', 'tech-audit', 'tasks'],
         'link_builder': ['dashboard', 'links', 'tasks'],

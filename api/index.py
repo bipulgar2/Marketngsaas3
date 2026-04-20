@@ -773,6 +773,37 @@ def update_campaign(campaign_id):
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
+# TRACKED KEYWORDS ROUTES
+# =============================================================================
+
+@app.route('/api/campaigns/<campaign_id>/keywords', methods=['GET', 'POST'])
+@login_required
+def manage_tracked_keywords(campaign_id):
+    """Get or update tracked keywords for a campaign."""
+    client = supabase_admin or supabase
+    try:
+        if request.method == 'GET':
+            response = client.table('campaigns').select('tracked_keywords').eq('id', campaign_id).single().execute()
+            if not response.data:
+                return jsonify({'keywords': []})
+            return jsonify({'keywords': response.data.get('tracked_keywords') or []})
+            
+        elif request.method == 'POST':
+            data = request.json
+            keywords = data.get('keywords', [])
+            
+            # Make sure it's a list of strings
+            keywords = [str(k) for k in keywords]
+            
+            response = client.table('campaigns').update({'tracked_keywords': keywords}).eq('id', campaign_id).execute()
+            out_keywords = response.data[0].get('tracked_keywords', keywords) if hasattr(response, 'data') and response.data else keywords
+            return jsonify({'success': True, 'keywords': out_keywords})
+            
+    except Exception as e:
+        logger.error(f"Tracked Keywords Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
 # TASK ROUTES
 # =============================================================================
 

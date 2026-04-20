@@ -346,11 +346,9 @@
                 { id: 'all-tasks', label: 'All Tasks' }
             ],
             'reports': [
-                { id: 'generated', label: 'Generated Reports' },
-                { id: 'create', label: 'Create Report' },
                 { id: 'analytics', label: 'Analytics' },
-                { id: 'wins', label: 'Wins' },
-                { id: 'exports', label: 'Exports' }
+                { id: 'tracked-keywords', label: 'Tracked Keywords' },
+                { id: 'wins', label: 'Wins' }
             ],
             'client-settings': [
                 { id: 'general', label: 'General' },
@@ -748,6 +746,8 @@
                 await loadClientSettingsContent();
             } else if (currentTopTab === 'reports' && currentSideTab === 'analytics') {
                 await loadAnalyticsDashboard();
+            } else if (currentTopTab === 'reports' && currentSideTab === 'tracked-keywords') {
+                await loadTrackedKeywordsDashboard();
             } else if (currentTopTab === 'content') {
                 await loadContentTab();
             } else {
@@ -802,6 +802,117 @@
             const m = Math.floor((seconds % 3600) / 60);
             const s = Math.floor(seconds % 60);
             return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+        }
+
+        async function loadTrackedKeywordsDashboard() {
+            const contentArea = document.getElementById('contentArea');
+
+            if (!currentClient || !currentClient.settings) {
+                contentArea.innerHTML = `<div class="text-center text-gray-500 py-12">No client selected or settings missing.</div>`;
+                return;
+            }
+
+            const tracked = currentClient.tracked_keywords || [];
+            if (tracked.length === 0) {
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center max-w-2xl mx-auto mt-8">
+                        <i data-lucide="line-chart" class="w-12 h-12 text-violet-500 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">No Keywords Tracked</h3>
+                        <p class="text-gray-400 mb-6">Go to Analytics > GSC > Keywords to start tracking specific search terms.</p>
+                        <button onclick="switchSideTab('analytics'); switchAnalyticsTemplate('gsc'); setTimeout(() => switchAnalyticsView('keywords'), 100);" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                            Select Keywords
+                        </button>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            const gscProp = currentClient.settings.gsc_property;
+            if (!gscProp) {
+                contentArea.innerHTML = `<div class="text-gray-500 text-center py-16">GSC not connected. Go to Settings → Google to connect.</div>`;
+                return;
+            }
+
+            contentArea.innerHTML = `<div class="flex items-center justify-center p-12"><i data-lucide="loader-2" class="w-8 h-8 text-violet-500 animate-spin"></i><span class="ml-3 text-gray-400">Fetching ranking data for tracked keywords...</span></div>`;
+            lucide.createIcons();
+
+            try {
+                // Fetch new metrics data for the max duration (or current duration)
+                const response = await fetch('/api/google/metrics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gsc_property: gscProp, ga4_property: null, duration: _analyticsDuration })
+                });
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+
+                const queries = (data.gsc && data.gsc.queries) || [];
+                // Filter queries to ONLY show those that are in tracked array
+                // If a tracked keyword isn't in GSC's top results, we'd need a separate direct query, but for now we filter the 5000 row pull.
+                const trackedQueries = queries.filter(q => tracked.includes(q.query));
+                
+                // Add any tracked keywords that weren't found with 0 data
+                tracked.forEach(tq => {
+                    if (!trackedQueries.some(q => q.query === tq)) {
+                        trackedQueries.push({ query: tq, clicks: 0, impressions: 0, ctr: 0, position: 0 });
+                    }
+                });
+                
+                const ac = '#10b981';
+                const acRgb = '16,185,129';
+
+                contentArea.innerHTML = `
+                    <div class="mb-4 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-bold text-white">Tracked Keywords Performance</h3>
+                            <p class="text-sm text-gray-400">Monitoring ${trackedQueries.length} exact targeted search terms</p>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2 sm:mt-0">
+                            <span class="text-[10px] text-gray-600 uppercase tracking-widest">Duration</span>
+                            <select onchange="_analyticsDuration = this.value; loadTrackedKeywordsDashboard();" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
+                                <option value="1m" ${_analyticsDuration === '1m' ? 'selected' : ''}>1 Month</option>
+                                <option value="3m" ${_analyticsDuration === '3m' ? 'selected' : ''}>3 Months</option>
+                                <option value="6m" ${_analyticsDuration === '6m' ? 'selected' : ''}>6 Months</option>
+                                <option value="12m" ${_analyticsDuration === '12m' ? 'selected' : ''}>12 Months</option>
+                                <option value="max" ${_analyticsDuration === 'max' ? 'selected' : ''}>Max (16 Months)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)">
+                                    <th class="text-left py-3 px-4 w-12 text-center">Status</th>
+                                    <th class="text-left py-3 px-4">Query</th>
+                                    <th class="text-right py-3 px-4">Clicks</th>
+                                    <th class="text-right py-3 px-4">Impressions</th>
+                                    <th class="text-right py-3 px-4">CTR</th>
+                                    <th class="text-right py-3 px-4">Position</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${trackedQueries.sort((a,b) => a.position === 0 ? 1 : b.position === 0 ? -1 : a.position - b.position).map(q => {
+                                    const rankStatus = q.position > 0 && q.position <= 10 ? '<i data-lucide="zap" class="w-4 h-4 text-emerald-500 mx-auto"></i>' : (q.position > 10 && q.position <= 100 ? '<i data-lucide="trending-up" class="w-4 h-4 text-blue-500 mx-auto"></i>' : '<i data-lucide="minus" class="w-4 h-4 text-gray-500 mx-auto"></i>');
+                                    return \`<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]">
+                                        <td class="py-3 px-4 text-center">\${rankStatus}</td>
+                                        <td class="py-3 px-4 text-white font-medium">\${q.query}</td>
+                                        <td class="py-3 px-4 text-right font-semibold" style="color:\${ac}">\${fmtNum(q.clicks)}</td>
+                                        <td class="py-3 px-4 text-right text-gray-300">\${fmtNum(q.impressions)}</td>
+                                        <td class="py-3 px-4 text-right text-gray-400">\${(q.ctr*100).toFixed(2)}%</td>
+                                        <td class="py-3 px-4 text-right text-white">\${q.position > 0 ? q.position.toFixed(1) : '<span class="text-gray-600 text-xs">Unranked</span>'}</td>
+                                    </tr>\`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                lucide.createIcons();
+
+            } catch (err) {
+                console.error(err);
+                contentArea.innerHTML = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400">Failed to load tracked keywords data.</span></div>`;
+            }
         }
 
         async function loadAnalyticsDashboard() {
@@ -873,6 +984,50 @@
         function switchAnalyticsView(view) {
             _analyticsView = view;
             renderAnalyticsDashboard();
+            updateKeywordSelection(); // trigger to show toolbar if any pre-checked
+        }
+        
+        function toggleAllKeywords(source) {
+            const checkboxes = document.querySelectorAll('.kw-checkbox');
+            checkboxes.forEach(cb => cb.checked = source.checked);
+            updateKeywordSelection();
+        }
+
+        function updateKeywordSelection() {
+            const toolbar = document.getElementById('keywordActionToolbar');
+            if (!toolbar) return;
+            const selectedCount = document.querySelectorAll('.kw-checkbox:checked').length;
+            document.getElementById('selectedKeywordCount').textContent = selectedCount;
+            if (selectedCount > 0) {
+                toolbar.classList.remove('hidden');
+            } else {
+                toolbar.classList.add('hidden');
+            }
+        }
+
+        async function saveTrackedKeywords() {
+            if (!currentClient) return;
+            const checkboxes = document.querySelectorAll('.kw-checkbox:checked');
+            const keywords = Array.from(checkboxes).map(cb => cb.value);
+
+            try {
+                const response = await fetch(`/api/campaigns/${currentClient.id}/keywords`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keywords })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentClient.tracked_keywords = data.keywords;
+                    showToast('Tracked keywords saved!', 'success');
+                } else {
+                    showToast('Failed to save keywords', 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                showToast('Error saving keywords', 'error');
+            }
         }
 
         // =====================================================================
@@ -982,8 +1137,41 @@
                     </div>`;
                 } else if (_analyticsView === 'keywords') {
                     const queries = gsc.queries || [];
-                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Query</th><th class="text-right py-3 px-4">Clicks</th><th class="text-right py-3 px-4">Impressions</th><th class="text-right py-3 px-4">CTR</th><th class="text-right py-3 px-4">Position</th></tr></thead><tbody>
-                    ${queries.map((q,i) => '<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2.5 px-4 text-white font-medium">'+q.query+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(q.clicks)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(q.impressions)+'</td><td class="py-2.5 px-4 text-right text-gray-400">'+(q.ctr*100).toFixed(2)+'%</td><td class="py-2.5 px-4 text-right text-gray-400">'+q.position.toFixed(1)+'</td></tr>').join('')}
+                    // Need a way to identify tracked keywords to pre-check them
+                    const tracked = currentClient.tracked_keywords || [];
+                    
+                    viewHtml = `
+                    <div id="keywordActionToolbar" class="hidden mb-4 p-3 bg-gray-800 border border-gray-700 rounded-lg flex items-center justify-between">
+                        <div class="text-sm text-gray-300"><span id="selectedKeywordCount" class="font-bold text-white">0</span> keywords selected</div>
+                        <button onclick="saveTrackedKeywords()" class="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition">Save to Tracked Keywords</button>
+                    </div>
+                    
+                    <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)">
+                                    <th class="text-left py-3 px-4 w-12"><input type="checkbox" onchange="toggleAllKeywords(this)" class="rounded bg-gray-900 border-gray-600 outline-none ring-0"></th>
+                                    <th class="text-left py-3 px-4">#</th>
+                                    <th class="text-left py-3 px-4">Query</th>
+                                    <th class="text-right py-3 px-4">Clicks</th>
+                                    <th class="text-right py-3 px-4">Impressions</th>
+                                    <th class="text-right py-3 px-4">CTR</th>
+                                    <th class="text-right py-3 px-4">Position</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    ${queries.map((q,i) => {
+                        const isTracked = tracked.includes(q.query);
+                        return \`<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]">
+                            <td class="py-2.5 px-4"><input type="checkbox" value="\${q.query}" onchange="updateKeywordSelection()" class="kw-checkbox rounded bg-gray-900 border-gray-600" \${isTracked ? 'checked' : ''}></td>
+                            <td class="py-2.5 px-4 text-gray-500">\${i+1}</td>
+                            <td class="py-2.5 px-4 text-white font-medium">\${q.query}</td>
+                            <td class="py-2.5 px-4 text-right font-semibold" style="color:\${ac}">\${fmtNum(q.clicks)}</td>
+                            <td class="py-2.5 px-4 text-right text-gray-300">\${fmtNum(q.impressions)}</td>
+                            <td class="py-2.5 px-4 text-right text-gray-400">\${(q.ctr*100).toFixed(2)}%</td>
+                            <td class="py-2.5 px-4 text-right text-gray-400">\${q.position.toFixed(1)}</td>
+                        </tr>\`;
+                    }).join('')}
                     </tbody></table></div>`;
                 } else if (_analyticsView === 'landing-pages') {
                     const pages = gsc.pages || [];

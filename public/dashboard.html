@@ -1011,12 +1011,17 @@
             const btn = document.getElementById('saveTrackedBtn');
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...';
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Pushing...';
                 lucide.createIcons();
             }
             
             const checkboxes = document.querySelectorAll('.kw-checkbox:checked');
             const keywords = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (keywords.length === 0) {
+                if (btn) { btn.disabled = false; btn.innerHTML = 'Push to Tracked'; }
+                return;
+            }
 
             try {
                 const response = await fetch(`/api/campaigns/${currentClient.id}/keywords`, {
@@ -1028,29 +1033,17 @@
                 if (response.ok) {
                     const data = await response.json();
                     currentClient.tracked_keywords = data.keywords;
-                    showToast('Tracked keywords saved!', 'success');
+                    showToast(`${keywords.length} keyword${keywords.length > 1 ? 's' : ''} pushed to tracking!`, 'success');
                     
-                    if (btn) {
-                        btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
-                        btn.classList.remove('bg-violet-600', 'hover:bg-violet-700');
-                        btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> Saved!';
-                        lucide.createIcons();
-                        
-                        setTimeout(() => {
-                            btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
-                            btn.classList.add('bg-violet-600', 'hover:bg-violet-700');
-                            btn.innerHTML = 'Save to Tracked Keywords';
-                            btn.disabled = false;
-                            updateKeywordSelection();
-                        }, 2000);
-                    }
+                    // Re-render the view to clear checkboxes and update Status badges
+                    renderAnalyticsDashboard();
                 } else {
-                    if (btn) { btn.disabled = false; btn.innerHTML = 'Save to Tracked Keywords'; }
+                    if (btn) { btn.disabled = false; btn.innerHTML = 'Push to Tracked'; }
                     showToast('Failed to save keywords', 'error');
                 }
             } catch (error) {
                 console.error(error);
-                if (btn) { btn.disabled = false; btn.innerHTML = 'Save to Tracked Keywords'; }
+                if (btn) { btn.disabled = false; btn.innerHTML = 'Push to Tracked'; }
                 showToast('Error saving keywords', 'error');
             }
         }
@@ -1162,13 +1155,12 @@
                     </div>`;
                 } else if (_analyticsView === 'keywords') {
                     const queries = gsc.queries || [];
-                    // Need a way to identify tracked keywords to pre-check them
                     const tracked = currentClient.tracked_keywords || [];
                     
                     viewHtml = `
                     <div id="keywordActionToolbar" class="hidden mb-4 p-3 bg-gray-800 border border-gray-700 rounded-lg flex items-center justify-between">
                         <div class="text-sm text-gray-300"><span id="selectedKeywordCount" class="font-bold text-white">0</span> keywords selected</div>
-                        <button id="saveTrackedBtn" onclick="saveTrackedKeywords()" class="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-1.5">Save to Tracked Keywords</button>
+                        <button id="saveTrackedBtn" onclick="saveTrackedKeywords()" class="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-1.5">Push to Tracked</button>
                     </div>
                     
                     <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
@@ -1178,6 +1170,7 @@
                                     <th class="text-left py-3 px-4 w-12"><input type="checkbox" onchange="toggleAllKeywords(this)" class="rounded bg-gray-900 border-gray-600 outline-none ring-0"></th>
                                     <th class="text-left py-3 px-4">#</th>
                                     <th class="text-left py-3 px-4">Query</th>
+                                    <th class="text-center py-3 px-4">Status</th>
                                     <th class="text-right py-3 px-4">Clicks</th>
                                     <th class="text-right py-3 px-4">Impressions</th>
                                     <th class="text-right py-3 px-4">CTR</th>
@@ -1187,10 +1180,14 @@
                             <tbody>
                     ${queries.map((q,i) => {
                         const isTracked = tracked.includes(q.query);
+                        const statusBadge = isTracked 
+                            ? '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full text-[10px] font-semibold uppercase tracking-wider">Tracked</span>' 
+                            : '<span class="text-gray-600 text-[10px]">—</span>';
                         return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]">
-                            <td class="py-2.5 px-4"><input type="checkbox" value="${q.query}" onchange="updateKeywordSelection()" class="kw-checkbox rounded bg-gray-900 border-gray-600" ${isTracked ? 'checked' : ''}></td>
+                            <td class="py-2.5 px-4"><input type="checkbox" value="${q.query}" onchange="updateKeywordSelection()" class="kw-checkbox rounded bg-gray-900 border-gray-600"></td>
                             <td class="py-2.5 px-4 text-gray-500">${i+1}</td>
                             <td class="py-2.5 px-4 text-white font-medium">${q.query}</td>
+                            <td class="py-2.5 px-4 text-center">${statusBadge}</td>
                             <td class="py-2.5 px-4 text-right font-semibold" style="color:${ac}">${fmtNum(q.clicks)}</td>
                             <td class="py-2.5 px-4 text-right text-gray-300">${fmtNum(q.impressions)}</td>
                             <td class="py-2.5 px-4 text-right text-gray-400">${(q.ctr*100).toFixed(2)}%</td>

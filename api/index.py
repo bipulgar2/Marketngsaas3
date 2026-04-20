@@ -799,13 +799,23 @@ def manage_tracked_keywords(campaign_id):
             
         elif request.method == 'POST':
             data = request.json
-            keywords = data.get('keywords', [])
+            new_keywords = data.get('keywords', [])
             
             # Make sure it's a list of strings
-            keywords = [str(k) for k in keywords]
+            new_keywords = [str(k) for k in new_keywords]
             
-            response = client.table('campaigns').update({'tracked_keywords': keywords}).eq('id', campaign_id).execute()
-            out_keywords = response.data[0].get('tracked_keywords', keywords) if hasattr(response, 'data') and response.data else keywords
+            # MERGE: Fetch existing tracked keywords first, then add new ones
+            existing_res = client.table('campaigns').select('tracked_keywords').eq('id', campaign_id).single().execute()
+            existing_keywords = (existing_res.data.get('tracked_keywords') or []) if existing_res.data else []
+            
+            # Union: existing + new, deduplicated, preserving order
+            merged = list(existing_keywords)
+            for kw in new_keywords:
+                if kw not in merged:
+                    merged.append(kw)
+            
+            response = client.table('campaigns').update({'tracked_keywords': merged}).eq('id', campaign_id).execute()
+            out_keywords = response.data[0].get('tracked_keywords', merged) if hasattr(response, 'data') and response.data else merged
             return jsonify({'success': True, 'keywords': out_keywords})
             
     except Exception as e:

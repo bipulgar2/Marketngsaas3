@@ -373,6 +373,7 @@
 
                 const data = await response.json();
                 currentUser = data.user;
+                window._allowedTabs = data.allowed_tabs || ['dashboard'];
 
                 // Reset active audit on full reload
                 activeAudit = null;
@@ -400,8 +401,13 @@
         // =========================================================================
         function buildTopTabs() {
             const container = document.getElementById('topTabs');
-            // Filter out client-only tabs when no client is selected
-            const visibleTabs = TOP_TABS.filter(tab => !tab.clientOnly || currentClient);
+            const allowed = window._allowedTabs || ['dashboard'];
+            // Filter by role-allowed tabs AND client-only visibility
+            const visibleTabs = TOP_TABS.filter(tab => {
+                if (!allowed.includes(tab.id)) return false;
+                if (tab.clientOnly && !currentClient) return false;
+                return true;
+            });
             container.innerHTML = visibleTabs.map(tab => `
                 <button onclick="switchTopTab('${tab.id}')" 
                     class="top-tab flex items-center gap-1.5 text-sm text-gray-400 transition-colors ${tab.id === currentTopTab ? 'active' : ''}">
@@ -710,11 +716,7 @@
                     <button onclick="showInviteModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
                         <i data-lucide="user-plus" class="w-4 h-4"></i> Invite Member
                     </button>`;
-                contentArea.innerHTML = `
-                    <div class="flex flex-col items-center justify-center h-64 text-center text-gray-500">
-                        <i data-lucide="users" class="w-12 h-12 text-gray-600 mb-4"></i>
-                        <p>Team management coming soon</p>
-                    </div>`;
+                await loadTeamContent(contentArea);
             } else if (currentSideTab === 'settings') {
                 pageActions.innerHTML = '';
                 contentArea.innerHTML = `
@@ -1771,15 +1773,225 @@
             }
         }
 
-        function showInviteModal() {
-            showModal(`
-                    <div class="p-4 border-b border-gray-800">
-                        <h3 class="text-lg font-semibold text-white">Invite Team Member</h3>
-                </div>
-                    <div class="p-4 text-center text-gray-400">
-                        <p>Team invites coming soon</p>
+        // =========================================================================
+        // TEAM MANAGEMENT
+        // =========================================================================
+        async function loadTeamContent(contentArea) {
+            try {
+                const [membersRes, invitesRes] = await Promise.all([
+                    fetch('/api/team'),
+                    fetch('/api/team/invitations')
+                ]);
+                const membersData = await membersRes.json();
+                const invitesData = await invitesRes.json();
+                const members = membersData.members || [];
+                const invitations = invitesData.invitations || [];
+
+                const roleColors = {
+                    'admin': 'bg-violet-500/20 text-violet-400',
+                    'campaign_manager': 'bg-blue-500/20 text-blue-400',
+                    'content_strategist': 'bg-emerald-500/20 text-emerald-400',
+                    'content_creator': 'bg-cyan-500/20 text-cyan-400',
+                    'optimization_specialist': 'bg-amber-500/20 text-amber-400',
+                    'link_builder': 'bg-orange-500/20 text-orange-400',
+                    'reporting_manager': 'bg-pink-500/20 text-pink-400',
+                    'viewer': 'bg-gray-500/20 text-gray-400'
+                };
+                const roleNames = {
+                    'admin': 'Administrator',
+                    'campaign_manager': 'Campaign Manager',
+                    'content_strategist': 'Content Strategist',
+                    'content_creator': 'Content Creator',
+                    'optimization_specialist': 'Optimization Specialist',
+                    'link_builder': 'Link Builder',
+                    'reporting_manager': 'Reporting Manager',
+                    'viewer': 'Viewer'
+                };
+
+                const pendingInvites = invitations.filter(i => !i.used);
+
+                contentArea.innerHTML = `
+                    <div class="space-y-6">
+                        <!-- Members Table -->
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                            <div class="px-4 py-3 border-b border-gray-800">
+                                <h3 class="text-sm font-semibold text-white">Team Members (${members.length})</h3>
+                            </div>
+                            <table class="w-full">
+                                <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left font-medium">Member</th>
+                                        <th class="px-4 py-3 text-left font-medium">Email</th>
+                                        <th class="px-4 py-3 text-left font-medium">Role</th>
+                                        <th class="px-4 py-3 text-left font-medium">Projects</th>
+                                        <th class="px-4 py-3 text-left font-medium">Joined</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-800 text-sm">
+                                    ${members.map(m => `
+                                        <tr class="hover:bg-gray-800/30">
+                                            <td class="px-4 py-3">
+                                                <div class="flex items-center gap-2">
+                                                    <div class="w-8 h-8 rounded-full bg-violet-600/30 flex items-center justify-center text-violet-300 text-xs font-bold">
+                                                        ${(m.full_name || m.email || '?')[0].toUpperCase()}
+                                                    </div>
+                                                    <span class="text-white font-medium">${m.full_name || '—'}</span>
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3 text-gray-400">${m.email || '—'}</td>
+                                            <td class="px-4 py-3">
+                                                <span class="px-2 py-1 text-xs rounded-full font-medium ${roleColors[m.role] || 'bg-gray-700 text-gray-400'}">${roleNames[m.role] || m.role}</span>
+                                            </td>
+                                            <td class="px-4 py-3 text-gray-500">${(m.assigned_campaigns || []).length === 0 ? '<span class="text-gray-600">All</span>' : (m.assigned_campaigns || []).length + ' projects'}</td>
+                                            <td class="px-4 py-3 text-gray-500">${m.created_at ? new Date(m.created_at).toLocaleDateString() : '—'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pending Invites -->
+                        ${pendingInvites.length > 0 ? `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                            <div class="px-4 py-3 border-b border-gray-800">
+                                <h3 class="text-sm font-semibold text-white">Pending Invitations (${pendingInvites.length})</h3>
+                            </div>
+                            <table class="w-full">
+                                <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left font-medium">Email</th>
+                                        <th class="px-4 py-3 text-left font-medium">Role</th>
+                                        <th class="px-4 py-3 text-left font-medium">Invited</th>
+                                        <th class="px-4 py-3 text-left font-medium">Invite Link</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-800 text-sm">
+                                    ${pendingInvites.map(inv => `
+                                        <tr class="hover:bg-gray-800/30">
+                                            <td class="px-4 py-3 text-white">${inv.email}</td>
+                                            <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full font-medium ${roleColors[inv.role] || 'bg-gray-700 text-gray-400'}">${roleNames[inv.role] || inv.role}</span></td>
+                                            <td class="px-4 py-3 text-gray-500">${new Date(inv.created_at).toLocaleDateString()}</td>
+                                            <td class="px-4 py-3">
+                                                <button onclick="copyInviteLink('${inv.token}', '${inv.email}', '${inv.role}')" class="text-xs bg-gray-800 hover:bg-gray-700 text-violet-400 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                                                    <i data-lucide="copy" class="w-3 h-3"></i> Copy Link
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        ` : ''}
                     </div>
-                `);
+                `;
+            } catch (error) {
+                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center">Error loading team: ${error.message}</div>`;
+            }
+            lucide.createIcons();
+        }
+
+        function copyInviteLink(token, email, role) {
+            const link = `${window.location.origin}/signup.html?invite=${token}&email=${encodeURIComponent(email)}&role=${role}`;
+            navigator.clipboard.writeText(link).then(() => {
+                alert('Invite link copied to clipboard!');
+            }).catch(() => {
+                prompt('Copy this invite link:', link);
+            });
+        }
+
+        function showInviteModal() {
+            // Build the campaign checklist from the loaded clients
+            const campaignOptions = (clients || []).map(c => `
+                <label class="flex items-center gap-2 p-2 rounded hover:bg-gray-800/50 cursor-pointer">
+                    <input type="checkbox" value="${c.id}" class="invite-campaign-check rounded border-gray-600 text-violet-500 focus:ring-violet-500 bg-gray-800">
+                    <span class="text-sm text-white">${c.name}</span>
+                    <span class="text-xs text-gray-500">(${c.domain})</span>
+                </label>
+            `).join('');
+
+            showModal(`
+                <div class="p-4 border-b border-gray-800">
+                    <h3 class="text-lg font-semibold text-white">Invite Team Member</h3>
+                    <p class="text-xs text-gray-400 mt-1">They will receive a signup link with their assigned role and projects.</p>
+                </div>
+                <div class="p-4 space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Email Address</label>
+                        <input type="email" id="inviteEmail" placeholder="teammate@example.com"
+                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:border-violet-500 focus:outline-none text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Role</label>
+                        <select id="inviteRole" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:border-violet-500 focus:outline-none text-sm">
+                            <option value="campaign_manager">Campaign Manager</option>
+                            <option value="content_strategist">Content Strategist</option>
+                            <option value="content_creator">Content Creator</option>
+                            <option value="optimization_specialist">Optimization Specialist</option>
+                            <option value="link_builder">Link Builder</option>
+                            <option value="reporting_manager">Reporting Manager</option>
+                            <option value="viewer">Viewer (Read-only)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Assign to Projects</label>
+                        <div class="max-h-40 overflow-y-auto space-y-1 bg-gray-800/50 border border-gray-700 rounded-lg p-2">
+                            ${campaignOptions || '<p class="text-sm text-gray-500 p-2">No projects yet</p>'}
+                        </div>
+                        <p class="text-[10px] text-gray-500 mt-1">Leave unchecked to grant access to no projects initially.</p>
+                    </div>
+                    <div id="inviteResult" class="hidden"></div>
+                    <div class="flex justify-end gap-3 pt-2">
+                        <button onclick="hideModal()" class="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">Cancel</button>
+                        <button onclick="submitInvite()" id="inviteSubmitBtn" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">Send Invite</button>
+                    </div>
+                </div>
+            `);
+        }
+
+        async function submitInvite() {
+            const email = document.getElementById('inviteEmail').value.trim();
+            const role = document.getElementById('inviteRole').value;
+            const checks = document.querySelectorAll('.invite-campaign-check:checked');
+            const assignedCampaigns = Array.from(checks).map(c => c.value);
+            const resultDiv = document.getElementById('inviteResult');
+            const btn = document.getElementById('inviteSubmitBtn');
+
+            if (!email) { alert('Please enter an email address.'); return; }
+
+            btn.disabled = true;
+            btn.textContent = 'Creating invite...';
+
+            try {
+                const resp = await fetch('/api/team/invite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, role, assigned_campaigns: assignedCampaigns })
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    const link = `${window.location.origin}/signup.html?invite=${data.invite_token}&email=${encodeURIComponent(email)}&role=${role}`;
+                    resultDiv.innerHTML = `
+                        <div class="bg-emerald-900/20 border border-emerald-700/50 rounded-lg p-3">
+                            <p class="text-emerald-400 text-sm font-medium mb-2">✅ Invite created!</p>
+                            <div class="flex gap-2">
+                                <input type="text" value="${link}" readonly class="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-300 focus:outline-none">
+                                <button onclick="navigator.clipboard.writeText('${link}'); this.textContent='Copied!'" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded text-xs font-medium">Copy</button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Share this link with ${email} to let them join.</p>
+                        </div>
+                    `;
+                    resultDiv.classList.remove('hidden');
+                    btn.textContent = 'Done';
+                } else {
+                    throw new Error(data.error || 'Failed to create invite');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="text-red-400 text-sm">${error.message}</p>`;
+                resultDiv.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Send Invite';
+            }
         }
 
         // =========================================================================

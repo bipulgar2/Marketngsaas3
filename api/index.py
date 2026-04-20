@@ -337,7 +337,8 @@ def login():
             'email': user.email,
             'role': profile.data.get('role', 'viewer') if profile.data else 'viewer',
             'organization_id': profile.data.get('organization_id') if profile.data else None,
-            'full_name': profile.data.get('full_name') if profile.data else None
+            'full_name': profile.data.get('full_name') if profile.data else None,
+            'assigned_campaigns': profile.data.get('assigned_campaigns', []) if profile.data else []
         }
         session['access_token'] = response.session.access_token
         
@@ -401,14 +402,28 @@ def change_password():
 
 @app.route('/api/auth/signup', methods=['POST'])
 def signup():
-    """Register new user."""
+    """Register new user. Optionally consumes an invite token."""
     data = request.json
     email = data.get('email')
     password = data.get('password')
     full_name = data.get('full_name', '')
+    invite_token = data.get('invite_token')  # Optional: from invite link
     
     if not email or not password:
         return jsonify({'error': 'Email and password required'}), 400
+    
+    admin = supabase_admin or supabase
+    invite = None
+    
+    # If invite token provided, validate it first before creating user
+    if invite_token:
+        try:
+            inv_res = admin.table('invitations').select('*').eq('token', invite_token).eq('used', False).single().execute()
+            invite = inv_res.data
+            if not invite:
+                return jsonify({'error': 'Invalid or expired invitation.'}), 400
+        except Exception:
+            return jsonify({'error': 'Invalid or expired invitation.'}), 400
     
     try:
         # Create user in Supabase Auth with metadata
@@ -428,36 +443,44 @@ def signup():
             return jsonify({'error': 'Signup failed. Please try again.'}), 400
         
         # Profile is created automatically by trigger
-        # NOW: Create Organization and assign it (Critical for data isolation)
-        try:
-            # Generate basic slug
-            org_name = f"{full_name}'s Org" if full_name else "My Organization"
-            slug = org_name.lower().replace(' ', '-').replace("'", "") + f"-{int(datetime.now().timestamp())}"
-            
-            # Use admin client to ensure we can create orgs and update profiles
-            admin = supabase_admin or supabase
-            
-            # 1. Create Org
-            org_res = admin.table('organizations').insert({
-                'name': org_name,
-                'slug': slug,
-                'owner_id': user.id
-            }).execute()
-            
-            if org_res.data:
-                org_id = org_res.data[0]['id']
-                
-                # 2. Update Profile with Org ID
+        if invite:
+            # ---- INVITED USER: Join existing org with assigned role ----
+            try:
                 admin.table('profiles').update({
-                    'organization_id': org_id,
-                    'role': 'admin' # First user is admin of their org
+                    'organization_id': invite['organization_id'],
+                    'role': invite['role'],
+                    'assigned_campaigns': invite.get('assigned_campaigns', []),
+                    'full_name': full_name
                 }).eq('id', user.id).execute()
                 
-                logger.info(f"Created organization {org_id} for new user {user.id}")
+                # Mark invite as used
+                admin.table('invitations').update({'used': True}).eq('id', invite['id']).execute()
                 
-        except Exception as e:
-            logger.error(f"Failed to auto-create org for {email}: {e}")
-            # Don't fail the whole signup, but log it. User will be caught by Login backfill.
+                logger.info(f"Invited user {email} joined org {invite['organization_id']} as {invite['role']}")
+            except Exception as e:
+                logger.error(f"Failed to process invite for {email}: {e}")
+        else:
+            # ---- SELF-SIGNUP: Create new org (existing behavior) ----
+            try:
+                org_name = f"{full_name}'s Org" if full_name else "My Organization"
+                slug = org_name.lower().replace(' ', '-').replace("'", "") + f"-{int(datetime.now().timestamp())}"
+                
+                org_res = admin.table('organizations').insert({
+                    'name': org_name,
+                    'slug': slug,
+                    'owner_id': user.id
+                }).execute()
+                
+                if org_res.data:
+                    org_id = org_res.data[0]['id']
+                    admin.table('profiles').update({
+                        'organization_id': org_id,
+                        'role': 'admin'
+                    }).eq('id', user.id).execute()
+                    logger.info(f"Created organization {org_id} for new user {user.id}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to auto-create org for {email}: {e}")
 
         return jsonify({
             'success': True,
@@ -468,7 +491,6 @@ def signup():
         error_msg = str(e)
         logger.error(f"Signup error: {error_msg}")
         
-        # Parse common errors into user-friendly messages
         if 'already registered' in error_msg.lower() or 'already exists' in error_msg.lower():
             return jsonify({'error': 'An account with this email already exists. Please sign in.'}), 400
         elif 'duplicate key' in error_msg.lower() or 'profiles_pkey' in error_msg.lower():
@@ -489,10 +511,26 @@ def logout():
 @app.route('/api/auth/me')
 @login_required
 def get_current_user():
-    """Get current user info."""
+    """Get current user info including role permissions and assigned campaigns."""
+    user = session.get('user', {})
+    role = user.get('role', 'viewer')
+    
+    # Define which top-level tabs each role can see
+    ROLE_TABS = {
+        'admin': ['dashboard', 'audit-2', 'tech-audit', 'content', 'keywords', 'competitors', 'links', 'tasks', 'reports', 'client-settings'],
+        'campaign_manager': ['dashboard', 'audit-2', 'tech-audit', 'content', 'keywords', 'competitors', 'links', 'tasks', 'reports'],
+        'content_strategist': ['dashboard', 'content', 'keywords', 'competitors', 'tasks'],
+        'content_creator': ['dashboard', 'content', 'tasks'],
+        'optimization_specialist': ['dashboard', 'audit-2', 'tech-audit', 'tasks'],
+        'link_builder': ['dashboard', 'links', 'tasks'],
+        'reporting_manager': ['dashboard', 'reports'],
+        'viewer': ['dashboard']
+    }
+    
     return jsonify({
-        'user': session.get('user'),
-        'role_info': ROLES.get(session['user']['role'], {})
+        'user': user,
+        'role_info': ROLES.get(role, {}),
+        'allowed_tabs': ROLE_TABS.get(role, ['dashboard'])
     })
 
 # =============================================================================
@@ -530,13 +568,112 @@ def create_organization():
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
+# TEAM MANAGEMENT ROUTES
+# =============================================================================
+
+@app.route('/api/team', methods=['GET'])
+@login_required
+@role_required('admin')
+def list_team_members():
+    """List all team members in the current organization."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    if not org_id:
+        return jsonify({'members': []})
+    
+    client = supabase_admin or supabase
+    try:
+        res = client.table('profiles').select('id, email, full_name, role, assigned_campaigns, created_at').eq('organization_id', org_id).execute()
+        return jsonify({'members': res.data or []})
+    except Exception as e:
+        logger.error(f"List team error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/team/invite', methods=['POST'])
+@login_required
+@role_required('admin')
+def invite_team_member():
+    """Create an invitation for a new team member."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    if not org_id:
+        return jsonify({'error': 'No organization found'}), 400
+    
+    data = request.json
+    email = data.get('email', '').strip()
+    role = data.get('role', 'viewer')
+    assigned_campaigns = data.get('assigned_campaigns', [])
+    
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+    
+    if role not in ROLES:
+        return jsonify({'error': f'Invalid role: {role}'}), 400
+    
+    client = supabase_admin or supabase
+    try:
+        # Check if an unused invite already exists for this email
+        existing = client.table('invitations').select('id, token').eq('email', email).eq('organization_id', org_id).eq('used', False).execute()
+        if existing.data:
+            # Return the existing invite link
+            token = existing.data[0]['token']
+            return jsonify({
+                'success': True,
+                'invite_token': token,
+                'message': f'Existing invite found for {email}'
+            })
+        
+        # Create new invitation
+        res = client.table('invitations').insert({
+            'email': email,
+            'organization_id': org_id,
+            'role': role,
+            'assigned_campaigns': assigned_campaigns
+        }).execute()
+        
+        if res.data:
+            token = res.data[0]['token']
+            logger.info(f"Created invite for {email} as {role} in org {org_id}")
+            return jsonify({
+                'success': True,
+                'invite_token': token,
+                'message': f'Invitation created for {email}'
+            })
+        else:
+            return jsonify({'error': 'Failed to create invitation'}), 500
+    except Exception as e:
+        logger.error(f"Invite error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/team/invitations', methods=['GET'])
+@login_required
+@role_required('admin')
+def list_invitations():
+    """List all invitations for the current organization."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    if not org_id:
+        return jsonify({'invitations': []})
+    
+    client = supabase_admin or supabase
+    try:
+        res = client.table('invitations').select('*').eq('organization_id', org_id).order('created_at', desc=True).execute()
+        return jsonify({'invitations': res.data or []})
+    except Exception as e:
+        logger.error(f"List invitations error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
 # CAMPAIGN ROUTES
 # =============================================================================
 
 @app.route('/api/campaigns', methods=['GET'])
 @login_required
 def list_campaigns():
-    """List campaigns visible to user."""
+    """List campaigns visible to user. Non-admin roles only see assigned campaigns."""
     user = session['user']
     
     # Use admin client to bypass RLS (backend handles authorization)
@@ -545,15 +682,26 @@ def list_campaigns():
     try:
         query = client.table('campaigns').select('*')
         
-        # Filter by organization for EVERYONE (Admin means Org Admin, not Superuser)
+        # Filter by organization for EVERYONE
         if user.get('organization_id'):
             query = query.eq('organization_id', user['organization_id'])
         else:
-            # CRITICAL: If no org ID, return nothing (prevent leak)
             return jsonify({'campaigns': []})
         
         response = query.order('created_at', desc=True).execute()
-        return jsonify({'campaigns': response.data})
+        campaigns = response.data or []
+        
+        # For non-admin roles, filter to only assigned campaigns
+        user_role = user.get('role', 'viewer')
+        assigned = user.get('assigned_campaigns', [])
+        
+        if user_role != 'admin' and assigned:
+            campaigns = [c for c in campaigns if c['id'] in assigned]
+        elif user_role != 'admin' and not assigned:
+            # Non-admin with no assignments sees nothing
+            campaigns = []
+        
+        return jsonify({'campaigns': campaigns})
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

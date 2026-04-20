@@ -31,8 +31,14 @@
     <div class="w-full max-w-md p-8">
         <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8">
             <div class="text-center mb-8">
-                <h1 class="text-2xl font-bold text-white mb-2">Create Account</h1>
-                <p class="text-gray-400">Join SEO Agency Platform</p>
+                <h1 id="signupTitle" class="text-2xl font-bold text-white mb-2">Create Account</h1>
+                <p id="signupSubtitle" class="text-gray-400">Join SEO Agency Platform</p>
+            </div>
+
+            <!-- Invite badge (hidden by default) -->
+            <div id="inviteBadge" class="hidden mb-6 bg-violet-600/10 border border-violet-500/30 rounded-lg px-4 py-3 text-center">
+                <p class="text-violet-300 text-sm font-medium">🎉 You've been invited to join a team!</p>
+                <p id="inviteRoleLabel" class="text-violet-400/70 text-xs mt-1"></p>
             </div>
 
             <form id="signupForm" class="space-y-4">
@@ -73,6 +79,39 @@
     </div>
 
     <script>
+        // Check for invite token in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const inviteToken = urlParams.get('invite');
+
+        if (inviteToken) {
+            // Show invite badge and update UI
+            document.getElementById('inviteBadge').classList.remove('hidden');
+            document.getElementById('signupTitle').textContent = 'Join Your Team';
+            document.getElementById('signupSubtitle').textContent = 'Create your account to get started';
+            document.getElementById('submitBtn').textContent = 'Join Team';
+
+            // If email is in the URL too, pre-fill it
+            const inviteEmail = urlParams.get('email');
+            if (inviteEmail) {
+                document.getElementById('email').value = inviteEmail;
+            }
+
+            // If role is in the URL, show it
+            const inviteRole = urlParams.get('role');
+            if (inviteRole) {
+                const roleNames = {
+                    'campaign_manager': 'Campaign Manager',
+                    'content_strategist': 'Content Strategist',
+                    'content_creator': 'Content Creator',
+                    'optimization_specialist': 'Optimization Specialist',
+                    'link_builder': 'Link Builder',
+                    'reporting_manager': 'Reporting Manager',
+                    'viewer': 'Viewer'
+                };
+                document.getElementById('inviteRoleLabel').textContent = `Role: ${roleNames[inviteRole] || inviteRole}`;
+            }
+        }
+
         document.getElementById('signupForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -89,16 +128,23 @@
             successDiv.classList.add('hidden');
 
             try {
+                const payload = { email, password, full_name: fullName };
+
+                // Include invite token if present
+                if (inviteToken) {
+                    payload.invite_token = inviteToken;
+                }
+
                 const response = await fetch('/api/auth/signup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password, full_name: fullName })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await response.json();
 
                 if (response.ok && data.success) {
-                    successDiv.textContent = data.message || 'Account created! Check your email to verify.';
+                    successDiv.textContent = data.message || 'Account created! Redirecting to login...';
                     successDiv.classList.remove('hidden');
                     setTimeout(() => {
                         window.location.href = '/login.html';
@@ -110,7 +156,7 @@
                 errorDiv.textContent = error.message;
                 errorDiv.classList.remove('hidden');
                 submitBtn.disabled = false;
-                submitBtn.textContent = 'Create Account';
+                submitBtn.textContent = inviteToken ? 'Join Team' : 'Create Account';
             }
         });
     </script>

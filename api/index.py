@@ -896,6 +896,98 @@ def keyword_research():
         logger.error(f"Keyword Research Error: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+# =============================================================================
+# TOPIC CLUSTERS ROUTES
+# =============================================================================
+
+@app.route('/api/generate-topic-clusters', methods=['POST'])
+@login_required
+def generate_topic_clusters():
+    """Use Gemini to semantically cluster keywords into topic silos."""
+    try:
+        data = request.json or {}
+        keywords = data.get('keywords', [])
+        brand_config = data.get('brand_config', {})
+        
+        if not keywords or len(keywords) < 3:
+            return jsonify({'error': 'At least 3 keywords required'}), 400
+        
+        # Build context from brand config
+        brand_context = ""
+        if brand_config:
+            if brand_config.get('business_name'):
+                brand_context += f"Business: {brand_config['business_name']}\n"
+            if brand_config.get('industry'):
+                brand_context += f"Industry: {brand_config['industry']}\n"
+            if brand_config.get('usp'):
+                brand_context += f"USP: {brand_config['usp']}\n"
+            if brand_config.get('primary_audience'):
+                brand_context += f"Target Audience: {brand_config['primary_audience']}\n"
+            if brand_config.get('linking_strategy'):
+                brand_context += f"Linking Strategy: {brand_config['linking_strategy']}\n"
+        
+        # Cap at 200 keywords for prompt length
+        kw_list = keywords[:200]
+        kw_str = "\n".join([f"- {kw}" for kw in kw_list])
+        
+        prompt = f"""You are an expert SEO content strategist. Analyze these keywords and organize them into topic clusters (content silos).
+
+{f"BRAND CONTEXT:{chr(10)}{brand_context}" if brand_context else ""}
+
+KEYWORDS:
+{kw_str}
+
+Create topic clusters following these rules:
+1. Each cluster has ONE pillar keyword (broadest/highest volume) and supporting keywords
+2. Group semantically related keywords together
+3. Assign each cluster a funnel stage: "tofu" (awareness), "mofu" (consideration), or "bofu" (decision)
+4. Suggest a pillar page title and URL slug for each cluster
+5. Create 3-8 clusters maximum (merge small groups)
+
+Respond ONLY with valid JSON in this exact format, no markdown:
+{{
+  "clusters": [
+    {{
+      "cluster_name": "Descriptive Cluster Name",
+      "pillar_keyword": "main keyword phrase",
+      "pillar_title": "Suggested Pillar Page Title",
+      "pillar_slug": "url-slug-for-pillar",
+      "funnel_stage": "tofu|mofu|bofu",
+      "supporting_keywords": ["keyword 1", "keyword 2", "keyword 3"],
+      "content_angle": "Brief description of what content in this cluster should cover"
+    }}
+  ]
+}}"""
+
+        result = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash",
+            use_grounding=False
+        )
+        
+        if not result:
+            return jsonify({'error': 'Empty response from AI'}), 500
+        
+        # Clean markdown
+        text = result.strip()
+        if text.startswith('```json'): text = text[7:]
+        if text.startswith('```'): text = text[3:]
+        if text.endswith('```'): text = text[:-3]
+        text = text.strip()
+        
+        import json
+        parsed = json.loads(text)
+        
+        return jsonify({'success': True, 'clusters': parsed.get('clusters', [])})
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Topic Clusters JSON Parse Error: {e}\nRaw: {text[:500]}")
+        return jsonify({'error': f'AI returned invalid JSON: {str(e)}'}), 500
+    except Exception as e:
+        logger.error(f"Topic Clusters Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # =============================================================================
 # TASK ROUTES
 # =============================================================================

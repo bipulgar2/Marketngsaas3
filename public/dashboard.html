@@ -879,10 +879,18 @@
                             </select>
                         </div>
                     </div>
+                    <div id="trackedKeywordActionToolbar" class="hidden mb-4 p-3 bg-gray-800 border border-gray-700 rounded-lg flex items-center justify-between">
+                        <div class="text-sm text-gray-300"><span id="trackedSelectedCount" class="font-bold text-white">0</span> keywords selected</div>
+                        <button id="bulkRemoveBtn" onclick="bulkRemoveTracked()" class="px-4 py-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-500 rounded-lg text-sm font-medium transition flex items-center gap-1.5">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i> Remove Selected
+                        </button>
+                    </div>
+
                     <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
                         <table class="w-full text-sm">
                             <thead>
                                 <tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)">
+                                    <th class="text-left py-3 px-4 w-12"><input type="checkbox" onchange="toggleAllTracked(this)" class="rounded bg-gray-900 border-gray-600 outline-none ring-0"></th>
                                     <th class="text-left py-3 px-4 w-12 text-center">Status</th>
                                     <th class="text-left py-3 px-4">Query</th>
                                     <th class="text-right py-3 px-4">Clicks</th>
@@ -896,6 +904,7 @@
                                 ${trackedQueries.sort((a,b) => a.position === 0 ? 1 : b.position === 0 ? -1 : a.position - b.position).map(q => {
                                     const rankStatus = q.position > 0 && q.position <= 10 ? '<i data-lucide="zap" class="w-4 h-4 text-emerald-500 mx-auto"></i>' : (q.position > 10 && q.position <= 100 ? '<i data-lucide="trending-up" class="w-4 h-4 text-blue-500 mx-auto"></i>' : '<i data-lucide="minus" class="w-4 h-4 text-gray-500 mx-auto"></i>');
                                     return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02] group">
+                                        <td class="py-3 px-4"><input type="checkbox" value="${q.query}" onchange="updateTrackedSelection()" class="tracked-checkbox rounded bg-gray-900 border-gray-600 outline-none ring-0"></td>
                                         <td class="py-3 px-4 text-center">${rankStatus}</td>
                                         <td class="py-3 px-4 text-white font-medium">${q.query}</td>
                                         <td class="py-3 px-4 text-right font-semibold" style="color:${ac}">${fmtNum(q.clicks)}</td>
@@ -903,7 +912,7 @@
                                         <td class="py-3 px-4 text-right text-gray-400">${(q.ctr*100).toFixed(2)}%</td>
                                         <td class="py-3 px-4 text-right text-white">${q.position > 0 ? q.position.toFixed(1) : '<span class="text-gray-600 text-xs">Unranked</span>'}</td>
                                         <td class="py-3 px-4 text-center">
-                                            <button onclick="removeTrackedKeyword('${q.query}')" class="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove keyword">
+                                            <button onclick="removeTrackedKeywords(['${q.query}'])" class="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove keyword">
                                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                                             </button>
                                         </td>
@@ -1011,6 +1020,32 @@
             }
         }
 
+        function toggleAllTracked(source) {
+            const checkboxes = document.querySelectorAll('.tracked-checkbox');
+            checkboxes.forEach(cb => cb.checked = source.checked);
+            updateTrackedSelection();
+        }
+
+        function updateTrackedSelection() {
+            const toolbar = document.getElementById('trackedKeywordActionToolbar');
+            if (!toolbar) return;
+            const selectedCount = document.querySelectorAll('.tracked-checkbox:checked').length;
+            document.getElementById('trackedSelectedCount').textContent = selectedCount;
+            if (selectedCount > 0) {
+                toolbar.classList.remove('hidden');
+            } else {
+                toolbar.classList.add('hidden');
+            }
+        }
+
+        function bulkRemoveTracked() {
+            const checkboxes = document.querySelectorAll('.tracked-checkbox:checked');
+            const keywords = Array.from(checkboxes).map(cb => cb.value);
+            if (keywords.length > 0) {
+                removeTrackedKeywords(keywords);
+            }
+        }
+
         async function saveTrackedKeywords() {
             if (!currentClient) return;
             
@@ -1054,20 +1089,28 @@
             }
         }
 
-        async function removeTrackedKeyword(keyword) {
-            if (!currentClient || !confirm(`Remove "${keyword}" from tracked keywords?`)) return;
+        async function removeTrackedKeywords(keywords) {
+            if (!currentClient || !confirm(`Remove ${keywords.length} keyword${keywords.length > 1 ? 's' : ''} from tracked keywords?`)) return;
+
+            // Optional: update button state if it's the bulk remove button
+            const btn = document.getElementById('bulkRemoveBtn');
+            if (btn && keywords.length > 1) {
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Removing...';
+                lucide.createIcons();
+            }
 
             try {
                 const response = await fetch(`/api/campaigns/${currentClient.id}/keywords`, {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keywords: [keyword] })
+                    body: JSON.stringify({ keywords: keywords })
                 });
 
                 if (response.ok) {
                     const data = await response.json();
                     currentClient.tracked_keywords = data.keywords;
-                    showToast('Keyword removed', 'success');
+                    showToast(`${keywords.length} keyword${keywords.length > 1 ? 's' : ''} removed`, 'success');
                     
                     // Re-render whatever view we are on
                     if (currentTopTab === 'reports' && currentSideTab === 'tracked-keywords') {
@@ -1076,11 +1119,13 @@
                         renderAnalyticsDashboard();
                     }
                 } else {
-                    showToast('Failed to remove keyword', 'error');
+                    if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i> Remove Selected'; }
+                    showToast('Failed to remove keyword(s)', 'error');
                 }
             } catch (error) {
                 console.error(error);
-                showToast('Error removing keyword', 'error');
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i> Remove Selected'; }
+                showToast('Error removing keyword(s)', 'error');
             }
         }
 

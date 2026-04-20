@@ -847,10 +847,16 @@
                 const data = await response.json();
                 if (data.error) throw new Error(data.error);
 
-                const queries = (data.gsc && data.gsc.queries) || [];
+                const queries = (data.gsc && (data.gsc.allQueries || data.gsc.queries)) || [];
+                const prevQueries = (data.gsc && data.gsc.prevQueries) || [];
+                
                 // Filter queries to ONLY show those that are in tracked array
-                // If a tracked keyword isn't in GSC's top results, we'd need a separate direct query, but for now we filter the 5000 row pull.
+                // We use allQueries to ensure keywords beyond top 25 are captured.
                 const trackedQueries = queries.filter(q => tracked.includes(q.query));
+                
+                // Create a fast lookup map for previous queries
+                const prevMap = new Map();
+                prevQueries.forEach(pq => prevMap.set(pq.query, pq));
                 
                 // Add any tracked keywords that weren't found with 0 data
                 tracked.forEach(tq => {
@@ -887,7 +893,7 @@
                     </div>
 
                     <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
-                        <table class="w-full text-sm">
+                        <table class="w-full text-sm mt-1">
                             <thead>
                                 <tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)">
                                     <th class="text-left py-3 px-4 w-12"><input type="checkbox" onchange="toggleAllTracked(this)" class="rounded bg-gray-900 border-gray-600 outline-none ring-0"></th>
@@ -903,15 +909,35 @@
                             <tbody>
                                 ${trackedQueries.sort((a,b) => a.position === 0 ? 1 : b.position === 0 ? -1 : a.position - b.position).map(q => {
                                     const rankStatus = q.position > 0 && q.position <= 10 ? '<i data-lucide="zap" class="w-4 h-4 text-emerald-500 mx-auto"></i>' : (q.position > 10 && q.position <= 100 ? '<i data-lucide="trending-up" class="w-4 h-4 text-blue-500 mx-auto"></i>' : '<i data-lucide="minus" class="w-4 h-4 text-gray-500 mx-auto"></i>');
+                                    
+                                    // Fetch prev data for comparison
+                                    const pq = prevMap.get(q.query);
+                                    const pClicks = pq ? pq.clicks : 0;
+                                    const pImps = pq ? pq.impressions : 0;
+                                    const pCtr = pq ? pq.ctr : 0;
+                                    const pPos = pq ? pq.position : 0;
+                                    
                                     return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02] group">
                                         <td class="py-3 px-4"><input type="checkbox" value="${q.query}" onchange="updateTrackedSelection()" class="tracked-checkbox rounded bg-gray-900 border-gray-600 outline-none ring-0"></td>
                                         <td class="py-3 px-4 text-center">${rankStatus}</td>
                                         <td class="py-3 px-4 text-white font-medium">${q.query}</td>
-                                        <td class="py-3 px-4 text-right font-semibold" style="color:${ac}">${fmtNum(q.clicks)}</td>
-                                        <td class="py-3 px-4 text-right text-gray-300">${fmtNum(q.impressions)}</td>
-                                        <td class="py-3 px-4 text-right text-gray-400">${(q.ctr*100).toFixed(2)}%</td>
-                                        <td class="py-3 px-4 text-right text-white">${q.position > 0 ? q.position.toFixed(1) : '<span class="text-gray-600 text-xs">Unranked</span>'}</td>
-                                        <td class="py-3 px-4 text-center">
+                                        <td class="py-3 px-4 text-right">
+                                            <div class="font-semibold" style="color:${ac}">${fmtNum(q.clicks)}</div>
+                                            <div>${changeBadgeHtml(q.clicks, pClicks)}</div>
+                                        </td>
+                                        <td class="py-3 px-4 text-right">
+                                            <div class="text-gray-300">${fmtNum(q.impressions)}</div>
+                                            <div>${changeBadgeHtml(q.impressions, pImps)}</div>
+                                        </td>
+                                        <td class="py-3 px-4 text-right">
+                                            <div class="text-gray-400">${(q.ctr*100).toFixed(2)}%</div>
+                                            <div>${changeBadgeHtml(q.ctr, pCtr)}</div>
+                                        </td>
+                                        <td class="py-3 px-4 text-right">
+                                            <div class="text-white">${q.position > 0 ? q.position.toFixed(1) : '<span class="text-gray-600 text-xs">Unranked</span>'}</div>
+                                            <div>${q.position > 0 && pPos > 0 ? changeBadgeHtml(q.position, pPos, true) : '<span class="text-xs text-gray-600">—</span>'}</div>
+                                        </td>
+                                        <td class="py-3 px-4 text-center align-middle">
                                             <button onclick="removeTrackedKeywords(['${q.query}'])" class="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove keyword">
                                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                                             </button>

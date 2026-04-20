@@ -456,12 +456,34 @@ def get_google_metrics():
                         'position': row['position']
                     })
                 
-                # g) Top queries (top 25)
+                # g) Top queries (top 25) & all queries for tracking
                 query_rows = _gsc_query(['query'], current_start, current_end)
                 query_rows.sort(key=lambda x: x['clicks'], reverse=True)
                 queries = []
                 for row in query_rows[:25]:
                     queries.append({
+                        'query': row['keys'][0],
+                        'clicks': row['clicks'],
+                        'impressions': row['impressions'],
+                        'ctr': row['ctr'],
+                        'position': row['position']
+                    })
+                
+                all_queries = []
+                for row in query_rows:
+                    all_queries.append({
+                        'query': row['keys'][0],
+                        'clicks': row['clicks'],
+                        'impressions': row['impressions'],
+                        'ctr': row['ctr'],
+                        'position': row['position']
+                    })
+
+                # g2) Previous queries for tracking comparison
+                prev_query_rows = _gsc_query(['query'], prev_start, prev_end)
+                prev_queries = []
+                for row in prev_query_rows:
+                    prev_queries.append({
                         'query': row['keys'][0],
                         'clicks': row['clicks'],
                         'impressions': row['impressions'],
@@ -504,6 +526,8 @@ def get_google_metrics():
                     'devices': devices,
                     'countries': countries,
                     'queries': queries,
+                    'allQueries': all_queries,
+                    'prevQueries': prev_queries,
                     'pages': pages
                 }
             except Exception as e:

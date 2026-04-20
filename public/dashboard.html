@@ -1983,6 +1983,11 @@
                     `;
                     resultDiv.classList.remove('hidden');
                     btn.textContent = 'Done';
+                    btn.disabled = false;
+                    btn.onclick = () => {
+                        hideModal();
+                        loadContent();
+                    };
                 } else {
                     throw new Error(data.error || 'Failed to create invite');
                 }

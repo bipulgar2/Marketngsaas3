@@ -272,6 +272,10 @@ def get_google_properties():
     """Returns the list of synced GSC and GA4 properties from the database."""
     if 'user' not in session:
         return jsonify({'error': 'Authentication required'}), 401
+    
+    user_role = session['user'].get('role', 'viewer')
+    if user_role not in ['admin', 'campaign_manager', 'reporting_manager']:
+        return jsonify({'error': 'Insufficient permissions'}), 403
         
     try:
         from api.index import supabase, supabase_admin
@@ -305,6 +309,10 @@ def get_google_metrics():
     """Fetches comprehensive metrics from GSC and GA4 for the analytics dashboard."""
     if 'user' not in session:
         return jsonify({'error': 'Authentication required'}), 401
+    
+    user_role = session['user'].get('role', 'viewer')
+    if user_role not in ['admin', 'campaign_manager', 'reporting_manager']:
+        return jsonify({'error': 'Insufficient permissions'}), 403
         
     try:
         from api.index import supabase, supabase_admin

@@ -1183,6 +1183,166 @@ Respond ONLY with valid JSON, no markdown:
 
 
 # =============================================================================
+# SITE ARCHITECTURE PLANNER
+# =============================================================================
+
+@app.route('/api/site-architecture', methods=['GET'])
+@login_required
+def get_site_architecture():
+    """Load saved site architecture for a campaign."""
+    campaign_id = request.args.get('campaign_id')
+    if not campaign_id:
+        return jsonify({'error': 'campaign_id required'}), 400
+    client = supabase_admin or supabase
+    try:
+        res = client.table('campaigns').select('site_architecture').eq('id', campaign_id).single().execute()
+        return jsonify({'success': True, 'architecture': res.data.get('site_architecture')})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/site-architecture', methods=['POST'])
+@login_required
+def save_site_architecture():
+    """Save site architecture for a campaign."""
+    data = request.get_json()
+    campaign_id = data.get('campaign_id')
+    architecture = data.get('architecture')
+    if not campaign_id or architecture is None:
+        return jsonify({'error': 'campaign_id and architecture required'}), 400
+    client = supabase_admin or supabase
+    try:
+        client.table('campaigns').update({'site_architecture': architecture}).eq('id', campaign_id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generate-site-architecture', methods=['POST'])
+@login_required
+def generate_site_architecture():
+    """Use Gemini to generate a recommended site architecture based on business type."""
+    data = request.get_json()
+    business_type = data.get('business_type', 'saas')
+    brand_config = data.get('brand_config', {})
+    domain = data.get('domain', '')
+    brand_name = brand_config.get('brand_name', domain.replace('www.', '').split('.')[0].title() if domain else 'Brand')
+
+    prompt = f"""You are an expert SEO site architect. Generate a comprehensive site architecture tree for a **{business_type}** business.
+
+Brand: {brand_name}
+Domain: {domain}
+Industry: {brand_config.get('industry', business_type)}
+Target audience: {brand_config.get('target_audience', 'general')}
+
+Return a JSON array of nodes. Each node has:
+- "id": unique string (use format "node_1", "node_2", etc.)
+- "name": page/section name (e.g. "Product", "Features", "Blog")
+- "type": "folder" (category/section that contains children) or "page" (leaf content page)
+- "slug": URL path (e.g. "/products", "/blog/seo-guide")
+- "keyword": primary target keyword for this page
+- "pr": PageRank priority weight (root=100, main sections=20, sub-sections=6, pages=1-4)
+- "parent_id": id of parent node (null for root homepage)
+- "order": sort order among siblings (0, 1, 2...)
+
+Requirements:
+1. Root node is the Homepage (parent_id: null, pr: 100)
+2. Create 4-7 top-level sections appropriate for a {business_type} business
+3. Each section should have 2-5 sub-items (mix of folders and pages)
+4. Go 3 levels deep minimum for content-heavy sections
+5. Total nodes: 30-60
+6. Every page node MUST have a specific, realistic target keyword
+7. PR weights should distribute authority logically (homepage=100, main nav=15-25, sub-pages=2-6, deep pages=1-3)
+
+Business type templates to follow:
+- SaaS: Product (Features, Pricing, Integrations, Security, API), Solutions (by industry/use-case), Resources (Blog, Case Studies, Guides, Webinars, Templates), Company (About, Careers, Partners), Support (Help Center, Documentation, Status)
+- E-commerce: Shop (by category), Collections, Product pages, About, Blog, FAQ, Size Guide, Returns, Contact
+- Local Business: Services (individual service pages), Areas Served (location pages), About, Team, Reviews/Testimonials, Blog, Contact, Gallery
+- Blog: Categories (3-5 main topics), each with 5-8 article pages, About, Newsletter, Resources, Contact
+
+Return ONLY a valid JSON array of node objects. No markdown, no explanation."""
+
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=os.environ.get('GEMINI_API_KEY'))
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+
+        # Clean markdown fences
+        if text.startswith('```'):
+            text = text.split('\n', 1)[1] if '\n' in text else text[3:]
+        if text.endswith('```'):
+            text = text[:-3]
+        if text.startswith('json'):
+            text = text[4:]
+        text = text.strip()
+
+        import json
+        nodes = json.loads(text)
+
+        # Build the architecture object
+        architecture = {
+            'nodes': nodes,
+            'business_type': business_type,
+            'generated_at': datetime.utcnow().isoformat() + 'Z',
+            'meta': {
+                'total_nodes': len(nodes),
+                'max_depth': _calc_max_depth(nodes)
+            }
+        }
+
+        return jsonify({'success': True, 'architecture': architecture})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+def _calc_max_depth(nodes):
+    """Calculate max depth of the node tree."""
+    node_map = {n['id']: n for n in nodes}
+    def depth(node_id, d=0):
+        node = node_map.get(node_id)
+        if not node:
+            return d
+        parent = node.get('parent_id')
+        if parent and parent in node_map:
+            return depth(parent, d + 1)
+        return d
+    return max((depth(n['id']) for n in nodes), default=0) + 1
+
+@app.route('/api/site-architecture/push-to-content', methods=['POST'])
+@login_required
+def push_architecture_to_content():
+    """Push selected architecture nodes to the content strategy as topics."""
+    data = request.get_json()
+    campaign_id = data.get('campaign_id')
+    nodes = data.get('nodes', [])
+
+    if not campaign_id or not nodes:
+        return jsonify({'error': 'campaign_id and nodes required'}), 400
+
+    client = supabase_admin or supabase
+    created = 0
+    try:
+        for node in nodes:
+            # Create a content_strategy item for each node
+            item = {
+                'campaign_id': campaign_id,
+                'title': node.get('name', ''),
+                'target_keyword': node.get('keyword', ''),
+                'slug': node.get('slug', ''),
+                'status': 'idea',
+                'content_type': 'page' if node.get('type') == 'page' else 'pillar',
+                'notes': f"From site architecture. PR weight: {node.get('pr', 0)}",
+                'created_at': datetime.utcnow().isoformat()
+            }
+            client.table('content_strategy').insert(item).execute()
+            created += 1
+
+        return jsonify({'success': True, 'created': created})
+    except Exception as e:
+        return jsonify({'error': str(e), 'created': created}), 500
+
+# =============================================================================
 # SCHEMA MARKUP RECOMMENDATIONS
 # =============================================================================
 

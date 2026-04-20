@@ -4137,6 +4137,11 @@
         }
 
         function showAuditItemDetails(category, key) {
+            // Intercept Site Architecture to show the full planner
+            if (category === 'architecture' && key === 'site_architecture') {
+                renderSiteArchitecturePlanner();
+                return;
+            }
             const data = activeAudit.results.categorized[category][key];
             const title = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             const items = data.items || [];
@@ -4167,6 +4172,274 @@
                     <button onclick="hideModal()" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Close</button>
                 </div>
             `);
+        }
+
+        async function renderSiteArchitecturePlanner() {
+            const contentArea = document.getElementById('contentArea');
+            contentArea.innerHTML = '<div class="flex items-center justify-center p-12 text-gray-500"><i data-lucide="loader-2" class="w-6 h-6 animate-spin mr-2"></i> Loading Architecture Planner...</div>';
+            lucide.createIcons();
+            
+            try {
+                const response = await fetch(`/api/site-architecture?campaign_id=${currentClient.id}`);
+                const data = await response.json();
+                let architecture = data.architecture || null;
+                
+                let treeData = architecture ? architecture.nodes : null;
+                let selectedNodes = new Set();
+                
+                const renderTree = () => {
+                    if (!treeData || treeData.length === 0) {
+                        contentArea.innerHTML = `
+                            <div class="mb-4">
+                                <button onclick="renderAuditDetail()" class="text-gray-400 hover:text-white text-sm flex items-center gap-1">
+                                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Audit
+                                </button>
+                            </div>
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center max-w-2xl mx-auto mt-12 shadow-xl">
+                                <div class="w-16 h-16 bg-violet-900/30 rounded-full flex items-center justify-center mx-auto mb-6 border border-violet-500/20">
+                                    <i data-lucide="network" class="w-8 h-8 text-violet-400"></i>
+                                </div>
+                                <h3 class="text-2xl font-bold text-white mb-3">Generate Site Architecture</h3>
+                                <p class="text-gray-400 mb-8">Create a complete, deeply nested, SEO-optimized page hierarchy tailored to your business model. This will give your site a structured backbone to build Content Strategy upon.</p>
+                                
+                                <div class="space-y-5 text-left max-w-sm mx-auto p-5 bg-gray-800/40 border border-gray-700/50 rounded-xl">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Business Type Template</label>
+                                        <select id="archBusinessType" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                                            <option value="saas">SaaS</option>
+                                            <option value="e-commerce">E-commerce</option>
+                                            <option value="local business">Local Business</option>
+                                            <option value="blog">Blog / Publisher</option>
+                                            <option value="agency">Agency / B2B Services</option>
+                                        </select>
+                                    </div>
+                                    <button id="generateArchBtn" class="w-full bg-violet-600 hover:bg-violet-500 text-white px-4 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-violet-600/20 mt-2">
+                                        <i data-lucide="sparkles" class="w-4 h-4"></i> Generate Architecture Tree
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        lucide.createIcons();
+                        
+                        document.getElementById('generateArchBtn')?.addEventListener('click', async (e) => {
+                            const btn = e.currentTarget;
+                            const type = document.getElementById('archBusinessType').value;
+                            btn.disabled = true;
+                            btn.classList.add('opacity-50', 'cursor-not-allowed');
+                            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Analyzing & Generating...';
+                            
+                            try {
+                                const bcRes = await fetch(`/api/client/brand-config?campaign_id=${currentClient.id}`);
+                                const bcData = await bcRes.json();
+                                const brandConfig = bcData.success ? bcData.config : {};
+                                
+                                const req = await fetch('/api/generate-site-architecture', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({
+                                        business_type: type,
+                                        domain: currentClient.domain,
+                                        brand_config: brandConfig
+                                    })
+                                });
+                                const resData = await req.json();
+                                if(!resData.success) throw new Error(resData.error);
+                                
+                                await fetch('/api/site-architecture', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({
+                                        campaign_id: currentClient.id,
+                                        architecture: resData.architecture
+                                    })
+                                });
+                                
+                                architecture = resData.architecture;
+                                treeData = architecture.nodes;
+                                renderTree();
+                            } catch(err) {
+                                alert("Generation Failed: " + err.message);
+                                btn.disabled = false;
+                                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                                btn.innerHTML = '<i data-lucide="sparkles" class="w-4 h-4"></i> Generate Architecture Tree';
+                            }
+                        });
+                        return;
+                    }
+                    
+                    // Build nested structure map
+                    const rootNodes = treeData.filter(n => !n.parent_id);
+                    const nodeMap = {};
+                    treeData.forEach(n => {
+                        n.children = [];
+                        nodeMap[n.id] = n;
+                    });
+                    treeData.forEach(n => {
+                        if (n.parent_id && nodeMap[n.parent_id]) {
+                            nodeMap[n.parent_id].children.push(n);
+                        }
+                    });
+                    Object.values(nodeMap).forEach(n => {
+                        n.children.sort((a,b) => (a.order || 0) - (b.order || 0));
+                    });
+                    
+                    const renderNode = (node, depth=0) => {
+                        const isFolder = node.type === 'folder';
+                        const icon = isFolder ? 'folder' : 'file-text';
+                        const iconColor = isFolder ? 'text-emerald-400' : 'text-gray-400';
+                        const checkedMsg = selectedNodes.has(node.id) ? 'checked' : '';
+                        
+                        let html = `
+                            <div class="flex items-center gap-3 py-2.5 px-3 hover:bg-gray-800/60 rounded-lg group border border-transparent hover:border-gray-700/50 transition-colors" style="margin-left: ${depth * 32}px">
+                                <div class="flex items-center gap-3">
+                                    <input type="checkbox" data-id="${node.id}" class="arch-checkbox w-4 h-4 rounded border-gray-600 bg-gray-700 text-violet-600 focus:ring-violet-600 focus:ring-offset-gray-900 cursor-pointer" ${checkedMsg}>
+                                    <i data-lucide="${icon}" class="w-4 h-4 ${iconColor}"></i>
+                                </div>
+                                <div class="flex-1 min-w-0 pr-4 flex items-center justify-between">
+                                    <div class="flex-1 min-w-0 flex items-center gap-2">
+                                        <span class="text-sm font-medium ${isFolder ? 'text-white' : 'text-gray-300'} truncate">${node.name}</span>
+                                        ${node.keyword ? `<span class="align-middle inline-flex items-center text-[10px] bg-indigo-900/30 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/20 truncate max-w-[150px]"><i data-lucide="key" class="w-3 h-3 mr-1"></i>${node.keyword}</span>` : ''}
+                                    </div>
+                                    <div class="text-[11px] text-gray-500 font-mono text-right truncate w-48">${node.slug}</div>
+                                </div>
+                                <div class="flex items-center gap-4 flex-shrink-0 w-24 justify-end">
+                                    <div class="flex items-center gap-1.5 bg-gray-800/80 px-2 py-0.5 rounded text-[10px] border border-gray-700 font-mono">
+                                        <span class="text-gray-500">PR:</span>
+                                        <span class="text-emerald-400">${node.pr || 0}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        if (node.children && node.children.length > 0) {
+                            html += `<div class="ml-4 pl-2 border-l border-gray-800/60 my-0.5 relative before:content-[''] before:absolute before:left-0 before:top-4 before:w-2 before:border-t before:border-gray-800/60">`;
+                            node.children.forEach(child => {
+                                html += renderNode(child, depth + 1);
+                            });
+                            html += `</div>`;
+                        }
+                        return html;
+                    };
+                    
+                    contentArea.innerHTML = `
+                        <div class="flex flex-col h-full bg-[#0a0c10] border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
+                            <!-- Header -->
+                            <div class="px-6 py-4 border-b border-gray-800 bg-gray-900/80 flex items-center justify-between">
+                                <div class="flex items-center gap-4">
+                                    <button onclick="renderAuditDetail()" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-colors">
+                                        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                                    </button>
+                                    <div>
+                                        <div class="flex items-center gap-3">
+                                            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                                <i data-lucide="network" class="w-5 h-5 text-violet-400"></i> Local Architecture
+                                            </h3>
+                                            <span class="text-[10px] uppercase tracking-wider bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded-full font-semibold">${architecture.business_type}</span>
+                                        </div>
+                                        <p class="text-xs text-gray-400 mt-1 flex items-center gap-3">
+                                            <span><strong class="text-gray-300">${treeData.length}</strong> nodes</span>
+                                            <span class="w-1 h-1 rounded-full bg-gray-600"></span>
+                                            <span><strong class="text-gray-300">3</strong> levels deep</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div class="text-sm font-medium"><span id="archSelectedCount" class="text-white bg-gray-800 px-2 py-0.5 rounded ml-1">0</span> <span class="text-gray-500 text-xs ml-1">selected</span></div>
+                                    <button id="pushArchBtn" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-violet-600/10" disabled>
+                                        <i data-lucide="arrow-right-to-line" class="w-4 h-4"></i> Push to Content Strategy
+                                    </button>
+                                    <div class="w-px h-6 bg-gray-800 mx-1"></div>
+                                    <button id="regenArchBtn" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2 text-xs font-medium" title="Regenerate Architecture">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Regenerate
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Tree Content -->
+                            <div class="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                                <div class="max-w-5xl mx-auto">
+                                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 shadow-inner">
+                                        <div class="flex px-3 pb-2 mb-2 border-b border-gray-800/80 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            <div class="flex-1 pl-[52px]">Site Structure & Priority Keyword</div>
+                                            <div class="w-48 text-right pr-4">URL Slug</div>
+                                            <div class="w-24 text-right pr-2 text-emerald-500">PageRank</div>
+                                        </div>
+                                        <div class="space-y-0.5 pb-4">
+                                            ${rootNodes.map(n => renderNode(n, 0)).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    lucide.createIcons();
+                    
+                    const checkBoxes = contentArea.querySelectorAll('.arch-checkbox');
+                    const pushBtn = document.getElementById('pushArchBtn');
+                    const countSpan = document.getElementById('archSelectedCount');
+                    
+                    const updateSelection = () => {
+                        selectedNodes.clear();
+                        checkBoxes.forEach(cb => {
+                            if(cb.checked) selectedNodes.add(cb.dataset.id);
+                        });
+                        countSpan.textContent = selectedNodes.size;
+                        pushBtn.disabled = selectedNodes.size === 0;
+                    };
+                    
+                    checkBoxes.forEach(cb => cb.addEventListener('change', updateSelection));
+                    if(selectedNodes.size > 0) updateSelection();
+                    
+                    document.getElementById('regenArchBtn')?.addEventListener('click', () => {
+                        if(confirm('Are you sure you want to regenerate the architecture? This will overwrite the current plan.')) {
+                            treeData = null;
+                            architecture = null;
+                            renderTree();
+                        }
+                    });
+                    
+                    pushBtn?.addEventListener('click', async () => {
+                        if(selectedNodes.size === 0) return;
+                        pushBtn.disabled = true;
+                        pushBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Pushing...';
+                        
+                        const nodesToPush = treeData.filter(n => selectedNodes.has(n.id));
+                        
+                        try {
+                            const req = await fetch('/api/site-architecture/push-to-content', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({
+                                    campaign_id: currentClient.id,
+                                    nodes: nodesToPush
+                                })
+                            });
+                            const resData = await req.json();
+                            if(!resData.success) throw new Error(resData.error);
+                            
+                            alert(`Successfully pushed ${resData.created} items to Content Strategy!`);
+                            
+                            // Uncheck elements to acknowledge
+                            checkBoxes.forEach(cb => { cb.checked = false; });
+                            updateSelection();
+                            pushBtn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> Pushed!';
+                            setTimeout(() => {
+                                pushBtn.innerHTML = '<i data-lucide="arrow-right-to-line" class="w-4 h-4"></i> Push to Content Strategy';
+                            }, 2000);
+                            
+                        } catch(err) {
+                            alert("Failed to push: " + err.message);
+                            pushBtn.disabled = false;
+                            pushBtn.innerHTML = '<i data-lucide="arrow-right-to-line" class="w-4 h-4"></i> Push to Content Strategy';
+                        }
+                    });
+                };
+                
+                renderTree();
+            } catch (err) {
+                contentArea.innerHTML = `<div class="text-red-400 p-8 text-center border-dashed border border-red-900 bg-red-900/10 rounded-xl"><i data-lucide="alert-triangle" class="w-8 h-8 mx-auto mb-2 opacity-80"></i>Error: ${err.message}</div>`;
+                lucide.createIcons();
+            }
         }
 
         function renderAuditDetail() {

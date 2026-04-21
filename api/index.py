@@ -1254,53 +1254,36 @@ def generate_site_architecture():
         except Exception as e:
             print(f"DEBUG: Could not fetch audit pages: {e}", flush=True)
 
-    existing_pages_str = ""
-    if existing_pages:
-        existing_pages_str = f"""
-=== EXISTING PAGES ON THE SITE (from live crawl) ===
-The following {len(existing_pages)} pages/URLs already exist on {domain}:
-{chr(10).join(f'  - {p}' for p in existing_pages[:80])}
+    existing_nodes = _paths_to_existing_nodes(existing_pages)
+    import json
+    existing_nodes_json = json.dumps(existing_nodes, indent=2)
 
-CRITICAL INSTRUCTIONS FOR EXISTING PAGES:
-1. You MUST include ALL these existing pages in your architecture tree. Mark them as they are.
-2. Organize them into a logical hierarchy (group related pages under folders).
-3. Assign appropriate keywords and PR weights to each existing page.
-4. Then ADDITIONALLY recommend NEW pages that are missing for a complete {business_type} site.
-5. For new recommended pages, base them on what the business actually does (visible from its existing pages).
-"""
-    else:
-        existing_pages_str = f"""
-NOTE: No existing audit data available. Generate a complete recommended architecture for a {business_type} business.
-"""
-
-    prompt = f"""You are an expert SEO site architect. Generate a comprehensive site architecture tree for this business.
-
+    prompt = f"""You are an expert SEO site architect. 
 Brand: {brand_name}
 Domain: {domain}
 Industry: {brand_config.get('industry', business_type)}
 Target audience: {brand_config.get('target_audience', 'general')}
 Business type: {business_type}
-{existing_pages_str}
-Return a JSON array of nodes. Each node has:
-- "id": unique string (use format "node_1", "node_2", etc.)
-- "name": page/section name (e.g. "Product", "Features", "Blog")
-- "type": "folder" (category/section that contains children) or "page" (leaf content page)
-- "slug": URL path (e.g. "/products", "/blog/seo-guide") — for existing pages use EXACT existing slug
-- "keyword": primary target keyword for this page
-- "pr": PageRank priority weight (root=100, main sections=20, sub-sections=6, pages=1-4)
-- "parent_id": id of parent node (null for root homepage)
-- "order": sort order among siblings (0, 1, 2...)
-- "status": "existing" if the page already exists on the site, "recommended" if it's a new suggestion
 
-Requirements:
-1. Root node is the Homepage (parent_id: null, pr: 100)
-2. Include ALL existing pages organized into proper hierarchy
-3. Add 15-30 NEW recommended pages to fill SEO gaps
-4. Go 3 levels deep minimum for content-heavy sections
-5. Every page node MUST have a specific, realistic target keyword
-6. PR weights should distribute authority logically (homepage=100, main nav=15-25, sub-pages=2-6, deep pages=1-3)
+=== CURRENT SITE ARCHITECTURE (Auto-Mapped) ===
+{existing_nodes_json}
 
-Return ONLY a valid JSON array of node objects. No markdown, no explanation."""
+=== YOUR MISSION ===
+Analyze the CURRENT SITE ARCHITECTURE above and identify 15-30 missing, high-value SEO pages (or folders) that this business urgently needs.
+You must return a JSON array containing ONLY the NEW recommended nodes to snap into the existing tree.
+
+Rules for your NEW nodes:
+1. "id": generate a unique string (e.g., "rec_node_1", "rec_node_2")
+2. "name": page/section name
+3. "type": "folder" or "page"
+4. "slug": URL path (e.g. "/new-topic/sub-page")
+5. "keyword": primary target keyword
+6. "pr": PageRank priority (folders=15-25, pages=2-10)
+7. "parent_id": VERY IMPORTANT! If a new page belongs under an existing folder, look at the CURRENT SITE ARCHITECTURE JSON and use its exact "id" as the parent_id. If a new page is top-level, set parent_id to "node_root".
+8. "order": sort order (0, 1, 2)
+9. "status": MUST be "recommended".
+
+DO NOT RETURN ANY EXISTING NODES IN YOUR OUTPUT. Return ONLY the JSON array of your new recommendations. No markdown formatting, just raw JSON array."""
 
     try:
         api_key = os.environ.get('GEMINI_API_KEY')
@@ -1314,7 +1297,6 @@ Return ONLY a valid JSON array of node objects. No markdown, no explanation."""
         text = text.strip()
 
         import re
-        import json
 
         # Robustly extract JSON array if markdown or conversational text is present
         match = re.search(r'\[[\s\S]*\]', text)
@@ -1332,7 +1314,14 @@ Return ONLY a valid JSON array of node objects. No markdown, no explanation."""
         text = text.strip()
         
         try:
-            nodes = json.loads(text)
+            if text and text != '[]':
+                new_nodes = json.loads(text)
+            else:
+                new_nodes = []
+            
+            # STITCH NATIVE PAGES + NEW RECOMMENDATIONS
+            nodes = existing_nodes + new_nodes
+            
         except json.JSONDecodeError as e:
             print(f"DEBUG: JSON Parse Error. Raw: {text[:200]}")
             return jsonify({'error': f'AI returned invalid JSON: {str(e)}'}), 500
@@ -1354,6 +1343,61 @@ Return ONLY a valid JSON array of node objects. No markdown, no explanation."""
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+def _paths_to_existing_nodes(paths):
+    """Natively convert an array of url paths into JSON architecture nodes."""
+    nodes = []
+    # Base root node
+    nodes.append({
+        "id": "node_root",
+        "name": "Homepage",
+        "type": "folder",
+        "slug": "/",
+        "keyword": "home",
+        "pr": 100,
+        "parent_id": None,
+        "order": 0,
+        "status": "existing"
+    })
+    
+    # Filter valid unique paths
+    clean_paths = sorted(list(set([p for p in paths if p and p != '/' and not p.startswith('#')])))
+    
+    slug_to_id = {"/": "node_root"}
+    node_counter = 1
+    
+    for path in clean_paths:
+        parts = [p for p in path.strip('/').split('/') if p]
+        if not parts:
+            continue
+            
+        current_slug = ""
+        parent_id = "node_root"
+        
+        for i, part in enumerate(parts):
+            current_slug += f"/{part}"
+            if current_slug not in slug_to_id:
+                node_id = f"node_ex_{node_counter}"
+                node_counter += 1
+                slug_to_id[current_slug] = node_id
+                
+                is_leaf = (i == len(parts) - 1)
+                name = part.replace("-", " ").replace("_", " ").title()
+                
+                nodes.append({
+                    "id": node_id,
+                    "name": name,
+                    "type": "page" if is_leaf else "folder",
+                    "slug": current_slug,
+                    "keyword": name.lower(),
+                    "pr": 5 if is_leaf else 15,
+                    "parent_id": parent_id,
+                    "order": 0,
+                    "status": "existing"
+                })
+            parent_id = slug_to_id[current_slug]
+            
+    return nodes
 
 def _calc_max_depth(nodes):
     """Calculate max depth of the node tree."""

@@ -4440,19 +4440,37 @@ def generate_content_via_rest(prompt, api_key, model="gemini-2.5-pro", use_groun
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = requests.post(url, headers=headers, json=data, timeout=60)
+            response = requests.post(url, headers=headers, json=data, timeout=150)
             response.raise_for_status()
             result = response.json()
             
-            # Extract text
+            # Extract text carefully to catch safety blocks or empty candidates
+            if not result.get('candidates'):
+                raise Exception(f"Gemini API returned no candidates. Raw response: {result}")
+                
+            candidate = result['candidates'][0]
+            if 'content' not in candidate or 'parts' not in candidate['content']:
+                finish_reason = candidate.get('finishReason', 'UNKNOWN')
+                raise Exception(f"Gemini API blocked generation. Finish Reason: {finish_reason}. Raw response: {result}")
+                
             try:
-                text = result['candidates'][0]['content']['parts'][0]['text']
+                text = candidate['content']['parts'][0]['text']
                 print(f"DEBUG: REST API Success. Text length: {len(text)}", flush=True)
                 return text
-            except (KeyError, IndexError):
+            except (KeyError, IndexError) as e:
                 print(f"DEBUG: Unexpected REST response structure: {result}", flush=True)
-                return None
+                raise Exception(f"Unexpected response structure: {result}")
                 
+        except requests.exceptions.ReadTimeout as e:
+            print(f"DEBUG: Gemini API Read Timed Out on attempt {attempt + 1}: {e}", flush=True)
+            if attempt < max_retries - 1:
+                print("DEBUG: Retrying on Timeout...", flush=True)
+                # Wait 5 seconds before retrying a timeout
+                import time
+                time.sleep(5)
+                continue
+            raise e
+            
         except Exception as e:
             print(f"DEBUG: REST API call failed on attempt {attempt + 1}: {e}")
             if 'response' in locals() and response is not None:

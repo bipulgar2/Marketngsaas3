@@ -1383,18 +1383,20 @@ def push_architecture_to_content():
     created = 0
     try:
         for node in nodes:
-            # Create a content_strategy item for each node
+            # Create a content_calendar item for each node
             item = {
                 'campaign_id': campaign_id,
                 'title': node.get('name', ''),
                 'target_keyword': node.get('keyword', ''),
-                'slug': node.get('slug', ''),
-                'status': 'idea',
-                'content_type': 'page' if node.get('type') == 'page' else 'pillar',
-                'notes': f"From site architecture. PR weight: {node.get('pr', 0)}",
+                'status': 'planned',
+                'brief': {
+                    'slug': node.get('slug', ''),
+                    'content_type': 'page' if node.get('type') == 'page' else 'pillar',
+                    'notes': f"From site architecture. PR weight: {node.get('pr', 0)}"
+                },
                 'created_at': datetime.utcnow().isoformat()
             }
-            client.table('content_strategy').insert(item).execute()
+            client.table('content_calendar').insert(item).execute()
             created += 1
 
         return jsonify({'success': True, 'created': created})

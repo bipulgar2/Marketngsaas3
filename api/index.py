@@ -1313,17 +1313,29 @@ Return ONLY a valid JSON array of node objects. No markdown, no explanation."""
 
         text = text.strip()
 
-        # Clean markdown fences
-        if text.startswith('```'):
-            text = text.split('\n', 1)[1] if '\n' in text else text[3:]
-        if text.endswith('```'):
-            text = text[:-3]
-        if text.startswith('json'):
-            text = text[4:]
-        text = text.strip()
-
+        import re
         import json
-        nodes = json.loads(text)
+
+        # Robustly extract JSON array if markdown or conversational text is present
+        match = re.search(r'\[[\s\S]*\]', text)
+        if match:
+            text = match.group(0)
+        else:
+            # Fallback markdown un-fencing
+            if text.startswith('```'):
+                text = text.split('\n', 1)[1] if '\n' in text else text[3:]
+            if text.endswith('```'):
+                text = text[:-3]
+            if text.startswith('json'):
+                text = text[4:]
+                
+        text = text.strip()
+        
+        try:
+            nodes = json.loads(text)
+        except json.JSONDecodeError as e:
+            print(f"DEBUG: JSON Parse Error. Raw: {text[:200]}")
+            return jsonify({'error': f'AI returned invalid JSON: {str(e)}'}), 500
 
         # Build the architecture object
         architecture = {

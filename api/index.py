@@ -4423,25 +4423,35 @@ def generate_content_via_rest(prompt, api_key, model="gemini-2.5-pro", use_groun
             "google_search": {}  # Enable Google Search Grounding
         }]
         
-    try:
-        response = requests.post(url, headers=headers, json=data, timeout=60)
-        response.raise_for_status()
-        result = response.json()
-        
-        # Extract text
+    max_retries = 3
+    for attempt in range(max_retries):
         try:
-            text = result['candidates'][0]['content']['parts'][0]['text']
-            print(f"DEBUG: REST API Success. Text length: {len(text)}", flush=True)
-            return text
-        except (KeyError, IndexError):
-            print(f"DEBUG: Unexpected REST response structure: {result}", flush=True)
-            return None
+            response = requests.post(url, headers=headers, json=data, timeout=60)
+            response.raise_for_status()
+            result = response.json()
             
-    except Exception as e:
-        print(f"DEBUG: REST API call failed: {e}")
-        if 'response' in locals() and response is not None:
-             print(f"DEBUG: Response content: {response.text}")
-        raise e
+            # Extract text
+            try:
+                text = result['candidates'][0]['content']['parts'][0]['text']
+                print(f"DEBUG: REST API Success. Text length: {len(text)}", flush=True)
+                return text
+            except (KeyError, IndexError):
+                print(f"DEBUG: Unexpected REST response structure: {result}", flush=True)
+                return None
+                
+        except Exception as e:
+            print(f"DEBUG: REST API call failed on attempt {attempt + 1}: {e}")
+            if 'response' in locals() and response is not None:
+                print(f"DEBUG: Response content: {response.text}", flush=True)
+                if response.status_code == 429 and attempt < max_retries - 1:
+                    import time
+                    sleep_time = (2 ** attempt) + 1  # Exponential backoff: 2s, 3s, ...
+                    print(f"DEBUG: 429 Rate Limit Hit. Waiting {sleep_time} seconds before retry...", flush=True)
+                    time.sleep(sleep_time)
+                    continue  # Retry
+            
+            if attempt == max_retries - 1:
+                raise e
 
 
 # --- perform_seo_analysis (L4300-4453) ---

@@ -4573,9 +4573,9 @@
                             btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Analyzing & Generating...';
                             
                             try {
-                                const bcRes = await fetch(`/api/client/brand-config?campaign_id=${currentClient.id}`);
+                                const bcRes = await fetch(`/api/campaigns/${currentClient.id}/brand-config`);
                                 const bcData = await bcRes.json();
-                                const brandConfig = bcData.success ? bcData.config : {};
+                                const brandConfig = bcData.brand_config || {};
                                 
                                 const req = await fetch('/api/generate-site-architecture', {
                                     method: 'POST',

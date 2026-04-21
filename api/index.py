@@ -1307,7 +1307,7 @@ Return ONLY a valid JSON array of node objects. No markdown, no explanation."""
         if not api_key:
             return jsonify({'error': 'GEMINI_API_KEY not configured'}), 500
 
-        text = generate_content_via_rest(prompt, api_key, model="gemini-2.0-flash", use_grounding=False)
+        text = generate_content_via_rest(prompt, api_key, model="gemini-2.5-flash", use_grounding=False)
         if not text:
             return jsonify({'error': 'Gemini returned empty response'}), 500
 
@@ -4214,7 +4214,7 @@ def generate_dynamic_outline(topic, research_context, project_loc, gemini_client
     try:
         response = gemini_client.generate_content(
             prompt=prompt,
-            model_name="gemini-2.5-pro",
+            model_name="gemini-2.5-flash",
             use_grounding=False # Logic only
         )
         
@@ -4315,7 +4315,7 @@ def generate_sections_chunked(topic, outline, research_context, project_loc, gem
         try:
             section_content = gemini_client.generate_content(
                 prompt=prompt,
-                model_name="gemini-2.5-pro",
+                model_name="gemini-2.5-flash",
                 use_grounding=True 
             )
             
@@ -4393,7 +4393,7 @@ def final_polish(full_content, topic, primary_keyword, cta_url, project_loc, gem
     try:
         final_text = gemini_client.generate_content(
             prompt=prompt,
-            model_name="gemini-2.5-pro",
+            model_name="gemini-2.5-flash",
             use_grounding=False # Editing task
         )
         return final_text if final_text else full_content
@@ -4401,7 +4401,7 @@ def final_polish(full_content, topic, primary_keyword, cta_url, project_loc, gem
         print(f"Error in final polish: {e}")
         return full_content
 
-def generate_content_via_rest(prompt, api_key, model="gemini-2.5-pro", use_grounding=True):
+def generate_content_via_rest(prompt, api_key, model="gemini-2.5-flash", use_grounding=True):
     """
     Generate content using Gemini REST API directly to avoid SDK crashes.
     Supports Google Search Grounding.
@@ -4857,11 +4857,11 @@ def batch_update_pages():
             -   Keep the original formatting (H1, H2, bullets) but polished.
             """
                                 # Use REST API for Products
-                                print(f"DEBUG: Generating content for Product: {page_title} using gemini-2.5-pro (REST)", flush=True)
+                                print(f"DEBUG: Generating content for Product: {page_title} using gemini-2.5-flash (REST)", flush=True)
                                 generated_text = generate_content_via_rest(
                                     prompt=prompt,
                                     api_key=api_key,
-                                    model="gemini-2.5-pro",
+                                    model="gemini-2.5-flash",
                                     use_grounding=True
                                 )
                             
@@ -4919,7 +4919,7 @@ def batch_update_pages():
                                 generated_text = generate_content_via_rest(
                                     prompt=prompt,
                                     api_key=api_key,
-                                    model="gemini-2.5-pro",
+                                    model="gemini-2.5-flash",
                                     use_grounding=True
                                 )
                                 

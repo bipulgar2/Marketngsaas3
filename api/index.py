@@ -963,7 +963,7 @@ Respond ONLY with valid JSON in this exact format, no markdown:
         result = gemini_client.generate_content(
             prompt=prompt,
             model_name="gemini-2.5-flash",
-            use_grounding=False
+            use_grounding=True
         )
         
         if not result:
@@ -1533,7 +1533,7 @@ Respond ONLY with valid JSON, no markdown:
         result = gemini_client.generate_content(
             prompt=prompt,
             model_name="gemini-2.5-flash",
-            use_grounding=False
+            use_grounding=True
         )
         
         if not result:
@@ -4557,7 +4557,7 @@ def perform_seo_analysis(page_id):
         result = gemini_client.generate_content(
             prompt=prompt,
             model_name="gemini-2.5-flash",
-            use_grounding=False  # Pure analysis, no web search
+            use_grounding=True  # Grounded analysis for SEO
         )
         
         if not result:

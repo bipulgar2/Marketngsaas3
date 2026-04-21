@@ -1219,53 +1219,99 @@ def save_site_architecture():
 @app.route('/api/generate-site-architecture', methods=['POST'])
 @login_required
 def generate_site_architecture():
-    """Use Gemini to generate a recommended site architecture based on business type."""
+    """Use Gemini to generate a recommended site architecture based on real audit data + business type."""
     data = request.get_json()
     business_type = data.get('business_type', 'saas')
     brand_config = data.get('brand_config', {})
     domain = data.get('domain', '')
+    campaign_id = data.get('campaign_id', '')
     brand_name = brand_config.get('brand_name', domain.replace('www.', '').split('.')[0].title() if domain else 'Brand')
 
-    prompt = f"""You are an expert SEO site architect. Generate a comprehensive site architecture tree for a **{business_type}** business.
+    # === STEP 1: Pull existing pages from the latest audit ===
+    existing_pages = []
+    client = supabase_admin or supabase
+    if campaign_id:
+        try:
+            audit_res = client.table('technical_audits').select('results').eq('campaign_id', campaign_id).order('created_at', desc=True).limit(1).execute()
+            if audit_res.data and audit_res.data[0].get('results'):
+                results = audit_res.data[0]['results']
+                categorized = results.get('categorized', {})
+                
+                # Extract all URLs/pages from the audit results across all categories
+                for category_key, category_data in categorized.items():
+                    for check_key, check_data in category_data.items():
+                        items = check_data.get('items', [])
+                        for item in items:
+                            if isinstance(item, str) and ('/' in item or '.' in item):
+                                # Normalize: strip domain prefix to get relative paths
+                                page = item.strip()
+                                if page.startswith('http'):
+                                    from urllib.parse import urlparse
+                                    parsed = urlparse(page)
+                                    page = parsed.path or '/'
+                                if page and page not in existing_pages:
+                                    existing_pages.append(page)
+        except Exception as e:
+            print(f"DEBUG: Could not fetch audit pages: {e}", flush=True)
+
+    existing_pages_str = ""
+    if existing_pages:
+        existing_pages_str = f"""
+=== EXISTING PAGES ON THE SITE (from live crawl) ===
+The following {len(existing_pages)} pages/URLs already exist on {domain}:
+{chr(10).join(f'  - {p}' for p in existing_pages[:80])}
+
+CRITICAL INSTRUCTIONS FOR EXISTING PAGES:
+1. You MUST include ALL these existing pages in your architecture tree. Mark them as they are.
+2. Organize them into a logical hierarchy (group related pages under folders).
+3. Assign appropriate keywords and PR weights to each existing page.
+4. Then ADDITIONALLY recommend NEW pages that are missing for a complete {business_type} site.
+5. For new recommended pages, base them on what the business actually does (visible from its existing pages).
+"""
+    else:
+        existing_pages_str = f"""
+NOTE: No existing audit data available. Generate a complete recommended architecture for a {business_type} business.
+"""
+
+    prompt = f"""You are an expert SEO site architect. Generate a comprehensive site architecture tree for this business.
 
 Brand: {brand_name}
 Domain: {domain}
 Industry: {brand_config.get('industry', business_type)}
 Target audience: {brand_config.get('target_audience', 'general')}
-
+Business type: {business_type}
+{existing_pages_str}
 Return a JSON array of nodes. Each node has:
 - "id": unique string (use format "node_1", "node_2", etc.)
 - "name": page/section name (e.g. "Product", "Features", "Blog")
 - "type": "folder" (category/section that contains children) or "page" (leaf content page)
-- "slug": URL path (e.g. "/products", "/blog/seo-guide")
+- "slug": URL path (e.g. "/products", "/blog/seo-guide") — for existing pages use EXACT existing slug
 - "keyword": primary target keyword for this page
 - "pr": PageRank priority weight (root=100, main sections=20, sub-sections=6, pages=1-4)
 - "parent_id": id of parent node (null for root homepage)
 - "order": sort order among siblings (0, 1, 2...)
+- "status": "existing" if the page already exists on the site, "recommended" if it's a new suggestion
 
 Requirements:
 1. Root node is the Homepage (parent_id: null, pr: 100)
-2. Create 4-7 top-level sections appropriate for a {business_type} business
-3. Each section should have 2-5 sub-items (mix of folders and pages)
+2. Include ALL existing pages organized into proper hierarchy
+3. Add 15-30 NEW recommended pages to fill SEO gaps
 4. Go 3 levels deep minimum for content-heavy sections
-5. Total nodes: 30-60
-6. Every page node MUST have a specific, realistic target keyword
-7. PR weights should distribute authority logically (homepage=100, main nav=15-25, sub-pages=2-6, deep pages=1-3)
-
-Business type templates to follow:
-- SaaS: Product (Features, Pricing, Integrations, Security, API), Solutions (by industry/use-case), Resources (Blog, Case Studies, Guides, Webinars, Templates), Company (About, Careers, Partners), Support (Help Center, Documentation, Status)
-- E-commerce: Shop (by category), Collections, Product pages, About, Blog, FAQ, Size Guide, Returns, Contact
-- Local Business: Services (individual service pages), Areas Served (location pages), About, Team, Reviews/Testimonials, Blog, Contact, Gallery
-- Blog: Categories (3-5 main topics), each with 5-8 article pages, About, Newsletter, Resources, Contact
+5. Every page node MUST have a specific, realistic target keyword
+6. PR weights should distribute authority logically (homepage=100, main nav=15-25, sub-pages=2-6, deep pages=1-3)
 
 Return ONLY a valid JSON array of node objects. No markdown, no explanation."""
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=os.environ.get('GEMINI_API_KEY'))
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        response = model.generate_content(prompt)
-        text = response.text.strip()
+        api_key = os.environ.get('GEMINI_API_KEY')
+        if not api_key:
+            return jsonify({'error': 'GEMINI_API_KEY not configured'}), 500
+
+        text = generate_content_via_rest(prompt, api_key, model="gemini-2.0-flash", use_grounding=False)
+        if not text:
+            return jsonify({'error': 'Gemini returned empty response'}), 500
+
+        text = text.strip()
 
         # Clean markdown fences
         if text.startswith('```'):
@@ -1284,6 +1330,7 @@ Return ONLY a valid JSON array of node objects. No markdown, no explanation."""
             'nodes': nodes,
             'business_type': business_type,
             'generated_at': datetime.utcnow().isoformat() + 'Z',
+            'existing_pages_count': len(existing_pages),
             'meta': {
                 'total_nodes': len(nodes),
                 'max_depth': _calc_max_depth(nodes)

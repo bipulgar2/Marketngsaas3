@@ -1235,22 +1235,22 @@ def generate_site_architecture():
             audit_res = client.table('technical_audits').select('results').eq('campaign_id', campaign_id).order('created_at', desc=True).limit(1).execute()
             if audit_res.data and audit_res.data[0].get('results'):
                 results = audit_res.data[0]['results']
-                categorized = results.get('categorized', {})
+                pages = results.get('pages', [])
                 
-                # Extract all URLs/pages from the audit results across all categories
-                for category_key, category_data in categorized.items():
-                    for check_key, check_data in category_data.items():
-                        items = check_data.get('items', [])
-                        for item in items:
-                            if isinstance(item, str) and ('/' in item or '.' in item):
-                                # Normalize: strip domain prefix to get relative paths
-                                page = item.strip()
-                                if page.startswith('http'):
-                                    from urllib.parse import urlparse
-                                    parsed = urlparse(page)
-                                    page = parsed.path or '/'
-                                if page and page not in existing_pages:
-                                    existing_pages.append(page)
+                # Extract all URLs/pages from the audit results
+                for page in pages:
+                    url = page.get('url')
+                    if url and isinstance(url, str):
+                        # Normalize: strip domain prefix to get relative paths
+                        url = url.strip()
+                        if url.startswith('http'):
+                            from urllib.parse import urlparse
+                            parsed = urlparse(url)
+                            path = parsed.path or '/'
+                        else:
+                            path = url
+                        if path and path not in existing_pages:
+                            existing_pages.append(path)
         except Exception as e:
             print(f"DEBUG: Could not fetch audit pages: {e}", flush=True)
 

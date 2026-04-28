@@ -138,8 +138,9 @@ def get_speed_annotation(score):
 
 def get_readability_annotation(grade):
     """Returns annotation based on readability grade."""
-    grade = grade or 0
-    if grade > 9:
+    if not grade or grade == 0:
+        return "⚠️ Not Enough Content to Analyze"
+    elif grade > 9:
         return "🔴 Poor Page Readability"
     else:
         return "✅ Content Readability is Apt"

@@ -1981,7 +1981,18 @@
                 return posA - posB; // Ascending (best position first)
             });
 
-            sortedKw.forEach(k => {
+            // Ensure diversity: max 2 keywords per URL
+            const urlCounts = {};
+            const diverseKw = [];
+            for (const k of sortedKw) {
+                const url = k.url || k.ranked_serp_element?.serp_item?.url || 'unknown';
+                urlCounts[url] = (urlCounts[url] || 0) + 1;
+                if (urlCounts[url] <= 2) {
+                    diverseKw.push(k);
+                }
+            }
+
+            diverseKw.forEach(k => {
                 const kwData = k.keyword_data || k;
                 const kwInfo = kwData.keyword_info || {};
                 const serp = k.ranked_serp_element?.serp_item || {};

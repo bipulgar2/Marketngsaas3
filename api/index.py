@@ -2975,6 +2975,17 @@ def save_audit_results():
             except Exception as e:
                 logger.error(f"PageSpeed error: {e}")
         
+        # Fetch accurate domain-level traffic/keyword totals
+        domain_totals = {}
+        if domain:
+            try:
+                from api.dataforseo_client import fetch_domain_metrics
+                domain_totals = fetch_domain_metrics(domain)
+                if domain_totals.get('success'):
+                    logger.info(f"Domain metrics: traffic={domain_totals.get('total_traffic')}, keywords={domain_totals.get('total_keywords')}")
+            except Exception as e:
+                logger.warning(f"Domain metrics error (non-fatal): {e}")
+        
         # Update with pages, pagespeed, and mark as completed
         audit_results['summary'] = summary
         categorized = categorize_audit_issues(pages, summary)
@@ -3007,6 +3018,13 @@ def save_audit_results():
                 project_data['pages'] = pages
                 project_data['pagespeed'] = pagespeed
                 project_data['status'] = 'completed'
+                
+                # Merge accurate domain totals if available
+                if domain_totals.get('success'):
+                    project_data['total_traffic'] = domain_totals.get('total_traffic', project_data.get('total_traffic', 0))
+                    project_data['total_keywords'] = domain_totals.get('total_keywords', project_data.get('total_keywords', 0))
+                    project_data['top_3_keywords'] = domain_totals.get('top_3_keywords', 0)
+                    project_data['top_10_keywords'] = domain_totals.get('top_10_keywords', 0)
                 
                 client.table('projects').update({
                     'full_audit_data': project_data
@@ -3658,12 +3676,24 @@ def refresh_pagespeed(audit_id):
         
         mobile = fetch_pagespeed_scores(f"https://{domain}", strategy="mobile")
         if mobile and mobile.get('success'):
-            pagespeed['mobile'] = {'scores': mobile.get('scores', {}), 'metrics': mobile.get('metrics', {})}
+            pagespeed['mobile'] = {
+                'scores': mobile.get('scores', {}), 
+                'metrics': mobile.get('metrics', {}),
+                'strategy': 'mobile',
+                'url': f"https://{domain}"
+            }
+            # Keep flat keys for backward compat (default = mobile)
             pagespeed['scores'] = mobile.get('scores', {})
             pagespeed['metrics'] = mobile.get('metrics', {})
         
-        # Desktop fetch skipped during auto-generate to save ~80s
-        # Users can manually trigger desktop via the dashboard's refresh button
+        desktop = fetch_pagespeed_scores(f"https://{domain}", strategy="desktop")
+        if desktop and desktop.get('success'):
+            pagespeed['desktop'] = {
+                'scores': desktop.get('scores', {}), 
+                'metrics': desktop.get('metrics', {}),
+                'strategy': 'desktop',
+                'url': f"https://{domain}"
+            }
         
         if not pagespeed:
             return jsonify({'error': 'PageSpeed fetch failed'}), 500
@@ -3682,7 +3712,7 @@ def refresh_pagespeed(audit_id):
         except Exception as e:
             logger.warning(f"Could not update projects pagespeed: {e}")
         
-        logger.info(f"PageSpeed refreshed for {domain}: perf={pagespeed.get('scores', {}).get('performance', 'N/A')}")
+        logger.info(f"PageSpeed refreshed for {domain}: mobile={pagespeed.get('mobile', {}).get('scores', {}).get('performance', 'N/A')}, desktop={pagespeed.get('desktop', {}).get('scores', {}).get('performance', 'N/A')}")
         return jsonify({'success': True, 'pagespeed': pagespeed})
     
     except Exception as e:

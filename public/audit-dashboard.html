@@ -1978,7 +1978,7 @@
             const sortedKw = [...keywords].sort((a, b) => {
                 const posA = a.position || a.ranked_serp_element?.serp_item?.rank_absolute || 100;
                 const posB = b.position || b.ranked_serp_element?.serp_item?.rank_absolute || 100;
-                return posB - posA; // Descending
+                return posA - posB; // Ascending (best position first)
             });
 
             sortedKw.forEach(k => {

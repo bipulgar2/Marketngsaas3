@@ -456,7 +456,7 @@ def create_deep_audit_slides(data, domain, creds=None, screenshots=None, annotat
 
     # Slide: Website Speed
     if screenshots and screenshots.get('speed_analysis'):
-        # Get actual performance score from pagespeed data
+        # Get actual performance score from pagespeed data (handle nested mobile/desktop structure)
         pagespeed_data = data.get('pagespeed', {})
         if isinstance(pagespeed_data, str):
             try:
@@ -464,9 +464,24 @@ def create_deep_audit_slides(data, domain, creds=None, screenshots=None, annotat
                 pagespeed_data = json.loads(pagespeed_data)
             except:
                 pagespeed_data = {}
-        scores = pagespeed_data.get('scores', {})
-        performance_score = scores.get('performance', 0) or 0
-        speed_annotation = annotations.get('speed_analysis', get_speed_annotation(performance_score))
+        # Extract mobile/desktop scores from nested structure
+        mobile_ps = pagespeed_data.get('mobile', {})
+        desktop_ps = pagespeed_data.get('desktop', {})
+        mobile_scores = mobile_ps.get('scores', pagespeed_data.get('scores', {}))
+        desktop_scores = desktop_ps.get('scores', {})
+        mobile_perf = mobile_scores.get('performance', 0) or 0
+        desktop_perf = desktop_scores.get('performance', 0) or 0
+        performance_score = mobile_perf if mobile_perf else desktop_perf
+        # Build annotation with BOTH mobile and desktop scores
+        speed_parts = []
+        if mobile_perf:
+            speed_parts.append(f"📱 Mobile: {mobile_perf}/100")
+        if desktop_perf:
+            speed_parts.append(f"🖥️ Desktop: {desktop_perf}/100")
+        if speed_parts:
+            speed_annotation = ' | '.join(speed_parts) + '\n' + annotations.get('speed_analysis', get_speed_annotation(performance_score))
+        else:
+            speed_annotation = annotations.get('speed_analysis', get_speed_annotation(performance_score))
         requests.extend(create_slide_image(generate_id(), "WEBSITE SPEED", screenshots['speed_analysis'], speed_annotation))
     else:
         avg_load_time = sum(p.get('load_time', 0) for p in pages) / max(1, len(pages)) if pages else 0

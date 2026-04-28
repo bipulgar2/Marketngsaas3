@@ -1030,92 +1030,140 @@
                 <p style="font-size: 14px; opacity: 0.9;" id="speed-domain">Mobile Page Speed Analysis</p>
             </div>
 
-            <!-- Mobile/Desktop Toggle + Refresh Button -->
-            <div
-                style="display: flex; justify-content: center; align-items: center; padding: 15px; border-bottom: 1px solid #eee; gap: 20px;">
-                <div style="display: flex; background: #f5f5f5; border-radius: 4px; overflow: hidden;">
-                    <div id="toggle-mobile" onclick="showSpeedData('mobile')"
-                        style="padding: 8px 20px; background: #1a73e8; color: white; font-weight: 500; cursor: pointer;">
-                        📱 Mobile</div>
-                    <div id="toggle-desktop" onclick="showSpeedData('desktop')"
-                        style="padding: 8px 20px; color: #666; cursor: pointer;">🖥️ Desktop</div>
-                </div>
+            <!-- Side by Side Layout for Mobile and Desktop -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee;">
+                <h3 style="margin: 0; font-size: 16px; color: #475569;">Core Web Vitals Summary</h3>
                 <button onclick="refreshPageSpeed()" id="refresh-speed-btn"
                     style="background: white; border: 1px solid #ccc; padding: 8px 16px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
                     🔄 Refresh Data
                 </button>
             </div>
-            <!-- Score Circles Row -->
-            <div class="score-circles" style="padding: 20px 30px;">
-                <div class="score-circle">
-                    <div class="score-ring" id="perf-score">--</div>
-                    <div class="score-label">Performance</div>
+
+            <div style="display: flex; flex-direction: row; width: 100%;">
+                
+                <!-- MOBILE SIDE -->
+                <div style="flex: 1; border-right: 1px solid #eee; padding-bottom: 20px;">
+                    <div style="text-align: center; padding: 15px; font-weight: 600; color: #1a73e8; font-size: 16px;">📱 Mobile Performance</div>
+                    
+                    <div class="score-circles" style="padding: 10px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                        <div class="score-circle">
+                            <div class="score-ring" id="mobile-perf-score">--</div>
+                            <div class="score-label" style="font-size: 10px;">Performance</div>
+                        </div>
+                        <div class="score-circle">
+                            <div class="score-ring" id="mobile-access-score">--</div>
+                            <div class="score-label" style="font-size: 10px;">Accessibility</div>
+                        </div>
+                        <div class="score-circle">
+                            <div class="score-ring" id="mobile-bp-score">--</div>
+                            <div class="score-label" style="font-size: 10px;">Best Practices</div>
+                        </div>
+                        <div class="score-circle">
+                            <div class="score-ring" id="mobile-seo-score">--</div>
+                            <div class="score-label" style="font-size: 10px;">SEO</div>
+                        </div>
+                    </div>
+
+                    <div style="padding: 10px 15px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="mobile-fcp-indicator" style="font-size: 12px;">●</span>
+                                <div>
+                                    <div style="font-size: 10px; color: #666;">First Contentful Paint</div>
+                                    <div style="font-size: 16px; font-weight: 600;" id="mobile-fcp-value">--</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="mobile-lcp-indicator" style="font-size: 12px;">●</span>
+                                <div>
+                                    <div style="font-size: 10px; color: #666;">Largest Contentful Paint</div>
+                                    <div style="font-size: 16px; font-weight: 600;" id="mobile-lcp-value">--</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="mobile-tbt-indicator" style="font-size: 12px;">●</span>
+                                <div>
+                                    <div style="font-size: 10px; color: #666;">Total Blocking Time</div>
+                                    <div style="font-size: 16px; font-weight: 600;" id="mobile-tbt-value">--</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="mobile-cls-indicator" style="font-size: 12px;">●</span>
+                                <div>
+                                    <div style="font-size: 10px; color: #666;">Cumulative Layout Shift</div>
+                                    <div style="font-size: 16px; font-weight: 600;" id="mobile-cls-value">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="score-circle">
-                    <div class="score-ring" id="access-score">--</div>
-                    <div class="score-label">Accessibility</div>
+
+                <!-- DESKTOP SIDE -->
+                <div style="flex: 1; padding-bottom: 20px;">
+                    <div style="text-align: center; padding: 15px; font-weight: 600; color: #666; font-size: 16px;">🖥️ Desktop Performance</div>
+                    
+                    <div class="score-circles" style="padding: 10px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                        <div class="score-circle">
+                            <div class="score-ring" id="desktop-perf-score">--</div>
+                            <div class="score-label" style="font-size: 10px;">Performance</div>
+                        </div>
+                        <div class="score-circle">
+                            <div class="score-ring" id="desktop-access-score">--</div>
+                            <div class="score-label" style="font-size: 10px;">Accessibility</div>
+                        </div>
+                        <div class="score-circle">
+                            <div class="score-ring" id="desktop-bp-score">--</div>
+                            <div class="score-label" style="font-size: 10px;">Best Practices</div>
+                        </div>
+                        <div class="score-circle">
+                            <div class="score-ring" id="desktop-seo-score">--</div>
+                            <div class="score-label" style="font-size: 10px;">SEO</div>
+                        </div>
+                    </div>
+
+                    <div style="padding: 10px 15px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="desktop-fcp-indicator" style="font-size: 12px;">●</span>
+                                <div>
+                                    <div style="font-size: 10px; color: #666;">First Contentful Paint</div>
+                                    <div style="font-size: 16px; font-weight: 600;" id="desktop-fcp-value">--</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="desktop-lcp-indicator" style="font-size: 12px;">●</span>
+                                <div>
+                                    <div style="font-size: 10px; color: #666;">Largest Contentful Paint</div>
+                                    <div style="font-size: 16px; font-weight: 600;" id="desktop-lcp-value">--</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="desktop-tbt-indicator" style="font-size: 12px;">●</span>
+                                <div>
+                                    <div style="font-size: 10px; color: #666;">Total Blocking Time</div>
+                                    <div style="font-size: 16px; font-weight: 600;" id="desktop-tbt-value">--</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="desktop-cls-indicator" style="font-size: 12px;">●</span>
+                                <div>
+                                    <div style="font-size: 10px; color: #666;">Cumulative Layout Shift</div>
+                                    <div style="font-size: 16px; font-weight: 600;" id="desktop-cls-value">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="score-circle">
-                    <div class="score-ring" id="bp-score">--</div>
-                    <div class="score-label">Best Practices</div>
-                </div>
-                <div class="score-circle">
-                    <div class="score-ring" id="seo-score">--</div>
-                    <div class="score-label">SEO</div>
-                </div>
+
             </div>
 
             <!-- Legend -->
-            <div
-                style="display: flex; justify-content: center; gap: 30px; padding: 10px; font-size: 12px; color: #666;">
+            <div style="display: flex; justify-content: center; gap: 30px; padding: 10px; font-size: 12px; color: #666; background: #fafafa; border-top: 1px solid #eee;">
                 <span>🔴 0-49</span>
                 <span>🟠 50-89</span>
                 <span>🟢 90-100</span>
             </div>
-
-            <!-- Core Web Vitals -->
-            <div style="padding: 15px 30px;">
-                <div
-                    style="font-weight: 600; color: #666; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
-                    METRICS</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span id="fcp-indicator" style="font-size: 14px;">●</span>
-                        <div>
-                            <div style="font-size: 12px; color: #666;">First Contentful Paint</div>
-                            <div style="font-size: 20px; font-weight: 600;" id="fcp-value">--</div>
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span id="lcp-indicator" style="font-size: 14px;">●</span>
-                        <div>
-                            <div style="font-size: 12px; color: #666;">Largest Contentful Paint</div>
-                            <div style="font-size: 20px; font-weight: 600;" id="lcp-value">--</div>
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span id="tbt-indicator" style="font-size: 14px;">●</span>
-                        <div>
-                            <div style="font-size: 12px; color: #666;">Total Blocking Time</div>
-                            <div style="font-size: 20px; font-weight: 600;" id="tbt-value">--</div>
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span id="cls-indicator" style="font-size: 14px;">●</span>
-                        <div>
-                            <div style="font-size: 12px; color: #666;">Cumulative Layout Shift</div>
-                            <div style="font-size: 20px; font-weight: 600;" id="cls-value">--</div>
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span id="si-indicator" style="font-size: 14px;">●</span>
-                        <div>
-                            <div style="font-size: 12px; color: #666;">Speed Index</div>
-                            <div style="font-size: 20px; font-weight: 600;" id="si-value">--</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            
         </div>
     </div>
 
@@ -1836,8 +1884,11 @@
 
             // Step 1.5: Fetch PageSpeed data only if missing
             try {
-                const hasPsData = currentAuditData && currentAuditData.pagespeed && 
-                                  (currentAuditData.pagespeed.scores || (currentAuditData.pagespeed.mobile && currentAuditData.pagespeed.mobile.scores));
+                const ps = currentAuditData && currentAuditData.pagespeed ? currentAuditData.pagespeed : null;
+                const hasScores = ps && ps.scores && Object.keys(ps.scores).length > 0 && ps.scores.performance !== undefined;
+                const hasMobileScores = ps && ps.mobile && ps.mobile.scores && Object.keys(ps.mobile.scores).length > 0 && ps.mobile.scores.performance !== undefined;
+                
+                const hasPsData = hasScores || hasMobileScores;
                 
                 if (!hasPsData) {
                     console.log('Fetching missing PageSpeed data (this may take ~60-90s)...');
@@ -2478,212 +2529,84 @@
             }
         }
 
-        // Populate Speed Metrics
+        // Populate Speed Metrics side-by-side
         function populateSpeedMetrics(data) {
             const ps = data.pagespeed || {};
-            // Handle nested structure: ps.mobile or ps.desktop
             const mobileData = ps.mobile || ps;
             const desktopData = ps.desktop || {};
 
-            // Use mobile data by default, fall back to desktop or flat structure
-            const activeData = mobileData.scores ? mobileData : (desktopData.scores ? desktopData : ps);
-            const scores = activeData.scores || {};
-            const metrics = activeData.metrics || {};
-            const loadingExp = activeData.loadingExperience || {};
-
-            // Reset UI
-            const overallScore = document.getElementById('overall-score');
-            if (overallScore) overallScore.textContent = '--';
-            ['fcp', 'lcp', 'cls', 'tbt', 'si'].forEach(k => {
-                const valParams = document.getElementById(k + '-value');
-                if (valParams) valParams.textContent = '--';
-            });
-
-            if (!scores.performance && scores.performance !== 0) {
-                const domain = data.domain || '';
-                if (domain) {
-                    const speedDomain = document.getElementById('speed-domain');
-                    if (speedDomain) speedDomain.textContent = domain;
-                }
-                return;
+            const domain = data.domain || data.competitor_domain || '';
+            const domainEl = document.getElementById('speed-domain');
+            if (domainEl && domain) {
+                domainEl.textContent = `Performance Analysis for ${domain}`;
             }
 
-            // Overall Score - API returns integers directly
-            const scoreVal = scores.performance || 0;
-            const perfEl = document.getElementById('perf-score');
-            if (perfEl) {
-                perfEl.textContent = scoreVal;
-                perfEl.className = 'score-ring ' + getScoreClass(scoreVal / 100);
-            }
-
-            // Helper for score class (expects 0-1 scale)
             function getScoreClass(score) {
-                if (score >= 0.9) return 'good';
-                if (score >= 0.5) return 'average';
+                if (score >= 90) return 'good';
+                if (score >= 50) return 'average';
                 return 'poor';
             }
 
-            // Populate other scores - API returns integers directly
-            const accEl = document.getElementById('access-score');
-            if (accEl) {
-                accEl.textContent = scores.accessibility || 0;
-                accEl.className = 'score-ring ' + getScoreClass((scores.accessibility || 0) / 100);
-            }
-
-            const bpEl = document.getElementById('bp-score');
-            if (bpEl) {
-                bpEl.textContent = scores.best_practices || 0;
-                bpEl.className = 'score-ring ' + getScoreClass((scores.best_practices || 0) / 100);
-            }
-
-            const seoEl = document.getElementById('seo-score');
-            if (seoEl) {
-                seoEl.textContent = scores.seo || 0;
-                seoEl.className = 'score-ring ' + getScoreClass((scores.seo || 0) / 100);
-            }
-
-            // Domain
-            const domainEl = document.getElementById('speed-domain');
-            const url = data.url || activeData.url || '';
-            const strategy = activeData.strategy || 'mobile';
-            if (url && domainEl) {
-                const domain = url.replace(/https?:\/\//, '').replace(/\/$/, '');
-                const label = strategy === 'mobile' ? 'Mobile' : 'Desktop';
-                domainEl.textContent = `${label} Page Speed Analysis for ${domain}`;
-            }
-
-            // Helper for metric color
             function getMetricIndicator(score) {
                 if (score >= 0.9) return { color: '#0cce6b', emoji: '🟢' };
                 if (score >= 0.5) return { color: '#ffa400', emoji: '🟠' };
                 return { color: '#ff4e42', emoji: '🔴' };
             }
 
-            if (metrics.fcp) {
-                const el = document.getElementById('fcp-value');
-                if (el) {
-                    el.textContent = metrics.fcp;
-                    const ind = getMetricIndicator(metrics.fcp_score || 0);
-                    el.style.color = ind.color;
-                    const icon = document.getElementById('fcp-indicator');
-                    if (icon) icon.textContent = ind.emoji;
+            function populateSide(strategyData, prefix) {
+                const scores = strategyData.scores || {};
+                const metrics = strategyData.metrics || {};
+
+                if (!scores.performance && scores.performance !== 0) return;
+
+                const scoreMap = {
+                    'perf-score': scores.performance,
+                    'access-score': scores.accessibility,
+                    'bp-score': scores.best_practices,
+                    'seo-score': scores.seo
+                };
+
+                for (const [id, val] of Object.entries(scoreMap)) {
+                    const el = document.getElementById(`${prefix}-${id}`);
+                    if (el) {
+                        el.textContent = val !== undefined ? val : '--';
+                        if (val !== undefined) el.className = 'score-ring ' + getScoreClass(val);
+                    }
+                }
+
+                const metricMap = {
+                    'fcp': { val: metrics.fcp, score: metrics.fcp_score },
+                    'lcp': { val: metrics.lcp, score: metrics.lcp_score },
+                    'cls': { val: metrics.cls, score: metrics.cls_score },
+                    'tbt': { val: metrics.tbt, score: metrics.tbt_score }
+                };
+
+                for (const [key, obj] of Object.entries(metricMap)) {
+                    const valEl = document.getElementById(`${prefix}-${key}-value`);
+                    const indEl = document.getElementById(`${prefix}-${key}-indicator`);
+                    if (valEl) {
+                        valEl.textContent = obj.val || '--';
+                        if (obj.val && obj.score !== undefined) {
+                            const ind = getMetricIndicator(obj.score);
+                            valEl.style.color = ind.color;
+                            if (indEl) indEl.textContent = ind.emoji;
+                        }
+                    }
                 }
             }
-            if (metrics.lcp) {
-                const el = document.getElementById('lcp-value');
-                if (el) {
-                    el.textContent = metrics.lcp;
-                    const ind = getMetricIndicator(metrics.lcp_score || 0);
-                    el.style.color = ind.color;
-                    const icon = document.getElementById('lcp-indicator');
-                    if (icon) icon.textContent = ind.emoji;
-                }
-            }
-            if (metrics.cls) {
-                const el = document.getElementById('cls-value');
-                if (el) {
-                    el.textContent = metrics.cls;
-                    const ind = getMetricIndicator(metrics.cls_score || 0);
-                    el.style.color = ind.color;
-                    const icon = document.getElementById('cls-indicator');
-                    if (icon) icon.textContent = ind.emoji;
-                }
-            }
-            if (metrics.tbt) {
-                const el = document.getElementById('tbt-value');
-                if (el) {
-                    el.textContent = metrics.tbt;
-                    const ind = getMetricIndicator(metrics.tbt_score || 0);
-                    el.style.color = ind.color;
-                    const icon = document.getElementById('tbt-indicator');
-                    if (icon) icon.textContent = ind.emoji;
-                }
-            }
-            if (metrics.speed_index) {
-                const el = document.getElementById('si-value');
-                if (el) {
-                    el.textContent = metrics.speed_index;
-                    const ind = getMetricIndicator(metrics.speed_index_score || 0);
-                    el.style.color = ind.color;
-                    const icon = document.getElementById('si-indicator');
-                    if (icon) icon.textContent = ind.emoji;
-                }
-            }
+
+            populateSide(mobileData, 'mobile');
+            populateSide(desktopData, 'desktop');
         }
 
-        // Toggle between Mobile and Desktop PageSpeed data
+        // Toggle between Mobile and Desktop PageSpeed data (Obsolete, kept for backwards compatibility if needed)
         function showSpeedData(strategy) {
-            const ps = currentAuditData?.pagespeed || {};
-            const data = ps[strategy] || {};
-
-            // Update toggle button styles
-            const mobileBtn = document.getElementById('toggle-mobile');
-            const desktopBtn = document.getElementById('toggle-desktop');
-            if (strategy === 'mobile') {
-                mobileBtn.style.background = '#1a73e8';
-                mobileBtn.style.color = 'white';
-                desktopBtn.style.background = 'transparent';
-                desktopBtn.style.color = '#666';
-            } else {
-                desktopBtn.style.background = '#1a73e8';
-                desktopBtn.style.color = 'white';
-                mobileBtn.style.background = 'transparent';
-                mobileBtn.style.color = '#666';
-            }
-
-            // Populate with selected strategy data
-            if (data.scores) {
-                populateSpeedMetricsWithData(data);
-            } else {
-                console.log('No data for strategy:', strategy);
-            }
+            console.log("showSpeedData called, but layout is now side-by-side.");
         }
 
-        // Helper to populate speed metrics from a specific strategy's data
+        // Helper to populate speed metrics from a specific strategy's data (Obsolete)
         function populateSpeedMetricsWithData(data) {
-            const scores = data.scores || {};
-            const metrics = data.metrics || {};
-
-            // Scores
-            const perfEl = document.getElementById('perf-score');
-            if (perfEl) {
-                perfEl.textContent = scores.performance || 0;
-                perfEl.className = 'score-ring ' + (scores.performance >= 90 ? 'good' : scores.performance >= 50 ? 'average' : 'poor');
-            }
-            const accEl = document.getElementById('access-score');
-            if (accEl) {
-                accEl.textContent = scores.accessibility || 0;
-                accEl.className = 'score-ring ' + (scores.accessibility >= 90 ? 'good' : scores.accessibility >= 50 ? 'average' : 'poor');
-            }
-            const bpEl = document.getElementById('bp-score');
-            if (bpEl) {
-                bpEl.textContent = scores.best_practices || 0;
-                bpEl.className = 'score-ring ' + (scores.best_practices >= 90 ? 'good' : scores.best_practices >= 50 ? 'average' : 'poor');
-            }
-            const seoEl = document.getElementById('seo-score');
-            if (seoEl) {
-                seoEl.textContent = scores.seo || 0;
-                seoEl.className = 'score-ring ' + (scores.seo >= 90 ? 'good' : scores.seo >= 50 ? 'average' : 'poor');
-            }
-
-            // Metrics
-            const metricIds = { fcp: 'fcp-value', lcp: 'lcp-value', cls: 'cls-value', tbt: 'tbt-value', speed_index: 'si-value' };
-            Object.entries(metricIds).forEach(([key, id]) => {
-                const el = document.getElementById(id);
-                if (el && metrics[key]) {
-                    el.textContent = metrics[key];
-                    const score = metrics[key + '_score'] || 0;
-                    el.style.color = score >= 0.9 ? '#0cce6b' : score >= 0.5 ? '#ffa400' : '#ff4e42';
-                }
-            });
-
-            // Update domain label
-            const domainEl = document.getElementById('speed-domain');
-            if (domainEl && data.url) {
-                const strategy = data.strategy || 'mobile';
-                const label = strategy === 'mobile' ? 'Mobile' : 'Desktop';
-                domainEl.textContent = `${label} Page Speed Analysis for ${data.url.replace(/https?:\/\//, '').replace(/\/$/, '')}`;
-            }
+            console.log("populateSpeedMetricsWithData called, but layout is now side-by-side.");
         }
 
         // Refresh backlinks data without running full audit

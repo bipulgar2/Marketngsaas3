@@ -1976,9 +1976,9 @@
             kwBody.innerHTML = '';
 
             const sortedKw = [...keywords].sort((a, b) => {
-                const posA = a.position || a.ranked_serp_element?.serp_item?.rank_absolute || 100;
-                const posB = b.position || b.ranked_serp_element?.serp_item?.rank_absolute || 100;
-                return posA - posB; // Ascending (best position first)
+                const trafficA = a.traffic_cost || a.ranked_serp_element?.serp_item?.etv || 0;
+                const trafficB = b.traffic_cost || b.ranked_serp_element?.serp_item?.etv || 0;
+                return trafficB - trafficA; // Descending traffic (most valuable first)
             });
 
             // Ensure diversity: max 2 keywords per URL

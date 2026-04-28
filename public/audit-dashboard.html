@@ -2900,8 +2900,14 @@
                 const data = await res.json();
 
                 if (data.success && data.pagespeed) {
-                    // Update the speed table in-place with the fresh data
-                    updateSpeedDisplay(data.pagespeed);
+                    // Update global data and populate UI
+                    if (currentAuditData) {
+                        currentAuditData.pagespeed = data.pagespeed;
+                        populateSpeedMetrics(currentAuditData);
+                    } else {
+                        populateSpeedMetrics({ pagespeed: data.pagespeed });
+                    }
+                    console.log('PageSpeed updated in-place:', data.pagespeed);
                     btn.innerHTML = '✅ Refreshed';
                     setTimeout(() => { btn.innerHTML = originalText; }, 2000);
                 } else {
@@ -2914,55 +2920,6 @@
             } finally {
                 btn.disabled = false;
             }
-        }
-
-        // Update speed display in-place without page reload
-        function updateSpeedDisplay(pagespeed) {
-            const mobileData = pagespeed.mobile || pagespeed;
-            const desktopData = pagespeed.desktop || pagespeed;
-
-            // Mobile scores
-            const mobileScores = mobileData.scores || {};
-            const mobilePerfEl = document.getElementById('mobile-performance');
-            const mobileA11yEl = document.getElementById('mobile-accessibility');
-            const mobileBpEl = document.getElementById('mobile-best-practices');
-            const mobileSeoEl = document.getElementById('mobile-seo');
-
-            if (mobilePerfEl) mobilePerfEl.textContent = mobileScores.performance || 0;
-            if (mobileA11yEl) mobileA11yEl.textContent = mobileScores.accessibility || 0;
-            if (mobileBpEl) mobileBpEl.textContent = mobileScores.best_practices || 0;
-            if (mobileSeoEl) mobileSeoEl.textContent = mobileScores.seo || 0;
-
-            // Desktop scores
-            const desktopScores = desktopData.scores || {};
-            const desktopPerfEl = document.getElementById('desktop-performance');
-            const desktopA11yEl = document.getElementById('desktop-accessibility');
-            const desktopBpEl = document.getElementById('desktop-best-practices');
-            const desktopSeoEl = document.getElementById('desktop-seo');
-
-            if (desktopPerfEl) desktopPerfEl.textContent = desktopScores.performance || 0;
-            if (desktopA11yEl) desktopA11yEl.textContent = desktopScores.accessibility || 0;
-            if (desktopBpEl) desktopBpEl.textContent = desktopScores.best_practices || 0;
-            if (desktopSeoEl) desktopSeoEl.textContent = desktopScores.seo || 0;
-
-            // Update Core Web Vitals metrics for active tab
-            const activeTab = document.querySelector('.speed-tab-btn.active');
-            const strategy = activeTab ? activeTab.dataset.strategy : 'mobile';
-            const metricsData = strategy === 'mobile' ? mobileData : desktopData;
-            const metrics = metricsData.metrics || {};
-
-            // Update metric displays if elements exist
-            const updateMetric = (id, value) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = value || 'N/A';
-            };
-            updateMetric('metrics-fcp', metrics.fcp || metrics.first_contentful_paint);
-            updateMetric('metrics-lcp', metrics.lcp || metrics.largest_contentful_paint);
-            updateMetric('metrics-tbt', metrics.tbt || metrics.total_blocking_time);
-            updateMetric('metrics-cls', metrics.cls || metrics.cumulative_layout_shift);
-            updateMetric('metrics-si', metrics.speed_index);
-
-            console.log('PageSpeed updated in-place:', pagespeed);
         }
     </script>
 

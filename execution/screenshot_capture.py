@@ -160,10 +160,10 @@ def capture_screenshot_with_fallback(url: str) -> Optional[str]:
         screenshot_b64 = fetch_dataforseo_screenshot(url)
         
         if screenshot_b64:
-            # Crop to 16:9 ratio for proper slide display
-            cropped_b64 = crop_image_to_16_9(screenshot_b64)
-            if cropped_b64:
-                screenshot_b64 = cropped_b64
+            # Skip cropping to 16:9 ratio to keep the full original image
+            # cropped_b64 = crop_image_to_16_9(screenshot_b64)
+            # if cropped_b64:
+            #     screenshot_b64 = cropped_b64
             
             # Add data prefix if not present
             if screenshot_b64.startswith('data:image'):

@@ -3558,11 +3558,20 @@ def analyze_readability(audit_id):
         client = supabase_admin or supabase
         result = client.table('audits').select('*').eq('id', audit_id).execute()
         
+        audit_data = {}
+        is_site_audit = False
+        
         if not result.data:
-            return jsonify({"success": False, "error": "Audit not found"}), 404
-            
-        audit_record = result.data[0]
-        audit_data = audit_record.get('results', {}) or {}
+            # Try site_audits table
+            sa_result = client.table('site_audits').select('*').eq('id', audit_id).execute()
+            if not sa_result.data:
+                return jsonify({"success": False, "error": "Audit not found"}), 404
+            audit_record = sa_result.data[0]
+            audit_data = audit_record.get('audit_data', {}) or {}
+            is_site_audit = True
+        else:
+            audit_record = result.data[0]
+            audit_data = audit_record.get('results', {}) or {}
 
         if audit_data.get('readability_results') and not request.args.get('refresh'):
             return jsonify({"success": True, "results": audit_data.get('readability_results')})
@@ -3638,8 +3647,12 @@ def analyze_readability(audit_id):
         readability_results = mass_analyze_urls(top_candidates)
         
         if readability_results:
-            audit_data['readability_results'] = readability_results
-            client.table('audits').update({'results': audit_data}).eq('id', audit_id).execute()
+            if is_site_audit:
+                audit_data['readability_results'] = readability_results
+                client.table('site_audits').update({'audit_data': audit_data}).eq('id', audit_id).execute()
+            else:
+                audit_data['readability_results'] = readability_results
+                client.table('audits').update({'results': audit_data}).eq('id', audit_id).execute()
             
             return jsonify({"success": True, "results": readability_results})
         else:
@@ -3690,15 +3703,25 @@ def refresh_pagespeed(audit_id):
     try:
         client = supabase_admin or supabase
         
-        # Get domain from audit
         audit_res = client.table('audits').select('results, campaign_id, campaigns(domain)').eq('id', audit_id).execute()
-        if not audit_res.data:
-            return jsonify({'error': 'Audit not found'}), 404
         
-        record = audit_res.data[0]
-        results = record.get('results', {}) or {}
-        campaign = record.get('campaigns', {}) or {}
-        domain = results.get('competitor_domain') or campaign.get('domain', '')
+        is_site_audit = False
+        domain = ""
+        
+        if not audit_res.data:
+            sa_result = client.table('site_audits').select('*').eq('id', audit_id).execute()
+            if not sa_result.data:
+                return jsonify({'error': 'Audit not found'}), 404
+            record = sa_result.data[0]
+            results = record.get('audit_data', {}) or {}
+            domain = record.get('domain', '')
+            is_site_audit = True
+        else:
+            record = audit_res.data[0]
+            results = record.get('results', {}) or {}
+            campaign = record.get('campaigns', {}) or {}
+            domain = results.get('competitor_domain') or campaign.get('domain', '')
+            
         if domain:
             domain = domain.replace('https://', '').replace('http://', '').rstrip('/')
         
@@ -3736,9 +3759,13 @@ def refresh_pagespeed(audit_id):
         if not pagespeed:
             return jsonify({'error': 'PageSpeed fetch failed'}), 500
         
-        # Save to audits.results
-        results['pagespeed'] = pagespeed
-        client.table('audits').update({'results': results}).eq('id', audit_id).execute()
+        # Save to correct table
+        if is_site_audit:
+            results['pagespeed'] = pagespeed
+            client.table('site_audits').update({'audit_data': results}).eq('id', audit_id).execute()
+        else:
+            results['pagespeed'] = pagespeed
+            client.table('audits').update({'results': results}).eq('id', audit_id).execute()
         
         # Save to projects.full_audit_data
         try:

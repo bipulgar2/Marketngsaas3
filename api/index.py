@@ -3582,16 +3582,45 @@ def analyze_readability(audit_id):
         for page in pages:
             url = page.get('url', '')
             traffic = page.get('traffic', 0)
-            if is_homepage(url): continue
+            if not url or is_homepage(url): continue
             if any(item in url.lower() for item in blacklist): continue
             is_blog = any(keyword in url.lower() for keyword in blog_keywords)
             candidates.append({'url': url, 'traffic': traffic, 'is_blog': is_blog})
             
+        # Also extract URLs from top organic keywords since the crawler might have missed blogs in its 20-page limit
+        keywords = audit_data.get('organic_keywords', [])
+        kw_urls = set()
+        for kw in keywords:
+            try:
+                serp_url = kw.get('ranked_serp_element', {}).get('serp_item', {}).get('url')
+                if serp_url and serp_url not in kw_urls:
+                    kw_urls.add(serp_url)
+                    if is_homepage(serp_url) or any(item in serp_url.lower() for item in blacklist): continue
+                    is_blog = any(keyword in serp_url.lower() for keyword in blog_keywords)
+                    # We don't have exact page traffic here easily, so we just use 0, but is_blog will prioritize them
+                    candidates.append({'url': serp_url, 'traffic': 0, 'is_blog': is_blog})
+            except Exception:
+                pass
+                
+        # Deduplicate candidates by URL while keeping highest traffic/is_blog
+        unique_candidates = {}
+        for c in candidates:
+            url = c['url']
+            if url not in unique_candidates:
+                unique_candidates[url] = c
+            else:
+                if c['is_blog'] and not unique_candidates[url]['is_blog']:
+                    unique_candidates[url]['is_blog'] = True
+                if c['traffic'] > unique_candidates[url]['traffic']:
+                    unique_candidates[url]['traffic'] = c['traffic']
+                    
+        candidates = list(unique_candidates.values())
         candidates.sort(key=lambda x: (x['is_blog'], x['traffic']), reverse=True)
         top_candidates = [c['url'] for c in candidates[:5]]
         
         if not top_candidates:
             urls = [p.get('url') for p in pages if p.get('url')]
+            urls.extend(list(kw_urls))
             
             # Simple heuristic sort: prefer paths with more slashes or hyphens which indicate content
             def sort_score(url):

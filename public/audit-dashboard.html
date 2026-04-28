@@ -1834,25 +1834,31 @@
                 await fetch(`/api/audit/${auditId}/readability`);
             } catch (e) { console.warn('Readability analysis skipped:', e); }
 
-            // Step 1.5: Fetch PageSpeed data and populate speed section
+            // Step 1.5: Fetch PageSpeed data only if missing
             try {
-                console.log('Fetching PageSpeed data (this may take ~60-90s)...');
-                const psRes = await fetch(`/api/audit/${auditId}/refresh-speed`, { method: 'POST' });
-                const psData = await psRes.json();
-                if (psData.success && psData.pagespeed) {
-                    console.log('PageSpeed data received, updating display...');
-                    // Update currentAuditData so populateSpeedMetrics works
-                    if (currentAuditData) currentAuditData.pagespeed = psData.pagespeed;
-                    // Re-populate speed section with fresh data
-                    if (typeof updateSpeedDisplay === 'function') {
-                        updateSpeedDisplay(psData.pagespeed);
-                    } else if (typeof populateSpeedMetrics === 'function' && currentAuditData) {
+                const hasPsData = currentAuditData && currentAuditData.pagespeed && 
+                                  (currentAuditData.pagespeed.scores || (currentAuditData.pagespeed.mobile && currentAuditData.pagespeed.mobile.scores));
+                
+                if (!hasPsData) {
+                    console.log('Fetching missing PageSpeed data (this may take ~60-90s)...');
+                    const psRes = await fetch(`/api/audit/${auditId}/refresh-speed`, { method: 'POST' });
+                    const psData = await psRes.json();
+                    if (psData.success && psData.pagespeed) {
+                        console.log('PageSpeed data received, updating display...');
+                        if (currentAuditData) currentAuditData.pagespeed = psData.pagespeed;
+                        if (typeof updateSpeedDisplay === 'function') {
+                            updateSpeedDisplay(psData.pagespeed);
+                        } else if (typeof populateSpeedMetrics === 'function' && currentAuditData) {
+                            populateSpeedMetrics(currentAuditData);
+                        }
+                        await new Promise(r => setTimeout(r, 500));
+                    }
+                } else {
+                    console.log('PageSpeed data already exists, skipping refresh.');
+                    // Ensure it is populated in the UI
+                    if (typeof populateSpeedMetrics === 'function' && currentAuditData) {
                         populateSpeedMetrics(currentAuditData);
                     }
-                    // Wait for DOM to update
-                    await new Promise(r => setTimeout(r, 500));
-                } else {
-                    console.warn('PageSpeed fetch returned no data:', psData);
                 }
             } catch (e) { console.warn('PageSpeed fetch skipped:', e); }
 
@@ -1937,13 +1943,21 @@
                 totalVolume += vol;
                 if (pos <= 3) top3++;
                 if (pos <= 10) top10++;
-                if (pos > 20) needsWork++;
+                if (pos > 20) needsWork++; // Fallback count
 
                 if (pos < 100) {
                     positionSum += pos;
                     positionCount++;
                 }
             });
+
+            // Use true domain metrics for accurate counts if available
+            if (data.domain_metrics && data.domain_metrics.raw_metrics && data.domain_metrics.raw_metrics.organic) {
+                const org = data.domain_metrics.raw_metrics.organic;
+                top3 = (org.pos_1 || 0) + (org.pos_2_3 || 0);
+                top10 = top3 + (org.pos_4_10 || 0);
+                needsWork = (org.pos_11_20 || 0) + (org.pos_21_30 || 0) + (org.pos_31_40 || 0) + (org.pos_41_50 || 0);
+            }
             console.log('DEBUG: Final totalTraffic:', totalTraffic);
             const statTraffic = document.getElementById('stat-traffic');
             if (statTraffic) statTraffic.textContent = Math.round(totalTraffic).toLocaleString();

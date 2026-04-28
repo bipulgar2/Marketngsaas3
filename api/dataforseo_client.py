@@ -423,9 +423,11 @@ def get_audit_status(task_id: str) -> Dict[str, Any]:
         response.raise_for_status()
         data = response.json()
         
-        if data.get('tasks'):
-            for task in data['tasks'][0].get('result', []):
-                if task.get('id') == task_id:
+        tasks = data.get('tasks')
+        if tasks and isinstance(tasks, list) and len(tasks) > 0 and tasks[0]:
+            results = tasks[0].get('result') or []
+            for task in results:
+                if isinstance(task, dict) and task.get('id') == task_id:
                     return {
                         "success": True,
                         "ready": True,
@@ -439,6 +441,8 @@ def get_audit_status(task_id: str) -> Dict[str, Any]:
         }
     except requests.exceptions.RequestException as e:
         return {"success": False, "error": str(e)}
+    except Exception as e:
+        return {"success": False, "error": f"Unexpected error: {str(e)}"}
 
 
 def get_audit_summary(task_id: str) -> Dict[str, Any]:

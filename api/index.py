@@ -2961,6 +2961,11 @@ def save_audit_results():
                         'scores': mobile_result.get('scores', {}),
                         'metrics': mobile_result.get('metrics', {})
                     }
+                
+                # Add delay to prevent Google API rate limits/timeouts
+                import time
+                time.sleep(5)
+
                 # Fetch DESKTOP
                 desktop_result = fetch_pagespeed_scores(f"https://{domain}", strategy="desktop")
                 if desktop_result:

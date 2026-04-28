@@ -3576,8 +3576,8 @@ def analyze_readability(audit_id):
             path = parsed.path.strip('/')
             return path == '' or path in ['index.html', 'index.php', 'home']
             
-        blacklist = ['/collections', '/products', '/cart', '/checkout', '/account', '/search', '/policies/', '/pages/']
-        blog_keywords = ['/blog', '/blogs', '/article', '/post', '/news', '/insight', '/guide', '202']
+        blacklist = ['/collections', '/products', '/cart', '/checkout', '/account', '/search', '/policies/']
+        blog_keywords = ['/blog', '/blogs', '/article', '/post', '/news', '/insight', '/guide', '202', '/journal', '/pages/']
             
         for page in pages:
             url = page.get('url', '')

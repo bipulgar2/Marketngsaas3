@@ -3691,6 +3691,10 @@ def refresh_pagespeed(audit_id):
             pagespeed['scores'] = mobile.get('scores', {})
             pagespeed['metrics'] = mobile.get('metrics', {})
         
+        # Add delay to prevent rate limits
+        import time
+        time.sleep(5)
+
         desktop = fetch_pagespeed_scores(f"https://{domain}", strategy="desktop")
         if desktop and desktop.get('success'):
             pagespeed['desktop'] = {

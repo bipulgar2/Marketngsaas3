@@ -2093,9 +2093,10 @@ def get_audit(audit_id):
                     categorized = categorize_audit_issues(pages, summary.get('summary'))
                     
                     # 4. Create Tasks
-                    # Use admin client for writes if available
-                    client = supabase_admin or supabase
-                    create_tasks_from_audit(categorized, audit['campaign_id'], client)
+                    if audit.get('type') != 'competitor':
+                        # Use admin client for writes if available
+                        client = supabase_admin or supabase
+                        create_tasks_from_audit(categorized, audit['campaign_id'], client)
                     
                     # 5. Update Audit Record
                     existing_results = audit.get('results') or {}

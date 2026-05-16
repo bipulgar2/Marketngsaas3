@@ -2533,8 +2533,12 @@
                 const data = await response.json();
 
                 if (data.audit && data.audit.status === 'completed') {
-                    // It finished! Reload list to show "View Results"
-                    await loadAuditContent();
+                    // It finished! Reload the appropriate list
+                    if (data.audit.type === 'competitor') {
+                        await loadCompetitorContent();
+                    } else {
+                        await loadAuditContent();
+                    }
                 } else {
                     // Still running, maybe show a toast
                     const btn = document.querySelector(`button[onclick="checkAuditStatus('${auditId}')"]`);

@@ -2611,7 +2611,12 @@
                         return;
                     }
 
-                    const compDomain = audits[0].results?.competitor_domain;
+                    const validDomains = audits.map(a => a.results?.competitor_domain).filter(Boolean);
+                    let compDomain = window.cgCompDomain || audits[0].results?.competitor_domain;
+                    if (!validDomains.includes(compDomain)) {
+                        compDomain = audits[0].results?.competitor_domain;
+                        window.cgCompDomain = compDomain;
+                    }
                     if (!compDomain) throw new Error("Competitor domain not found in audit results.");
 
                     // Default to window properties or defaults
@@ -2632,13 +2637,27 @@
                     const compOnly = gapData.competitor_only_keywords || [];
 
                     if (currentSideTab !== 'content-gap') return;
+                    
+                    // Build competitor dropdown options
+                    let compOptionsHtml = '';
+                    for (const audit of audits) {
+                        const d = audit.results?.competitor_domain;
+                        if (d) {
+                            compOptionsHtml += `<option value="${d}" ${d === compDomain ? 'selected' : ''}>${d}</option>`;
+                        }
+                    }
 
                     contentArea.innerHTML = `
                         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col h-full">
                             <div class="p-4 border-b border-gray-800 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
                                 <div>
                                     <h3 class="text-lg font-semibold text-white">Content Gap Analysis</h3>
-                                    <p class="text-sm text-gray-400">Comparing ${gapData.target_domain} vs ${gapData.competitor_domain}</p>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <p class="text-sm text-gray-400">Comparing ${gapData.target_domain} vs</p>
+                                        <select id="cg-comp-select" onchange="window.cgCompDomain = this.value; loadCompetitorContent()" class="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 outline-none focus:border-violet-500">
+                                            ${compOptionsHtml}
+                                        </select>
+                                    </div>
                                 </div>
                                 <div class="flex flex-col md:flex-row gap-3 items-center">
                                     <div class="flex items-center gap-2 bg-gray-800 p-1.5 rounded-lg border border-gray-700">
@@ -2763,7 +2782,12 @@
                         return;
                     }
 
-                    const compDomain = audits[0].results?.competitor_domain;
+                    const validDomains = audits.map(a => a.results?.competitor_domain).filter(Boolean);
+                    let compDomain = window.bgCompDomain || audits[0].results?.competitor_domain;
+                    if (!validDomains.includes(compDomain)) {
+                        compDomain = audits[0].results?.competitor_domain;
+                        window.bgCompDomain = compDomain;
+                    }
                     if (!compDomain) throw new Error("Competitor domain not found.");
 
                     const minBl = window.bgMinBl || 1;
@@ -2780,13 +2804,27 @@
                     const compOnly = gapData.competitor_only_domains || [];
 
                     if (currentSideTab !== 'backlink-gap') return;
+                    
+                    // Build competitor dropdown options
+                    let compOptionsHtml = '';
+                    for (const audit of audits) {
+                        const d = audit.results?.competitor_domain;
+                        if (d) {
+                            compOptionsHtml += `<option value="${d}" ${d === compDomain ? 'selected' : ''}>${d}</option>`;
+                        }
+                    }
 
                     contentArea.innerHTML = `
                         <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col h-full">
                             <div class="p-4 border-b border-gray-800 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
                                 <div>
                                     <h3 class="text-lg font-semibold text-white">Backlink Gap Analysis</h3>
-                                    <p class="text-sm text-gray-400">Comparing ${gapData.target_domain} vs ${gapData.competitor_domain}</p>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <p class="text-sm text-gray-400">Comparing ${gapData.target_domain} vs</p>
+                                        <select id="bg-comp-select" onchange="window.bgCompDomain = this.value; loadCompetitorContent()" class="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 outline-none focus:border-violet-500">
+                                            ${compOptionsHtml}
+                                        </select>
+                                    </div>
                                 </div>
                                 <div class="flex flex-col md:flex-row gap-3 items-center">
                                     <div class="flex items-center gap-2 bg-gray-800 p-1.5 rounded-lg border border-gray-700">
@@ -2894,17 +2932,23 @@
                         return;
                     }
 
-                    // Collect pages from all competitor audits
-                    let allCompPages = [];
+                    // Group pages by competitor domain
+                    const compGroups = {};
                     for (const audit of audits) {
-                        const compDomain = audit.results?.competitor_domain || '';
+                        const compDomain = audit.results?.competitor_domain;
+                        if (!compDomain) continue;
+                        
+                        if (!compGroups[compDomain]) {
+                            compGroups[compDomain] = [];
+                        }
+
                         const pages = audit.results?.pages || [];
                         pages.forEach(p => {
                             const url = p.url || '';
                             const status = p.status_code || 200;
                             // Only include 200-status content pages (skip redirects, errors, assets)
                             if (status === 200 && url && !url.match(/\.(jpg|jpeg|png|gif|svg|css|js|woff|pdf|ico|xml|json)(\?|$)/i)) {
-                                allCompPages.push({
+                                compGroups[compDomain].push({
                                     url,
                                     title: p.meta?.title || p.title || '',
                                     wordCount: p.meta?.content?.plain_text_word_count || p.word_count || 0,
@@ -2916,57 +2960,80 @@
                         });
                     }
 
-                    // Deduplicate by URL
-                    const seen = new Set();
-                    allCompPages = allCompPages.filter(p => {
-                        if (seen.has(p.url)) return false;
-                        seen.add(p.url);
-                        return true;
-                    });
+                    const compDomains = Object.keys(compGroups);
+                    if (compDomains.length === 0) {
+                        contentArea.innerHTML = '<div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center"><i data-lucide="file-text" class="w-10 h-10 text-gray-600 mx-auto mb-3"></i><p class="text-gray-400">No content pages found for the added competitors.</p></div>';
+                        lucide.createIcons();
+                        return;
+                    }
 
-                    // Sort by word count descending (meatiest content first)
-                    allCompPages.sort((a, b) => (b.wordCount || 0) - (a.wordCount || 0));
+                    // Deduplicate and sort for each competitor
+                    for (const domain of compDomains) {
+                        const seen = new Set();
+                        let pages = compGroups[domain].filter(p => {
+                            if (seen.has(p.url)) return false;
+                            seen.add(p.url);
+                            return true;
+                        });
+                        // Sort by word count descending (meatiest content first)
+                        pages.sort((a, b) => (b.wordCount || 0) - (a.wordCount || 0));
+                        // Take top 10 as requested
+                        compGroups[domain] = pages.slice(0, 10);
+                    }
 
                     if (currentSideTab !== 'content-library') return;
 
-                    contentArea.innerHTML = `
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                            <div class="p-4 border-b border-gray-800 flex justify-between items-center">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-white flex items-center gap-2"><i data-lucide="file-text" class="w-5 h-5 text-violet-400"></i>Competitor Content Pages</h3>
-                                    <p class="text-sm text-gray-400">${allCompPages.length} content pages found across ${audits.length} competitor(s)</p>
-                                </div>
-                            </div>
-                            <div class="overflow-y-auto max-h-[600px]">
+                    // Build tabs html
+                    let tabsHtml = '<div class="flex bg-gray-800 p-1 rounded-lg w-fit mb-4 overflow-x-auto">';
+                    compDomains.forEach((domain, idx) => {
+                        tabsHtml += `<button onclick="document.querySelectorAll('.tc-tab-content').forEach(el=>el.classList.add('hidden')); document.getElementById('tc-tab-${idx}').classList.remove('hidden'); document.querySelectorAll('.tc-tab-btn').forEach(b => { b.classList.remove('bg-gray-700', 'text-white'); b.classList.add('text-gray-400'); }); this.classList.remove('text-gray-400'); this.classList.add('bg-gray-700', 'text-white');" class="tc-tab-btn px-4 py-1.5 text-sm font-medium rounded-md whitespace-nowrap outline-none transition-colors ${idx === 0 ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}">${domain}</button>`;
+                    });
+                    tabsHtml += '</div>';
+
+                    // Build content html
+                    let contentHtml = '';
+                    compDomains.forEach((domain, idx) => {
+                        const pages = compGroups[domain];
+                        contentHtml += `
+                            <div id="tc-tab-${idx}" class="tc-tab-content ${idx === 0 ? '' : 'hidden'} overflow-y-auto max-h-[600px]">
                                 <table class="w-full text-left text-sm text-gray-400">
                                     <thead class="text-xs uppercase bg-gray-800/50 text-gray-300 sticky top-0">
                                         <tr>
                                             <th class="px-4 py-3 font-medium">Page</th>
-                                            <th class="px-4 py-3 font-medium">Competitor</th>
                                             <th class="px-4 py-3 font-medium text-right">Words</th>
                                             <th class="px-4 py-3 font-medium text-right">Score</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-800">
-                                        ${allCompPages.length > 0 ? allCompPages.map(p => `
-                                            <tr class="hover:bg-gray-800/50 transition-colors">
-                                                <td class="px-4 py-3">
-                                                    <a href="${p.url}" target="_blank" class="text-white hover:text-violet-400 transition-colors flex items-center gap-1 truncate max-w-[400px]" title="${(p.title || p.url).replace(/"/g, '&quot;')}">
-                                                        ${p.title || new URL(p.url).pathname}
-                                                        <i data-lucide="external-link" class="w-3 h-3 opacity-40 flex-shrink-0"></i>
-                                                    </a>
-                                                    <div class="text-[10px] text-gray-500 truncate max-w-[400px]">${p.url}</div>
+                                        ${pages.length > 0 ? pages.map(p => `
+                                            <tr class="hover:bg-gray-800/50 transition-colors group">
+                                                <td class="px-4 py-4">
+                                                    <div class="font-medium text-white mb-1 leading-tight group-hover:text-violet-400 transition-colors">${p.title || p.h1 || 'Untitled Page'}</div>
+                                                    <a href="${p.url}" target="_blank" class="text-xs text-gray-500 hover:text-violet-400 truncate max-w-xl flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i>${p.url}</a>
                                                 </td>
-                                                <td class="px-4 py-3 text-xs text-gray-500">${p.domain}</td>
-                                                <td class="px-4 py-3 text-right font-mono ${p.wordCount > 1000 ? 'text-emerald-400' : p.wordCount > 300 ? 'text-white' : 'text-amber-400'}">${(p.wordCount || 0).toLocaleString()}</td>
-                                                <td class="px-4 py-3 text-right font-mono ${p.score >= 80 ? 'text-emerald-400' : p.score >= 50 ? 'text-white' : 'text-red-400'}">${p.score || '—'}</td>
+                                                <td class="px-4 py-4 text-right font-mono text-emerald-400">${(p.wordCount || 0).toLocaleString()}</td>
+                                                <td class="px-4 py-4 text-right font-mono ${p.score >= 90 ? 'text-emerald-400' : p.score >= 70 ? 'text-amber-400' : 'text-red-400'}">${(p.score || 0).toFixed(2)}</td>
                                             </tr>
-                                        `).join('') : '<tr><td colspan="4" class="px-4 py-8 text-center">No content pages found in audits.</td></tr>'}
+                                        `).join('') : '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">No content pages found.</td></tr>'}
                                     </tbody>
                                 </table>
                             </div>
+                        `;
+                    });
+
+                    contentArea.innerHTML = `
+                        <div class="flex flex-col h-full">
+                            <div class="mb-4">
+                                <h3 class="text-lg font-semibold text-white flex items-center gap-2"><i data-lucide="file-text" class="w-5 h-5 text-violet-400"></i>Competitor Content Pages</h3>
+                                <p class="text-sm text-gray-400">Top content pages broken down by competitor.</p>
+                            </div>
+                            ${tabsHtml}
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex-1">
+                                ${contentHtml}
+                            </div>
                         </div>
                     `;
+
                 } catch (error) {
                     contentArea.innerHTML = `<div class="text-red-400 p-8 text-center">Error: ${error.message}</div>`;
                 }
@@ -3363,27 +3430,24 @@
             // Store competitor country for gap analysis calls
             window.lastCompetitorCountry = (document.getElementById('competitorCountryInput')?.value) || (currentClient?.settings?.location) || 'US';
 
-            // Run audit for each domain sequentially
-            for (let d of domains) {
-                // Strip http/https/www
+            // Run audit for each domain in parallel
+            const fetchPromises = domains.map(d => {
                 let cleanDomain = d.replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
-                
-                // Fetch directly to avoid UI prompts in runAudit
-                try {
-                    await fetch('/api/audits', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            campaign_id: currentClient.id,
-                            max_pages: maxPages,
-                            type: 'competitor',
-                            competitor_domain: cleanDomain
-                        })
-                    });
-                } catch(e) {
+                return fetch('/api/audits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaign_id: currentClient.id,
+                        max_pages: maxPages,
+                        type: 'competitor',
+                        competitor_domain: cleanDomain
+                    })
+                }).catch(e => {
                     console.error("Error adding competitor:", cleanDomain, e);
-                }
-            }
+                });
+            });
+
+            await Promise.all(fetchPromises);
 
             document.getElementById('addCompetitorModal').classList.add('hidden');
             if (btn) { btn.innerHTML = originalText; btn.disabled = false; }

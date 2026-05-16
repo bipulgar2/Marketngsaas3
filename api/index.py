@@ -2077,13 +2077,15 @@ def get_audit(audit_id):
         # Lazy status check for running audits
         if audit['status'] == 'crawling' and audit.get('dataforseo_task_id'):
             task_id = audit['dataforseo_task_id']
-            status = get_audit_status(task_id)
             
-            if status.get('ready'):
+            # Use get_audit_summary directly because tasks_ready expires tasks!
+            summary_check = get_audit_summary(task_id)
+            is_ready = summary_check.get('success') and summary_check.get('summary', {}).get('crawl_progress') == 'finished'
+            
+            if is_ready:
                 # Audit finished! Fetch results and update
                 try:
-                    # 1. Get Summary
-                    summary = get_audit_summary(task_id)
+                    summary = summary_check
                     
                     # 2. Get Page Issues
                     pages_result = get_page_issues(task_id, limit=100)

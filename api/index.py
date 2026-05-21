@@ -674,6 +674,99 @@ def list_invitations():
         logger.error(f"List invitations error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/team/invitations/<token>', methods=['DELETE'])
+@login_required
+@role_required('admin')
+def delete_invitation(token):
+    """Delete a pending invitation."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    client = supabase_admin or supabase
+    
+    try:
+        # Verify the invitation belongs to the user's organization
+        existing = client.table('invitations').select('*').eq('token', token).eq('organization_id', org_id).execute()
+        if not existing.data:
+            return jsonify({'error': 'Invitation not found or unauthorized'}), 404
+            
+        res = client.table('invitations').delete().eq('token', token).execute()
+        return jsonify({'success': True, 'message': 'Invitation deleted'})
+    except Exception as e:
+        logger.error(f"Delete invitation error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/team/<member_id>', methods=['PUT'])
+@login_required
+@role_required('admin')
+def update_team_member(member_id):
+    """Update a team member's role or assigned campaigns."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    
+    # Cannot change your own role/org (prevents self-lockout)
+    if str(user.get('id')) == str(member_id):
+        return jsonify({'error': 'Cannot modify your own account via this endpoint'}), 400
+        
+    data = request.json
+    role = data.get('role')
+    assigned_campaigns = data.get('assigned_campaigns')
+    
+    update_data = {}
+    if role:
+        if role not in ROLES:
+            return jsonify({'error': f'Invalid role: {role}'}), 400
+        update_data['role'] = role
+    if assigned_campaigns is not None:
+        update_data['assigned_campaigns'] = assigned_campaigns
+        
+    if not update_data:
+        return jsonify({'error': 'No fields to update'}), 400
+        
+    client = supabase_admin or supabase
+    try:
+        # Verify the member belongs to the same org
+        member = client.table('profiles').select('*').eq('id', member_id).eq('organization_id', org_id).execute()
+        if not member.data:
+            return jsonify({'error': 'Member not found or unauthorized'}), 404
+            
+        res = client.table('profiles').update(update_data).eq('id', member_id).execute()
+        return jsonify({'success': True, 'member': res.data[0] if res.data else None})
+    except Exception as e:
+        logger.error(f"Update team member error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/team/<member_id>', methods=['DELETE'])
+@login_required
+@role_required('admin')
+def remove_team_member(member_id):
+    """Remove a team member from the organization."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    
+    # Cannot delete yourself
+    if str(user.get('id')) == str(member_id):
+        return jsonify({'error': 'Cannot remove your own account'}), 400
+        
+    client = supabase_admin or supabase
+    try:
+        # Verify the member belongs to the same org
+        member = client.table('profiles').select('*').eq('id', member_id).eq('organization_id', org_id).execute()
+        if not member.data:
+            return jsonify({'error': 'Member not found or unauthorized'}), 404
+            
+        # To "remove" a member, we disconnect them from the org
+        # Depending on auth setup, might just clear their org_id and role
+        res = client.table('profiles').update({
+            'organization_id': None,
+            'role': 'viewer',
+            'assigned_campaigns': []
+        }).eq('id', member_id).execute()
+        
+        return jsonify({'success': True, 'message': 'Member removed successfully'})
+    except Exception as e:
+        logger.error(f"Remove team member error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 # =============================================================================
 # CAMPAIGN ROUTES
@@ -779,6 +872,21 @@ def update_campaign(campaign_id):
         response = client.table('campaigns').update(update_data).eq('id', campaign_id).execute()
         return jsonify({'campaign': response.data[0]})
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/campaigns/<campaign_id>', methods=['DELETE'])
+@login_required
+@permission_required('view_all_campaigns')
+def delete_campaign(campaign_id):
+    """Delete a campaign."""
+    client = supabase_admin or supabase
+    try:
+        # Note: Depending on Supabase cascade rules, deleting the campaign might automatically
+        # delete related audits, tasks, and data. If not set, might need explicit cleanup.
+        response = client.table('campaigns').delete().eq('id', campaign_id).execute()
+        return jsonify({'success': True, 'message': 'Campaign deleted successfully'})
+    except Exception as e:
+        logger.error(f"Delete campaign error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================

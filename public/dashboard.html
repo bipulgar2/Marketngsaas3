@@ -694,11 +694,23 @@
                                             <tr class="hover:bg-gray-800/30 cursor-pointer" onclick="selectClient('${c.id}', true); switchTopTab('tech-audit');">
                                                 <td class="px-4 py-3 font-medium text-white">${c.name}</td>
                                                 <td class="px-4 py-3 text-gray-400">${c.domain}</td>
-                                                <td class="px-4 py-3">
-                                                    <span class="px-2 py-1 text-xs rounded ${c.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-700 text-gray-400'}">${c.status}</span>
+                                                <td class="px-4 py-3" onclick="event.stopPropagation()">
+                                                    ${currentUser.role === 'admin' ? `
+                                                        <select onchange="updateClientStatus('${c.id}', this.value)" class="bg-gray-800 border-none outline-none text-xs rounded px-2 py-1 focus:ring-1 focus:ring-violet-500 ${c.status === 'active' ? 'text-emerald-400' : 'text-gray-400'}">
+                                                            <option value="active" ${c.status === 'active' ? 'selected' : ''}>Active</option>
+                                                            <option value="inactive" ${c.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                                                        </select>
+                                                    ` : `
+                                                        <span class="px-2 py-1 text-xs rounded ${c.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-700 text-gray-400'}">${c.status}</span>
+                                                    `}
                                                 </td>
                                                 <td class="px-4 py-3 text-gray-500">${new Date(c.created_at).toLocaleDateString()}</td>
-                                                <td class="px-4 py-3 text-right">
+                                                <td class="px-4 py-3 text-right flex justify-end items-center gap-3">
+                                                    ${currentUser.role === 'admin' ? `
+                                                    <button onclick="event.stopPropagation(); deleteClient('${c.id}')" class="text-xs text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-900/30 transition-colors" title="Delete Client">
+                                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                                    </button>
+                                                    ` : ''}
                                                     <button class="text-gray-400 hover:text-white">
                                                         <i data-lucide="chevron-right" class="w-4 h-4"></i>
                                                     </button>
@@ -726,8 +738,61 @@
                         <p>Settings page coming soon</p>
                     </div>`;
             }
-
             lucide.createIcons();
+        }
+
+        async function updateClientStatus(clientId, newStatus) {
+            try {
+                const response = await fetch(`/api/campaigns/${clientId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                
+                // Update local data
+                const client = clients.find(c => c.id === clientId);
+                if (client) client.status = newStatus;
+                
+                // Reload the view to update UI colors
+                switchSideTab('clients');
+            } catch (error) {
+                alert('Failed to update status: ' + error.message);
+                switchSideTab('clients'); // Revert dropdown on error
+            }
+        }
+
+        async function deleteClient(clientId) {
+            if (!confirm('Are you sure you want to completely delete this client/campaign? This will delete all associated data, audits, and tasks.')) return;
+            
+            try {
+                const response = await fetch(`/api/campaigns/${clientId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update local list
+                    clients = clients.filter(c => c.id !== clientId);
+                    if (currentClient && currentClient.id === clientId) {
+                        currentClient = null;
+                        document.getElementById('clientSelector').value = '';
+                        switchTopTab('dashboard'); // Redirect away from deleted client
+                    }
+                    
+                    // Re-render
+                    switchSideTab('clients');
+                    // Refresh the selector
+                    const selector = document.getElementById('clientSelector');
+                    selector.innerHTML = '<option value="">Select Client...</option>' + 
+                        clients.map(c => `<option value="${c.id}">${c.name} (${c.domain})</option>`).join('');
+                } else {
+                    alert('Failed to delete client: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error deleting client: ' + error.message);
+            }
         }
 
         async function loadTabContent() {
@@ -2182,6 +2247,7 @@
                                         <th class="px-4 py-3 text-left font-medium">Role</th>
                                         <th class="px-4 py-3 text-left font-medium">Projects</th>
                                         <th class="px-4 py-3 text-left font-medium">Joined</th>
+                                        <th class="px-4 py-3 text-right font-medium">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-800 text-sm">
@@ -2201,6 +2267,16 @@
                                             </td>
                                             <td class="px-4 py-3 text-gray-500">${(m.assigned_campaigns || []).length === 0 ? '<span class="text-gray-600">All</span>' : (m.assigned_campaigns || []).length + ' projects'}</td>
                                             <td class="px-4 py-3 text-gray-500">${m.created_at ? new Date(m.created_at).toLocaleDateString() : '—'}</td>
+                                            <td class="px-4 py-3 text-right">
+                                                <button onclick="showEditMemberModal('${m.id}', '${m.role}', '${(m.assigned_campaigns || []).join(',')}')" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors mr-2">
+                                                    Edit
+                                                </button>
+                                                ${userData && userData.id !== m.id ? `
+                                                <button onclick="deleteTeamMember('${m.id}')" class="text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 px-3 py-1.5 rounded-lg transition-colors">
+                                                    Remove
+                                                </button>
+                                                ` : ''}
+                                            </td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
@@ -2219,7 +2295,7 @@
                                         <th class="px-4 py-3 text-left font-medium">Email</th>
                                         <th class="px-4 py-3 text-left font-medium">Role</th>
                                         <th class="px-4 py-3 text-left font-medium">Invited</th>
-                                        <th class="px-4 py-3 text-left font-medium">Invite Link</th>
+                                        <th class="px-4 py-3 text-right font-medium">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-800 text-sm">
@@ -2228,9 +2304,12 @@
                                             <td class="px-4 py-3 text-white">${inv.email}</td>
                                             <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded-full font-medium ${roleColors[inv.role] || 'bg-gray-700 text-gray-400'}">${roleNames[inv.role] || inv.role}</span></td>
                                             <td class="px-4 py-3 text-gray-500">${new Date(inv.created_at).toLocaleDateString()}</td>
-                                            <td class="px-4 py-3">
+                                            <td class="px-4 py-3 flex justify-end gap-2">
                                                 <button onclick="copyInviteLink('${inv.token}', '${inv.email}', '${inv.role}')" class="text-xs bg-gray-800 hover:bg-gray-700 text-violet-400 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
                                                     <i data-lucide="copy" class="w-3 h-3"></i> Copy Link
+                                                </button>
+                                                <button onclick="deleteInvitation('${inv.token}')" class="text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                                                    <i data-lucide="trash-2" class="w-3 h-3"></i> Delete
                                                 </button>
                                             </td>
                                         </tr>
@@ -2254,6 +2333,128 @@
             }).catch(() => {
                 prompt('Copy this invite link:', link);
             });
+            });
+        }
+
+        async function deleteTeamMember(memberId) {
+            if (!confirm('Are you sure you want to remove this member from the organization?')) return;
+            try {
+                const res = await fetch(`/api/team/${memberId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    loadTeamView(); // Reload the view
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Failed to remove member: ' + err.message);
+            }
+        }
+
+        async function deleteInvitation(token) {
+            if (!confirm('Are you sure you want to delete this pending invitation?')) return;
+            try {
+                const res = await fetch(`/api/team/invitations/${token}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    loadTeamView(); // Reload the view
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Failed to delete invitation: ' + err.message);
+            }
+        }
+
+        function showEditMemberModal(id, currentRole, currentCampaignsStr) {
+            const currentCampaigns = currentCampaignsStr ? currentCampaignsStr.split(',') : [];
+            let checklistHtml = '';
+            
+            // Build the campaign checklist
+            if (clients && clients.length > 0) {
+                checklistHtml = `
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Assigned Projects (Leave empty for All)</label>
+                        <div class="max-h-40 overflow-y-auto bg-gray-900 border border-gray-700 rounded-lg p-3 space-y-2">
+                `;
+                clients.forEach(c => {
+                    const isChecked = currentCampaigns.includes(c.id) ? 'checked' : '';
+                    checklistHtml += `
+                        <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-800 p-1.5 rounded">
+                            <input type="checkbox" value="${c.id}" class="edit-campaign-checkbox rounded border-gray-600 bg-gray-700 text-violet-500 focus:ring-violet-500" ${isChecked}>
+                            <span class="text-sm text-gray-300 truncate">${c.domain || c.name || 'Unnamed'}</span>
+                        </label>
+                    `;
+                });
+                checklistHtml += `</div></div>`;
+            } else {
+                checklistHtml = `<div class="mt-4 text-sm text-gray-500">No projects available.</div>`;
+            }
+
+            const modalHtml = `
+                <div id="editMemberModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+                        <h3 class="text-lg font-semibold text-white mb-4">Edit Team Member</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-1">Role</label>
+                                <select id="editMemberRole" class="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 outline-none focus:border-violet-500">
+                                    <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>Admin (Full Access)</option>
+                                    <option value="campaign_manager" ${currentRole === 'campaign_manager' ? 'selected' : ''}>Campaign Manager</option>
+                                    <option value="content_strategist" ${currentRole === 'content_strategist' ? 'selected' : ''}>Content Strategist</option>
+                                    <option value="content_creator" ${currentRole === 'content_creator' ? 'selected' : ''}>Content Creator</option>
+                                    <option value="optimization_specialist" ${currentRole === 'optimization_specialist' ? 'selected' : ''}>Optimization Specialist</option>
+                                    <option value="link_builder" ${currentRole === 'link_builder' ? 'selected' : ''}>Link Builder</option>
+                                    <option value="reporting_manager" ${currentRole === 'reporting_manager' ? 'selected' : ''}>Reporting Manager</option>
+                                    <option value="viewer" ${currentRole === 'viewer' ? 'selected' : ''}>Viewer (Read Only)</option>
+                                </select>
+                            </div>
+                            
+                            ${checklistHtml}
+                            
+                            <div class="flex justify-end gap-3 mt-6">
+                                <button onclick="document.getElementById('editMemberModal').remove()" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancel</button>
+                                <button onclick="submitEditMember('${id}')" id="editMemberSubmitBtn" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">Save Changes</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        async function submitEditMember(memberId) {
+            const btn = document.getElementById('editMemberSubmitBtn');
+            const role = document.getElementById('editMemberRole').value;
+            const checkboxes = document.querySelectorAll('.edit-campaign-checkbox:checked');
+            const assigned_campaigns = Array.from(checkboxes).map(cb => cb.value);
+            
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Saving...';
+            btn.disabled = true;
+            lucide.createIcons();
+            
+            try {
+                const response = await fetch('/api/team/' + memberId, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role, assigned_campaigns })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('editMemberModal').remove();
+                    loadTeamView(); // Reload view
+                } else {
+                    alert(data.error || 'Failed to update member');
+                    btn.textContent = 'Save Changes';
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+                btn.textContent = 'Save Changes';
+                btn.disabled = false;
+            }
         }
 
         function showInviteModal() {

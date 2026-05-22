@@ -531,6 +531,20 @@
             style="display: flex; align-items: center; gap: 6px;">
             📊 Generate Slides
         </button>
+        <script>
+            // Hide action buttons for viewers (read-only access)
+            if (new URLSearchParams(window.location.search).get('role') === 'viewer') {
+                const genBtn = document.getElementById('generate-slides-btn');
+                if (genBtn) genBtn.style.display = 'none';
+                // Hide template selector too
+                const tmplSelect = document.getElementById('template-type-select');
+                if (tmplSelect) tmplSelect.style.display = 'none';
+                // Hide New Audit button
+                document.querySelectorAll('.btn-primary').forEach(btn => {
+                    if (btn.textContent.trim().includes('New Audit')) btn.style.display = 'none';
+                });
+            }
+        </script>
     </div>
 
     <!-- VIEW 0: All Audits (NOT included in screenshots) -->

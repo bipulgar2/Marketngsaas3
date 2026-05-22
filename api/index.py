@@ -262,6 +262,117 @@ def audit_dashboard():
     """Serve the advanced deep audit dashboard."""
     return render_template('audit-dashboard.html')
 
+@app.route('/client-portal')
+@login_required
+def client_portal():
+    """Serve the read-only client-facing dashboard."""
+    return render_template('client-portal.html')
+
+
+@app.route('/api/client-portal/summary', methods=['GET'])
+@login_required
+def get_client_portal_summary():
+    """Aggregated read-only summary for client portal.
+    
+    Returns: campaign info, recent wins, keyword ranking snapshot,
+    traffic trend, completed tasks, and upcoming tasks.
+    Accessible by viewers (clients) and admins.
+    """
+    campaign_id = request.args.get('campaign_id')
+    if not campaign_id:
+        return jsonify({'error': 'campaign_id required'}), 400
+    
+    user = session.get('user', {})
+    user_role = user.get('role', 'viewer')
+    
+    # Scope check for viewers
+    if user_role == 'viewer':
+        assigned = user.get('assigned_campaigns', [])
+        if assigned and campaign_id not in assigned:
+            return jsonify({'error': 'Not authorized'}), 403
+    
+    db = supabase_admin or supabase
+    
+    try:
+        # 1. Campaign info
+        camp_res = db.table('campaigns').select('name, domain, settings, created_at').eq('id', campaign_id).single().execute()
+        camp = camp_res.data
+        if not camp:
+            return jsonify({'error': 'Campaign not found'}), 404
+        
+        # 2. Tracked keywords + ranking snapshot
+        tracked_kws = (camp.get('settings') or {}).get('tracked_keywords', [])
+        kw_snapshot = []
+        for kw in tracked_kws[:20]:
+            kw_text = kw if isinstance(kw, str) else kw.get('keyword', '')
+            rank = kw.get('rank', None) if isinstance(kw, dict) else None
+            prev_rank = kw.get('prev_rank', None) if isinstance(kw, dict) else None
+            kw_snapshot.append({
+                'keyword': kw_text,
+                'rank': rank,
+                'prev_rank': prev_rank,
+                'change': (prev_rank - rank) if (rank and prev_rank) else None
+            })
+        
+        # 3. Tasks summary
+        tasks_res = db.table('tasks').select('id, title, status, priority, due_date').eq('campaign_id', campaign_id).order('created_at', desc=True).limit(50).execute()
+        all_tasks = tasks_res.data or []
+        completed_tasks = [t for t in all_tasks if t.get('status') == 'done']
+        upcoming_tasks = [t for t in all_tasks if t.get('status') in ('todo', 'in_progress')]
+        
+        # 4. Recent wins (link placements)
+        placements_res = db.table('link_placements').select('id, target_url, anchor_text, dr, status, created_at').eq('campaign_id', campaign_id).eq('status', 'live').order('created_at', desc=True).limit(10).execute()
+        recent_placements = placements_res.data or []
+        
+        # 5. Domain metrics from latest audit
+        client_data = _collect_domain_data(db, camp['domain'], campaign_id=campaign_id)
+        
+        # 6. Scorecard
+        scorecard = {}
+        try:
+            both = [{**client_data, 'domain': camp['domain'], 'is_client': True}]
+            # Add a fake baseline for normalization
+            both.append({**{k: max(v, 1) if isinstance(v, (int, float)) else v for k, v in client_data.items()}, 'domain': 'baseline', 'is_client': False})
+            cards = _compute_scorecards(both)
+            scorecard = next((s for s in cards if s.get('is_client')), {})
+        except:
+            pass
+        
+        return jsonify({
+            'success': True,
+            'campaign': {
+                'name': camp.get('name', ''),
+                'domain': camp.get('domain', ''),
+                'created_at': camp.get('created_at', '')
+            },
+            'metrics': {
+                'total_traffic': client_data.get('total_traffic', 0),
+                'total_keywords': client_data.get('total_keywords', 0),
+                'domain_rank': client_data.get('domain_rank', 0),
+                'referring_domains': client_data.get('referring_domains', 0),
+                'backlinks_total': client_data.get('backlinks_total', 0)
+            },
+            'scorecard': scorecard,
+            'keywords': kw_snapshot,
+            'tasks': {
+                'completed': len(completed_tasks),
+                'upcoming': len(upcoming_tasks),
+                'total': len(all_tasks),
+                'recent_completed': [{'title': t['title'], 'priority': t.get('priority')} for t in completed_tasks[:5]],
+                'upcoming_list': [{'title': t['title'], 'priority': t.get('priority'), 'due_date': t.get('due_date')} for t in upcoming_tasks[:5]]
+            },
+            'placements': [{
+                'url': p.get('target_url', ''),
+                'anchor': p.get('anchor_text', ''),
+                'dr': p.get('dr', 0),
+                'date': p.get('created_at', '')
+            } for p in recent_placements]
+        })
+        
+    except Exception as e:
+        logger.error(f"Client portal summary error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # =============================================================================
 # AUTH ROUTES
 # =============================================================================
@@ -533,7 +644,7 @@ def get_current_user():
         'optimization_specialist': ['dashboard', 'audit-2', 'tech-audit', 'tasks'],
         'link_builder': ['dashboard', 'links', 'tasks'],
         'reporting_manager': ['dashboard', 'reports'],
-        'viewer': ['reports']
+        'viewer': ['dashboard', 'tasks', 'reports']
     }
     
     return jsonify({
@@ -793,14 +904,16 @@ def list_campaigns():
         response = query.order('created_at', desc=True).execute()
         campaigns = response.data or []
         
-        # For non-admin roles, filter to only assigned campaigns
+        # For non-admin/non-campaign_manager roles, filter to only assigned campaigns
         user_role = user.get('role', 'viewer')
         assigned = user.get('assigned_campaigns', [])
         
-        if user_role != 'admin' and assigned:
+        if user_role in ['admin', 'campaign_manager']:
+            pass  # Full visibility — see all org campaigns
+        elif assigned:
             campaigns = [c for c in campaigns if c['id'] in assigned]
-        elif user_role != 'admin' and not assigned:
-            # Non-admin with no assignments sees nothing
+        else:
+            # Non-privileged role with no assignments sees nothing
             campaigns = []
         
         return jsonify({'campaigns': campaigns})
@@ -1632,6 +1745,65 @@ def process_link_checkout():
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
+# LINK PLACEMENTS
+# =============================================================================
+
+@app.route('/api/link-placements', methods=['GET'])
+@login_required
+def get_link_placements():
+    """Fetch all link orders and their items for a campaign."""
+    campaign_id = request.args.get('campaign_id')
+    if not campaign_id:
+        return jsonify({'error': 'campaign_id required'}), 400
+
+    client = supabase_admin or supabase
+    try:
+        # Fetch orders for this campaign
+        orders_res = client.table('link_orders').select('*').eq('campaign_id', campaign_id).order('created_at', desc=True).execute()
+        orders = orders_res.data or []
+
+        # Fetch all order items with link info
+        result = []
+        for order in orders:
+            items_res = client.table('link_order_items').select('*, link_inventory(domain, da, niche)').eq('order_id', order['id']).execute()
+            items = items_res.data or []
+            result.append({
+                'order_id': order['id'],
+                'total_amount': float(order.get('total_amount', 0)),
+                'status': order.get('status', 'pending'),
+                'created_at': order.get('created_at', ''),
+                'items': [{
+                    'id': it['id'],
+                    'domain': (it.get('link_inventory') or {}).get('domain', 'Unknown'),
+                    'da': (it.get('link_inventory') or {}).get('da', 0),
+                    'niche': (it.get('link_inventory') or {}).get('niche', ''),
+                    'target_url': it.get('target_url', ''),
+                    'anchor_text': it.get('anchor_text', ''),
+                    'price': float(it.get('price', 0))
+                } for it in items]
+            })
+
+        # Summary stats
+        total_links = sum(len(o['items']) for o in result)
+        total_spent = sum(o['total_amount'] for o in result)
+        active_orders = sum(1 for o in result if o['status'] in ('processing', 'in_progress'))
+        completed = sum(1 for o in result if o['status'] == 'completed')
+
+        return jsonify({
+            'success': True,
+            'orders': result,
+            'stats': {
+                'total_links': total_links,
+                'total_spent': total_spent,
+                'active_orders': active_orders,
+                'completed_orders': completed,
+                'total_orders': len(result)
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
 # SCHEMA MARKUP RECOMMENDATIONS
 # =============================================================================
 
@@ -1906,7 +2078,20 @@ def list_tasks():
             query = query.eq('status', status)
         
         response = query.order('created_at', desc=True).execute()
-        return jsonify({'tasks': response.data})
+        tasks = response.data or []
+
+        # For non-admin/non-campaign_manager roles, further filter by assigned campaigns
+        user_role = user.get('role', 'viewer')
+        assigned = user.get('assigned_campaigns', [])
+        
+        if user_role in ['admin', 'campaign_manager']:
+            pass  # Full visibility — see all org tasks
+        elif assigned:
+            # Keep tasks that are either in an assigned campaign OR directly assigned to user
+            tasks = [t for t in tasks if str(t.get('campaign_id')) in assigned or t.get('assigned_to') == user['id']]
+        # else: no assigned_campaigns — the DB query already filtered by assigned_to, so no extra filter needed
+
+        return jsonify({'tasks': tasks})
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1959,6 +2144,9 @@ def update_task(task_id):
         
         # Check permission
         user_role = user.get('role', '').lower()
+        # Viewers are strictly read-only — block all mutations
+        if user_role == 'viewer':
+            return jsonify({'error': 'Viewers have read-only access'}), 403
         if user_role not in ['admin', 'administrator', 'campaign_manager']:
             if task.data.get('assigned_to') != user['id']:
                 return jsonify({'error': 'Not authorized'}), 403
@@ -2084,8 +2272,8 @@ def create_audit():
     client = supabase_admin or supabase
     
     try:
-        # Get campaign domain
-        campaign = client.table('campaigns').select('domain').eq('id', data.get('campaign_id')).single().execute()
+        # Get campaign domain + settings (need settings for location_code resolution)
+        campaign = client.table('campaigns').select('domain, settings').eq('id', data.get('campaign_id')).single().execute()
         if not campaign.data:
             return jsonify({'error': 'Campaign not found'}), 404
             
@@ -2125,10 +2313,13 @@ def create_audit():
         # ---- DUAL WRITE: Also create a projects record for audit-dashboard.html ----
         try:
             # Fetch keywords + backlinks in parallel with crawl (same as audit-app)
-            from api.dataforseo_client import fetch_ranked_keywords, fetch_backlinks_summary, get_referring_domains, location_code_for
+            from api.dataforseo_client import fetch_ranked_keywords, fetch_backlinks_summary, get_referring_domains, location_code_for, get_domain_rank_overview
             
-            # Resolve campaign country to DataForSEO location_code
+            # Resolve country to DataForSEO location_code
+            # For competitor audits: use competitor_country if provided, else fall back to campaign location
             saved_location = (campaign.data.get('settings') or {}).get('location', 'US')
+            if audit_type == 'competitor' and data.get('competitor_country'):
+                saved_location = data.get('competitor_country')
             audit_location_code = location_code_for(saved_location)
             
             keywords_data = fetch_ranked_keywords(target_domain, location_code=audit_location_code)
@@ -2139,6 +2330,9 @@ def create_audit():
             
             backlinks_summary = fetch_backlinks_summary(target_domain)
             referring_domains = get_referring_domains(target_domain)
+            
+            # Fetch domain rank overview (position distribution for slides)
+            domain_rank = get_domain_rank_overview(target_domain)
             
             import time as time_mod
             full_audit_data = {
@@ -2152,6 +2346,7 @@ def create_audit():
                 'keywords_at_limit': keywords_at_limit,
                 'backlinks_summary': backlinks_summary,
                 'referring_domains': referring_domains,
+                'domain_rank': domain_rank,
                 'max_pages': max_pages
             }
             
@@ -2447,6 +2642,8 @@ def get_client_stats():
     db = supabase_admin or supabase
     keywords_raw, total_kw, total_traffic = [], 0, 0
     proj = {}
+    resolved_domain = None  # Track the domain for live fallback
+    resolved_location = 'US'  # Track location for correct API calls
 
     try:
         if audit_id:
@@ -2455,9 +2652,9 @@ def get_client_stats():
             if aud_res.data and aud_res.data[0].get('results'):
                 comp_domain = aud_res.data[0]['results'].get('competitor_domain')
                 if comp_domain:
-                    # Strip http/www
-                    c_dom = comp_domain.replace('https://', '').replace('http://', '').split('/')[0].strip('www.')
-                    sa_res = db.table('site_audits').select('full_audit_data').ilike('domain', f"%{c_dom}%").limit(1).execute()
+                    resolved_domain = comp_domain.replace('https://', '').replace('http://', '').split('/')[0].strip('www.')
+                    # Try site_audits table
+                    sa_res = db.table('site_audits').select('full_audit_data').ilike('domain', f"%{resolved_domain}%").limit(1).execute()
                     if sa_res.data:
                         proj = sa_res.data[0].get('full_audit_data') or {}
             
@@ -2466,16 +2663,20 @@ def get_client_stats():
                 proj_res = db.table('projects').select('full_audit_data').eq('audit_id', audit_id).limit(1).execute()
                 if proj_res.data:
                     proj = proj_res.data[0].get('full_audit_data') or {}
+                    if not resolved_domain:
+                        resolved_domain = proj.get('domain', '')
         else:
             # Client row
             if not campaign_id:
                 return jsonify({'error': 'campaign_id or audit_id required'}), 400
             
-            camp_res = db.table('campaigns').select('domain').eq('id', campaign_id).limit(1).execute()
-            domain = (camp_res.data or [{}])[0].get('domain')
+            camp_res = db.table('campaigns').select('domain, settings').eq('id', campaign_id).limit(1).execute()
+            camp_data = (camp_res.data or [{}])[0]
+            domain = camp_data.get('domain')
+            resolved_location = (camp_data.get('settings') or {}).get('location', 'US')
             if domain:
-                c_dom = domain.replace('https://', '').replace('http://', '').split('/')[0].strip('www.')
-                sa_res = db.table('site_audits').select('full_audit_data').ilike('domain', f"%{c_dom}%").limit(1).execute()
+                resolved_domain = domain.replace('https://', '').replace('http://', '').split('/')[0].strip('www.')
+                sa_res = db.table('site_audits').select('full_audit_data').ilike('domain', f"%{resolved_domain}%").limit(1).execute()
                 if sa_res.data:
                     proj = sa_res.data[0].get('full_audit_data') or {}
             
@@ -2491,6 +2692,31 @@ def get_client_stats():
         keywords_raw = proj.get('organic_keywords') or proj.get('keywords', [])
         total_kw = proj.get('total_keywords', len(keywords_raw))
         total_traffic = proj.get('total_traffic', 0)
+        
+        # LIVE FALLBACK: If no stored data exists but we have a domain, fetch live from DataForSEO
+        if not keywords_raw and resolved_domain:
+            logger.info(f"client/stats: No stored data for {resolved_domain}, fetching live from DataForSEO")
+            try:
+                from api.dataforseo_client import fetch_domain_metrics, fetch_ranked_keywords, location_code_for
+                fallback_loc = location_code_for(resolved_location)
+                
+                # Quick domain totals (fast, ~$0.005)
+                dm = fetch_domain_metrics(resolved_domain, location_code=fallback_loc)
+                if dm.get('success'):
+                    total_kw = dm.get('total_keywords', 0)
+                    total_traffic = dm.get('total_traffic', 0)
+                
+                # Top 10 keywords (slightly more expensive but needed for display)
+                kw_result = fetch_ranked_keywords(resolved_domain, limit=10, location_code=fallback_loc)
+                if isinstance(kw_result, dict) and kw_result.get('success'):
+                    keywords_raw = kw_result.get('keywords', [])
+                    if not total_kw:
+                        total_kw = kw_result.get('total_count', len(keywords_raw))
+                    if not total_traffic:
+                        total_traffic = kw_result.get('estimated_traffic', 0)
+            except Exception as live_err:
+                logger.warning(f"client/stats live fallback failed (non-fatal): {live_err}")
+                
     except Exception as e:
         logger.error(f"get_client_stats error: {e}")
 
@@ -2549,6 +2775,7 @@ def get_client_backlinks():
 
 
 @app.route('/api/refresh-backlinks', methods=['POST'])
+@login_required
 def refresh_backlinks():
     """Fetch live backlinks from DataForSEO for a project/audit and persist to projects table.
     
@@ -2710,68 +2937,440 @@ def analyze_backlinks_gap():
 @login_required
 @permission_required('view_all_campaigns')
 def get_competitor_strategy():
-    """Generate strategic content recommendations based on the gap analysis."""
+    """Generate AI-powered strategic recommendations based on scoring + gap analysis.
+    
+    Uses the scorecard data + gap keywords to produce contextual, actionable recommendations
+    via Gemini. Falls back to an analytical template if Gemini is unavailable.
+    """
     campaign_id = request.args.get('campaign_id')
     competitor_domain = request.args.get('competitor_domain')
     
     if not campaign_id or not competitor_domain:
         return jsonify({'error': 'Campaign ID and Competitor Domain are required'}), 400
         
-    client = supabase_admin or supabase
+    db = supabase_admin or supabase
     
     try:
         # Get target campaign
-        campaign_res = client.table('campaigns').select('*').eq('id', campaign_id).single().execute()
+        campaign_res = db.table('campaigns').select('domain, settings, name').eq('id', campaign_id).single().execute()
         campaign = campaign_res.data
         if not campaign:
             return jsonify({'error': 'Campaign not found'}), 404
             
         target_domain = campaign['domain']
+        brand_config = (campaign.get('settings') or {}).get('brand_config', {})
         
-        # We need get_keyword_gap which computes the set difference locally
-        from api.dataforseo_client import get_keyword_gap
-        gap_results = get_keyword_gap(target_domain, competitor_domain)
+        # 1. Collect scoring data for both domains
+        client_data = _collect_domain_data(db, target_domain, campaign_id=campaign_id)
+        comp_data = _collect_domain_data(db, competitor_domain)
         
-        # If there's an error in gap analysis
-        if not gap_results.get('success'):
-            return jsonify({'error': gap_results.get('error', 'Gap analysis failed')}), 500
+        # 2. Get gap keywords (top 10)
+        gap_keywords = []
+        try:
+            from api.dataforseo_client import get_keyword_gap, location_code_for
+            saved_location = (campaign.get('settings') or {}).get('location', 'US')
+            loc_code = location_code_for(saved_location)
+            gap_results = get_keyword_gap(target_domain, competitor_domain, location_code=loc_code)
+            if gap_results.get('success'):
+                for kw in gap_results.get('gap_keywords', [])[:10]:
+                    word = kw.get('keyword_data', {}).get('keyword', '')
+                    vol = kw.get('keyword_data', {}).get('keyword_info', {}).get('search_volume', 0)
+                    rank = (kw.get('ranked_serp_element') or {}).get('serp_item', {}).get('rank_absolute', '—')
+                    if word:
+                        gap_keywords.append({'keyword': word, 'volume': vol, 'competitor_rank': rank})
+        except Exception as gap_err:
+            logger.warning(f"Strategy gap fetch failed (non-fatal): {gap_err}")
+        
+        # 3. Compute quick scores for the prompt context
+        both = [
+            {**client_data, 'domain': target_domain, 'is_client': True},
+            {**comp_data, 'domain': competitor_domain, 'is_client': False}
+        ]
+        scorecards = _compute_scorecards(both)
+        client_card = next((s for s in scorecards if s.get('is_client')), {})
+        comp_card = next((s for s in scorecards if not s.get('is_client')), {})
+        
+        # 4. Build context for Gemini
+        gap_text = "\n".join([f"- {g['keyword']} (vol: {g['volume']}, competitor rank: #{g['competitor_rank']})" for g in gap_keywords]) or "No gap data available"
+        
+        brand_context = ""
+        if brand_config:
+            brand_context = f"""
+Brand Context:
+- USP: {brand_config.get('usp', 'Not set')}
+- Voice: {brand_config.get('voice', 'Not set')}
+- Target Audience: {brand_config.get('target_audience', 'Not set')}
+"""
+        
+        prompt = f"""You are a senior SEO strategist creating an actionable competitor strategy report.
+
+CLIENT: {target_domain}
+  - Brand Authority Score: {client_card.get('brand_authority', 0)}/100
+  - Competitive Score: {client_card.get('competitive_score', 0)}/100
+  - Traffic: {client_data.get('total_traffic', 0):,}
+  - Keywords: {client_data.get('total_keywords', 0):,}
+  - Domain Rank: {client_data.get('domain_rank', 0)}
+  - Referring Domains: {client_data.get('referring_domains', 0):,}
+  - Funnel: ToFu {client_card.get('funnel_score', {}).get('tofu', 0)}% | MoFu {client_card.get('funnel_score', {}).get('mofu', 0)}% | BoFu {client_card.get('funnel_score', {}).get('bofu', 0)}%
+
+COMPETITOR: {competitor_domain}
+  - Brand Authority Score: {comp_card.get('brand_authority', 0)}/100
+  - Competitive Score: {comp_card.get('competitive_score', 0)}/100
+  - Traffic: {comp_data.get('total_traffic', 0):,}
+  - Keywords: {comp_data.get('total_keywords', 0):,}
+  - Domain Rank: {comp_data.get('domain_rank', 0)}
+  - Referring Domains: {comp_data.get('referring_domains', 0):,}
+  - Funnel: ToFu {comp_card.get('funnel_score', {}).get('tofu', 0)}% | MoFu {comp_card.get('funnel_score', {}).get('mofu', 0)}% | BoFu {comp_card.get('funnel_score', {}).get('bofu', 0)}%
+
+KEYWORD GAPS (competitor ranks, client doesn't):
+{gap_text}
+{brand_context}
+Generate exactly 5 strategic recommendations in HTML format. Each recommendation should:
+1. Have a numbered heading (h4 tag)
+2. Include specific, data-backed reasoning
+3. Reference the actual metrics above
+4. Provide a clear action item
+5. Estimate expected impact (low/medium/high)
+
+Focus areas should cover: content gaps, link building, funnel optimization, competitive positioning, and quick wins.
+
+Output ONLY the HTML content (h4 + p tags), no wrapping divs or extra markup."""
+
+        # 5. Try Gemini, fall back to analytical template
+        strategy_html = None
+        try:
+            result = gemini_client.generate_content(
+                prompt=prompt,
+                model_name="gemini-2.5-flash",
+            )
+            if result and len(result.strip()) > 100:
+                strategy_html = result.strip()
+        except Exception as llm_err:
+            logger.warning(f"Gemini strategy generation failed: {llm_err}")
+        
+        # Fallback: structured analytical template using real data
+        if not strategy_html:
+            gap_list = "\n".join([f"<li><strong>{g['keyword']}</strong> (Volume: {g['volume']:,}, Competitor Rank: #{g['competitor_rank']})</li>" for g in gap_keywords[:5]]) or "<li>No significant content gaps found</li>"
             
-        gap_keywords = gap_results.get('gap_keywords', [])
-        
-        # Format the top 5 gap keywords for the strategy recommendation
-        top_gaps = []
-        for kw in gap_keywords[:5]:
-            word = kw.get('keyword_data', {}).get('keyword', 'Unknown')
-            vol = kw.get('keyword_data', {}).get('keyword_info', {}).get('search_volume', 0)
-            top_gaps.append(f"<li><strong>{word}</strong> (Volume: {vol})</li>")
+            auth_diff = comp_card.get('brand_authority', 0) - client_card.get('brand_authority', 0)
+            auth_direction = "ahead of" if auth_diff < 0 else "behind"
             
-        gaps_html = "\n".join(top_gaps) if top_gaps else "<li>No significant content gaps found!</li>"
-        
-        # Normally you would pass this through an LLM to generate real recommendations.
-        # For now, we will return a formatted HTML strategy based on the gap data.
-        strategy_html = f"""
-        <h4>1. Attack High-Value Gaps</h4>
-        <p>Your competitor <strong>{competitor_domain}</strong> is currently outranking you for several key terms. We recommend prioritizing new pillar content targeting these exact phrases:</p>
-        <ul>
-            {gaps_html}
-        </ul>
-        
-        <h4>2. The 30% Better Rule (Skyscraper)</h4>
-        <p>Review the top-ranking pages for the keywords above. Produce content that is at least 30% longer, more comprehensive, and features custom graphics or unique data that {competitor_domain} lacks.</p>
-        
-        <h4>3. Internal Link Architecture</h4>
-        <p>Once the new content is published, route authority to it by adding 3-5 internal links from your strongest existing pages (like your homepage or main service pages) using exact-match anchor text.</p>
-        """
+            traffic_ratio = comp_data.get('total_traffic', 1) / max(client_data.get('total_traffic', 1), 1)
+            
+            bofu_gap = comp_card.get('funnel_score', {}).get('bofu', 0) - client_card.get('funnel_score', {}).get('bofu', 0)
+            
+            strategy_html = f"""
+            <h4>1. Attack High-Value Content Gaps</h4>
+            <p>Your competitor <strong>{competitor_domain}</strong> ranks for keywords you don't yet target. Prioritize creating pillar content for these high-value terms:</p>
+            <ul>{gap_list}</ul>
+            <p><em>Expected Impact: High — these represent untapped search demand your competitor is already capturing.</em></p>
+            
+            <h4>2. Bridge the Authority Gap</h4>
+            <p>You are currently {abs(auth_diff)} points {auth_direction} {competitor_domain} on Brand Authority ({client_card.get('brand_authority', 0)} vs {comp_card.get('brand_authority', 0)}). 
+            {'Focus on earning high-DR referring domains through guest posts, digital PR, and HARO to close this gap.' if auth_diff > 0 else 'Maintain your authority advantage by continuing your backlink acquisition strategy.'}</p>
+            <p>Target: {max(comp_data.get('referring_domains', 0) - client_data.get('referring_domains', 0), 10)} new referring domains over the next 90 days.</p>
+            <p><em>Expected Impact: {'High' if auth_diff > 10 else 'Medium'}</em></p>
+            
+            <h4>3. Optimize Funnel Distribution</h4>
+            <p>Your content funnel is {client_card.get('funnel_score', {}).get('tofu', 0)}% ToFu / {client_card.get('funnel_score', {}).get('mofu', 0)}% MoFu / {client_card.get('funnel_score', {}).get('bofu', 0)}% BoFu.
+            {'You need more bottom-of-funnel content to improve conversion readiness.' if bofu_gap > 5 else 'Your funnel balance is competitive.'} 
+            {competitor_domain} has {comp_card.get('funnel_score', {}).get('bofu', 0)}% BoFu content.</p>
+            <p><em>Expected Impact: {'High' if bofu_gap > 10 else 'Medium'}</em></p>
+            
+            <h4>4. Apply the 30% Better Rule (Skyscraper)</h4>
+            <p>{competitor_domain} gets ~{comp_data.get('total_traffic', 0):,} organic visits vs your {client_data.get('total_traffic', 0):,}. 
+            For the gap keywords above, create content that is 30% more comprehensive with unique data, better visuals, and expert quotes that {competitor_domain} lacks.</p>
+            <p><em>Expected Impact: Medium-High</em></p>
+            
+            <h4>5. Internal Link Architecture</h4>
+            <p>Route authority to new gap content by adding 3-5 internal links from your strongest pages (homepage, main service pages) using descriptive anchor text. 
+            This compounds the organic lift from steps 1-4.</p>
+            <p><em>Expected Impact: Medium — amplifies all other strategies.</em></p>
+            """
         
         return jsonify({
             'success': True,
             'target_domain': target_domain,
             'competitor_domain': competitor_domain,
-            'recommendations_html': strategy_html
+            'recommendations_html': strategy_html,
+            'client_score': client_card.get('competitive_score', 0),
+            'competitor_score': comp_card.get('competitive_score', 0),
+            'gap_keywords_count': len(gap_keywords),
+            'ai_generated': strategy_html is not None and 'Attack High-Value Content' not in (strategy_html[:50] if strategy_html else '')
         })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# COMPETITOR SCORING SYSTEM (Phase 2 Completion)
+# =============================================================================
+
+@app.route('/api/competitors/scorecard', methods=['GET'])
+@login_required
+@permission_required('view_all_campaigns')
+def get_competitor_scorecard():
+    """Compute Brand Authority, Funnel Orientation, and Multi-Parameter scores.
+    
+    All scores are derived from data we already fetch (traffic, keywords, backlinks, DR).
+    No additional DataForSEO API calls — purely computational.
+    
+    Returns a scorecard for the client and each competitor with:
+      - brand_authority (0-100): Weighted composite of DR, referring domains, traffic
+      - funnel_score: ToFu/MoFu/BoFu distribution based on keyword intent classification
+      - competitive_score (0-100): Multi-parameter composite score
+      - parameter_breakdown: Individual dimension scores
+    """
+    campaign_id = request.args.get('campaign_id')
+    if not campaign_id:
+        return jsonify({'error': 'campaign_id required'}), 400
+    
+    db = supabase_admin or supabase
+    
+    try:
+        # 1. Get client campaign data
+        camp_res = db.table('campaigns').select('domain, settings').eq('id', campaign_id).single().execute()
+        camp = camp_res.data
+        if not camp:
+            return jsonify({'error': 'Campaign not found'}), 404
+        
+        client_domain = camp['domain'].replace('https://', '').replace('http://', '').split('/')[0]
+        
+        # 2. Get competitor audits
+        aud_res = db.table('audits').select('id, results, status').eq('campaign_id', campaign_id).eq('type', 'competitor').order('created_at', desc=True).execute()
+        competitor_audits = aud_res.data or []
+        
+        # 3. Collect data for all domains (client + competitors)
+        domains_data = []
+        
+        # -- Client data from site_audits or projects --
+        client_data = _collect_domain_data(db, client_domain, campaign_id=campaign_id)
+        client_data['is_client'] = True
+        client_data['domain'] = client_domain
+        domains_data.append(client_data)
+        
+        # -- Competitor data --
+        for audit in competitor_audits:
+            if audit.get('status') != 'completed':
+                continue
+            comp_domain = (audit.get('results') or {}).get('competitor_domain', '')
+            if not comp_domain:
+                continue
+            comp_domain = comp_domain.replace('https://', '').replace('http://', '').split('/')[0]
+            comp_data = _collect_domain_data(db, comp_domain, audit_id=audit['id'])
+            comp_data['is_client'] = False
+            comp_data['domain'] = comp_domain
+            domains_data.append(comp_data)
+        
+        if len(domains_data) < 2:
+            return jsonify({
+                'success': True,
+                'message': 'Need at least 1 completed competitor audit for scoring',
+                'scorecards': []
+            })
+        
+        # 4. Compute scores
+        scorecards = _compute_scorecards(domains_data)
+        
+        return jsonify({
+            'success': True,
+            'scorecards': scorecards,
+            'total_domains': len(scorecards)
+        })
+        
+    except Exception as e:
+        logger.error(f"Scorecard error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def _collect_domain_data(db, domain, campaign_id=None, audit_id=None):
+    """Gather all available metrics for a domain from stored data."""
+    data = {
+        'total_keywords': 0,
+        'total_traffic': 0,
+        'backlinks_total': 0,
+        'referring_domains': 0,
+        'domain_rank': 0,
+        'top_keywords': [],
+    }
+    
+    try:
+        # Try site_audits first
+        sa_res = db.table('site_audits').select('full_audit_data').ilike('domain', f"%{domain}%").limit(1).execute()
+        if sa_res.data:
+            fad = sa_res.data[0].get('full_audit_data') or {}
+            data['total_keywords'] = fad.get('total_keywords', 0) or 0
+            data['total_traffic'] = fad.get('total_traffic', 0) or 0
+            data['backlinks_total'] = fad.get('backlinks_total', 0) or 0
+            data['referring_domains'] = fad.get('referring_domains', 0) or 0
+            data['domain_rank'] = fad.get('domain_rank', 0) or 0
+            data['top_keywords'] = fad.get('organic_keywords', []) or []
+            return data
+        
+        # Try projects table
+        if audit_id:
+            proj_res = db.table('projects').select('full_audit_data').eq('audit_id', audit_id).limit(1).execute()
+        elif campaign_id:
+            # Get latest technical audit for this campaign
+            aud_res = db.table('audits').select('id').eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(1).execute()
+            if aud_res.data:
+                proj_res = db.table('projects').select('full_audit_data').eq('audit_id', aud_res.data[0]['id']).limit(1).execute()
+            else:
+                proj_res = type('obj', (object,), {'data': []})()
+        else:
+            proj_res = type('obj', (object,), {'data': []})()
+        
+        if proj_res.data:
+            fad = proj_res.data[0].get('full_audit_data') or {}
+            data['total_keywords'] = fad.get('total_keywords', 0) or 0
+            data['total_traffic'] = fad.get('total_traffic', 0) or 0
+            data['backlinks_total'] = fad.get('backlinks_total', 0) or 0
+            data['referring_domains'] = fad.get('referring_domains', 0) or 0
+            data['domain_rank'] = fad.get('domain_rank', 0) or 0
+            data['top_keywords'] = fad.get('organic_keywords', []) or []
+    except Exception as e:
+        logger.warning(f"_collect_domain_data({domain}): {e}")
+    
+    return data
+
+
+def _compute_scorecards(domains_data):
+    """Compute all scoring dimensions for a list of domains.
+    
+    Scoring model:
+      Brand Authority (0-100): 40% DR + 30% Referring Domains + 30% Traffic
+      Funnel Score: Classify keywords into ToFu/MoFu/BoFu by search intent
+      Competitive Score (0-100): Weighted composite of 6 parameters
+    """
+    import math
+    
+    # Find max values for normalization
+    max_traffic = max((d.get('total_traffic', 0) for d in domains_data), default=1) or 1
+    max_keywords = max((d.get('total_keywords', 0) for d in domains_data), default=1) or 1
+    max_backlinks = max((d.get('backlinks_total', 0) for d in domains_data), default=1) or 1
+    max_ref_domains = max((d.get('referring_domains', 0) for d in domains_data), default=1) or 1
+    max_dr = max((d.get('domain_rank', 0) for d in domains_data), default=1) or 1
+    
+    scorecards = []
+    
+    for d in domains_data:
+        traffic = d.get('total_traffic', 0) or 0
+        keywords = d.get('total_keywords', 0) or 0
+        backlinks = d.get('backlinks_total', 0) or 0
+        ref_domains = d.get('referring_domains', 0) or 0
+        dr = d.get('domain_rank', 0) or 0
+        top_kws = d.get('top_keywords', []) or []
+        
+        # --- Brand Authority Score (0-100) ---
+        # DR is already 0-100 scale, normalize others to 0-100
+        dr_norm = min(dr, 100)
+        ref_norm = min((ref_domains / max_ref_domains) * 100, 100)
+        traffic_norm = min((traffic / max_traffic) * 100, 100)
+        
+        brand_authority = round(
+            (dr_norm * 0.40) +
+            (ref_norm * 0.30) +
+            (traffic_norm * 0.30)
+        )
+        brand_authority = min(brand_authority, 100)
+        
+        # --- Funnel Orientation Score ---
+        # Classify keywords by intent signals
+        tofu, mofu, bofu = 0, 0, 0
+        tofu_terms = ['what', 'how', 'why', 'guide', 'tutorial', 'tips', 'learn', 'example', 'best']
+        mofu_terms = ['vs', 'comparison', 'review', 'alternative', 'top', 'compare', 'difference']
+        bofu_terms = ['buy', 'price', 'cost', 'deal', 'discount', 'coupon', 'near me', 'hire', 'service', 'agency', 'free trial']
+        
+        for kw_item in top_kws[:100]:  # Limit to top 100 for speed
+            kw_text = ''
+            if isinstance(kw_item, dict):
+                kw_text = (kw_item.get('keyword_data', {}).get('keyword', '') or 
+                          kw_item.get('keyword', '')).lower()
+            elif isinstance(kw_item, str):
+                kw_text = kw_item.lower()
+            
+            if not kw_text:
+                continue
+            
+            matched = False
+            for term in bofu_terms:
+                if term in kw_text:
+                    bofu += 1
+                    matched = True
+                    break
+            if not matched:
+                for term in mofu_terms:
+                    if term in kw_text:
+                        mofu += 1
+                        matched = True
+                        break
+            if not matched:
+                for term in tofu_terms:
+                    if term in kw_text:
+                        tofu += 1
+                        matched = True
+                        break
+            if not matched:
+                tofu += 1  # Default: unclassified = informational/ToFu
+        
+        total_classified = tofu + mofu + bofu
+        funnel_score = {
+            'tofu': round((tofu / total_classified * 100) if total_classified else 0),
+            'mofu': round((mofu / total_classified * 100) if total_classified else 0),
+            'bofu': round((bofu / total_classified * 100) if total_classified else 0),
+            'tofu_count': tofu,
+            'mofu_count': mofu,
+            'bofu_count': bofu,
+            'total_classified': total_classified,
+            # Funnel health: higher BoFu% = more conversion-ready
+            'conversion_readiness': round((bofu / total_classified * 100) if total_classified else 0)
+        }
+        
+        # --- Multi-Parameter Competitive Score (0-100) ---
+        # 6 dimensions, each normalized to 0-100
+        params = {
+            'organic_visibility': min(round((traffic / max_traffic) * 100), 100),
+            'keyword_portfolio': min(round((keywords / max_keywords) * 100), 100),
+            'link_strength': min(round((backlinks / max_backlinks) * 100), 100),
+            'domain_diversity': min(round((ref_domains / max_ref_domains) * 100), 100),
+            'domain_authority': min(dr_norm, 100),
+            'conversion_focus': funnel_score['conversion_readiness']
+        }
+        
+        # Weighted composite
+        weights = {
+            'organic_visibility': 0.25,
+            'keyword_portfolio': 0.20,
+            'link_strength': 0.15,
+            'domain_diversity': 0.15,
+            'domain_authority': 0.15,
+            'conversion_focus': 0.10
+        }
+        
+        competitive_score = round(sum(params[k] * weights[k] for k in params))
+        competitive_score = min(competitive_score, 100)
+        
+        scorecards.append({
+            'domain': d['domain'],
+            'is_client': d.get('is_client', False),
+            'brand_authority': brand_authority,
+            'funnel_score': funnel_score,
+            'competitive_score': competitive_score,
+            'parameter_breakdown': params,
+            'raw_metrics': {
+                'total_traffic': traffic,
+                'total_keywords': keywords,
+                'backlinks_total': backlinks,
+                'referring_domains': ref_domains,
+                'domain_rank': dr
+            }
+        })
+    
+    # Sort: client first, then by competitive_score descending
+    scorecards.sort(key=lambda x: (not x['is_client'], -x['competitive_score']))
+    
+    return scorecards
+
 
 # =============================================================================
 # DEBUG / RESCUE ROUTES
@@ -3029,14 +3628,34 @@ def save_audit_results():
             
         client = supabase_admin or supabase
         
-        # Fetch the on-page audit results from DataForSEO
+        # Fetch the on-page audit results from DataForSEO (with retry for stability)
         from api.dataforseo_client import get_page_issues, get_audit_summary
+        import time as _time
         
-        summary_result = get_audit_summary(task_id)
+        # Retry helper for transient API failures
+        def _retry_fetch(fn, *args, max_retries=3, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    result = fn(*args, **kwargs)
+                    if result and (isinstance(result, dict) and result.get('success', True)):
+                        return result
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Retry {attempt+1}/{max_retries} for {fn.__name__}: {result.get('error', 'empty result') if isinstance(result, dict) else 'None'}")
+                        _time.sleep(5 * (attempt + 1))  # 5s, 10s backoff
+                except Exception as e:
+                    logger.warning(f"Retry {attempt+1}/{max_retries} for {fn.__name__}: {e}")
+                    if attempt < max_retries - 1:
+                        _time.sleep(5 * (attempt + 1))
+            return result if result else {}
+        
+        summary_result = _retry_fetch(get_audit_summary, task_id)
         summary = summary_result.get('summary', {}) if summary_result.get('success') else {}
         
-        pages_data = get_page_issues(task_id, limit=200)  # Get up to 200 pages
+        pages_data = _retry_fetch(get_page_issues, task_id, limit=200)  # Get up to 200 pages
         pages = pages_data.get('pages', []) if pages_data.get('success') else []
+        
+        # Log data quality for debugging
+        logger.info(f"Audit data fetched: summary_keys={list(summary.keys()) if summary else 'EMPTY'}, pages_count={len(pages)}")
         
         # Get existing audit/project data
         result = client.table('audits').select('*').eq('id', audit_id).execute()
@@ -3048,12 +3667,14 @@ def save_audit_results():
         
         # Get domain from audit data
         domain = audit_results.get('competitor_domain') or audit_record.get('campaign_id') # Will need to fetch campaign domain if missing
+        campaign_location = 'US'  # Default; resolved below from campaign settings
         
         if not domain or str(domain).startswith(('http', 'ww', '1', '2', '3', 'u', 'd', 'e')): # Crude fast check
            try:
-              c_res = client.table('campaigns').select('domain').eq('id', audit_record.get('campaign_id')).execute()
+              c_res = client.table('campaigns').select('domain, settings').eq('id', audit_record.get('campaign_id')).execute()
               if c_res.data:
                  domain = c_res.data[0]['domain']
+                 campaign_location = (c_res.data[0].get('settings') or {}).get('location', 'US')
            except:
               pass
               
@@ -3095,10 +3716,11 @@ def save_audit_results():
         domain_totals = {}
         if domain:
             try:
-                from api.dataforseo_client import fetch_domain_metrics
-                domain_totals = fetch_domain_metrics(domain)
+                from api.dataforseo_client import fetch_domain_metrics, location_code_for
+                audit_loc = location_code_for(campaign_location)
+                domain_totals = fetch_domain_metrics(domain, location_code=audit_loc)
                 if domain_totals.get('success'):
-                    logger.info(f"Domain metrics: traffic={domain_totals.get('total_traffic')}, keywords={domain_totals.get('total_keywords')}")
+                    logger.info(f"Domain metrics: traffic={domain_totals.get('total_traffic')}, keywords={domain_totals.get('total_keywords')}, loc={campaign_location}")
             except Exception as e:
                 logger.warning(f"Domain metrics error (non-fatal): {e}")
         
@@ -3149,6 +3771,26 @@ def save_audit_results():
         except Exception as dual_err:
             logger.error(f"Dual-write update to projects failed (non-fatal): {dual_err}")
         # ---- END DUAL WRITE ----
+        
+        # ---- ENRICH audits.results with traffic/backlink data for slides fallback ----
+        try:
+            if domain_totals.get('success'):
+                audit_results['total_traffic'] = domain_totals.get('total_traffic', 0)
+                audit_results['total_keywords'] = domain_totals.get('total_keywords', 0)
+            # Fetch domain_rank if not already in results (needed for slides position distribution)
+            if not audit_results.get('domain_rank') and domain:
+                from api.dataforseo_client import get_domain_rank_overview as _get_dro
+                audit_results['domain_rank'] = _get_dro(domain)
+            # Fetch backlinks_summary if missing
+            if not audit_results.get('backlinks_summary') and domain:
+                from api.dataforseo_client import fetch_backlinks_summary as _fetch_bl
+                audit_results['backlinks_summary'] = _fetch_bl(domain)
+            # Re-save enriched results
+            client.table('audits').update({'results': audit_results}).eq('id', audit_id).execute()
+            logger.info(f"Enriched audits.results with traffic/rank/backlinks data")
+        except Exception as enrich_err:
+            logger.error(f"Enrichment of audits.results failed (non-fatal): {enrich_err}")
+        # ---- END ENRICHMENT ----
         
         # ---- AUTO-SYNC TO CONTENT SYSTEM ----
         try:
@@ -3346,23 +3988,23 @@ def generate_deep_audit_slides_endpoint():
                     else:
                         # Fallback to audits table
                         result = client.table('audits').select('*, campaigns(domain)').eq('id', audit_id).execute()
-                    if result.data:
-                        record = result.data[0]
-                        results_dict = record.get('results', {}) or {}
-                        campaign_data = record.get('campaigns', {}) or {}
-                        
-                        domain = results_dict.get('competitor_domain') or campaign_data.get('domain', 'unknown')
-                        
-                        audit_data = {
-                            **results_dict,
-                            'domain': domain,
-                            'pages': results_dict.get('pages', []),
-                            'pagespeed': results_dict.get('pagespeed', {}),
-                            'organic_keywords': results_dict.get('keywords', []),
-                            'backlinks_summary': results_dict.get('backlinks_summary', results_dict.get('backlinks', {})),
-                            'referring_domains': results_dict.get('referring_domains', [])
-                        }
-                        logger.info(f"Slides: loaded data from audits table for audit {audit_id}")
+                        if result.data:
+                            record = result.data[0]
+                            results_dict = record.get('results', {}) or {}
+                            campaign_data = record.get('campaigns', {}) or {}
+                            
+                            domain = results_dict.get('competitor_domain') or campaign_data.get('domain', 'unknown')
+                            
+                            audit_data = {
+                                **results_dict,
+                                'domain': domain,
+                                'pages': results_dict.get('pages', []),
+                                'pagespeed': results_dict.get('pagespeed', {}),
+                                'organic_keywords': results_dict.get('keywords', []),
+                                'backlinks_summary': results_dict.get('backlinks_summary', results_dict.get('backlinks', {})),
+                                'referring_domains': results_dict.get('referring_domains', [])
+                            }
+                            logger.info(f"Slides: loaded data from audits table for audit {audit_id}")
             except Exception as e:
                 logger.error(f"Error fetching project for slides: {e}")
 
@@ -4865,6 +5507,7 @@ def perform_seo_analysis(page_id):
 
 
 @app.route('/api/analyze-seo', methods=['POST'])
+@login_required
 def analyze_seo_endpoint():
     """Endpoint to analyze a page for SEO issues."""
     if not supabase:
@@ -4896,6 +5539,7 @@ def analyze_seo_endpoint():
 
 # --- batch_update_pages (L4456-5767) ---
 @app.route('/api/batch-update-pages', methods=['POST'])
+@login_required
 def batch_update_pages():
     print(f"====== BATCH UPDATE PAGES CALLED ======", flush=True)
     log_debug("Entered batch_update_pages route")
@@ -6215,6 +6859,7 @@ def get_page_details():
 
 # --- get_pages (L1611-1637) ---
 @app.route('/api/get-pages', methods=['GET'])
+@login_required
 def get_pages():
     client = supabase_admin or supabase
     if not client:
@@ -6246,6 +6891,7 @@ def get_pages():
 
 # --- delete_page (L1639-1665) ---
 @app.route('/api/delete-page', methods=['DELETE'])
+@login_required
 def delete_page():
     if not supabase:
         return jsonify({"error": "Supabase not configured"}), 500
@@ -6276,6 +6922,7 @@ def delete_page():
 
 # --- get_page_status (L1667-1687) ---
 @app.route('/api/get-page-status', methods=['GET'])
+@login_required
 def get_page_status():
     if not supabase:
         return jsonify({"error": "Supabase not configured"}), 500
@@ -6300,6 +6947,7 @@ def get_page_status():
 
 # --- webflow_sites (L6220-6229) ---
 @app.route('/api/webflow/sites', methods=['POST'])
+@login_required
 def webflow_list_sites():
     try:
         data = request.json
@@ -6313,6 +6961,7 @@ def webflow_list_sites():
 
 # --- webflow_collections (L6231-6241) ---
 @app.route('/api/webflow/collections', methods=['POST'])
+@login_required
 def webflow_list_collections():
     try:
         data = request.json
@@ -6410,6 +7059,7 @@ def publish_wordpress():
 
 # --- generate_blog_image (L6243-6285) ---
 @app.route('/api/generate-blog-image', methods=['POST'])
+@login_required
 def generate_blog_image_endpoint():
     data = request.json
     page_id = data.get('page_id')
@@ -6456,6 +7106,7 @@ def generate_blog_image_endpoint():
 
 # --- get_html_content (L6287-6397) ---
 @app.route('/api/get-html-content', methods=['POST'])
+@login_required
 def get_html_content():
     """Get HTML-formatted content for copy-paste (same logic as Webflow publish)"""
     data = request.json
@@ -6570,7 +7221,8 @@ def get_html_content():
 
 # --- publish_webflow (L6616-6855) ---
 @app.route('/api/publish-webflow', methods=['POST'])
-def webflow_publish():
+@login_required
+def publish_webflow_legacy():
     data = request.json
     page_id = data.get('page_id')
     api_key = data.get('api_key')
@@ -6814,6 +7466,7 @@ def webflow_publish():
 
 
 @app.route('/api/debug/sync-supergoop')
+@login_required
 def debug_sync_supergoop():
     import traceback
     try:
@@ -6848,8 +7501,1244 @@ def debug_sync_supergoop():
     except Exception as e:
         return jsonify({"error": str(e), "trace": traceback.format_exc()})
 
+# =============================================================================
+# WINS OF THE WEEK
+# =============================================================================
+
+@app.route('/api/wins', methods=['POST'])
+@login_required
+def get_wins():
+    """
+    Aggregates 'wins' for the client portal — ranking improvements,
+    traffic gains, and completed tasks. Accessible by all roles including viewer.
+    """
+    import traceback
+    from datetime import timedelta
+
+    user = session['user']
+    data = request.json or {}
+    campaign_id = data.get('campaign_id')
+    duration = data.get('duration', '7d')  # 7d, 14d, 30d
+
+    if not campaign_id:
+        return jsonify({'error': 'campaign_id is required'}), 400
+
+    # Scope check: viewers can only see their assigned campaigns
+    user_role = user.get('role', 'viewer')
+    if user_role == 'viewer':
+        assigned = user.get('assigned_campaigns', [])
+        if assigned and campaign_id not in assigned:
+            return jsonify({'error': 'Not authorized'}), 403
+
+    client = supabase_admin or supabase
+
+    duration_days = {'7d': 7, '14d': 14, '30d': 30, '90d': 90}.get(duration, 7)
+    now = datetime.utcnow()
+    cutoff = (now - timedelta(days=duration_days)).isoformat()
+
+    wins = {
+        'tasks': {'completed': 0, 'total': 0, 'items': []},
+        'rankings': {'improved': 0, 'top3': 0, 'top10': 0, 'items': []},
+        'traffic': {'clicks_current': 0, 'clicks_prev': 0, 'impressions_current': 0, 'impressions_prev': 0},
+        'highlights': [],
+        'duration': duration,
+        'duration_days': duration_days
+    }
+
+    try:
+        # -----------------------------------------------------------------
+        # 1. TASK WINS — completed tasks in the period
+        # -----------------------------------------------------------------
+        try:
+            tasks_res = client.table('tasks').select('*').eq('campaign_id', campaign_id).execute()
+            all_tasks = tasks_res.data or []
+            wins['tasks']['total'] = len(all_tasks)
+
+            completed = [t for t in all_tasks if t.get('status') == 'done']
+            # Filter to recently completed (updated_at within cutoff)
+            recent_completed = []
+            for t in completed:
+                updated = t.get('updated_at') or t.get('created_at') or ''
+                if updated >= cutoff:
+                    recent_completed.append(t)
+
+            wins['tasks']['completed'] = len(recent_completed)
+            wins['tasks']['items'] = [
+                {
+                    'title': t.get('title', 'Untitled'),
+                    'type': t.get('type', 'general'),
+                    'assigned_role': t.get('assigned_role', ''),
+                    'completed_at': t.get('updated_at', '')
+                }
+                for t in recent_completed[:20]
+            ]
+
+            if len(recent_completed) > 0:
+                wins['highlights'].append({
+                    'type': 'tasks',
+                    'icon': 'check-circle',
+                    'color': 'emerald',
+                    'title': f"{len(recent_completed)} Tasks Completed",
+                    'subtitle': f"In the last {duration_days} days"
+                })
+        except Exception as e:
+            logger.warning(f"Wins: Task fetch failed: {e}")
+
+        # -----------------------------------------------------------------
+        # 2. RANKING WINS — GSC query comparison (current vs previous)
+        # -----------------------------------------------------------------
+        try:
+            # Get campaign details for GSC property
+            campaign_res = client.table('campaigns').select('settings, tracked_keywords').eq('id', campaign_id).single().execute()
+            campaign_data = campaign_res.data or {}
+            settings = campaign_data.get('settings') or {}
+            gsc_property = settings.get('gsc_property')
+            tracked_keywords = campaign_data.get('tracked_keywords') or []
+
+            if gsc_property and tracked_keywords:
+                # Get Google integration credentials
+                org_id = user.get('organization_id')
+                integration = client.table('agency_integrations').select('*').eq('organization_id', org_id).eq('provider', 'google').execute()
+
+                if integration.data:
+                    from google.oauth2.credentials import Credentials
+                    from googleapiclient.discovery import build as google_build
+                    from api.google_integration import get_client_config
+
+                    refresh_token = integration.data[0].get('refresh_token')
+                    if refresh_token:
+                        client_config = get_client_config()
+                        creds = Credentials(
+                            None,
+                            refresh_token=refresh_token,
+                            client_id=client_config['web']['client_id'],
+                            client_secret=client_config['web']['client_secret'],
+                            token_uri=client_config['web']['token_uri']
+                        )
+
+                        gsc_service = google_build('searchconsole', 'v1', credentials=creds)
+
+                        today = now.date()
+                        current_start = (today - timedelta(days=duration_days)).isoformat()
+                        current_end = today.isoformat()
+                        prev_start = (today - timedelta(days=duration_days * 2)).isoformat()
+                        prev_end = (today - timedelta(days=duration_days)).isoformat()
+
+                        def _gsc_query(start, end):
+                            body = {
+                                'startDate': start,
+                                'endDate': end,
+                                'dimensions': ['query'],
+                                'rowLimit': 5000
+                            }
+                            resp = gsc_service.searchanalytics().query(siteUrl=gsc_property, body=body).execute()
+                            return resp.get('rows', [])
+
+                        current_rows = _gsc_query(current_start, current_end)
+                        prev_rows = _gsc_query(prev_start, prev_end)
+
+                        # Build lookup maps
+                        current_map = {}
+                        for r in current_rows:
+                            q = r['keys'][0]
+                            current_map[q] = {
+                                'position': r['position'],
+                                'clicks': r['clicks'],
+                                'impressions': r['impressions'],
+                                'ctr': r['ctr']
+                            }
+
+                        prev_map = {}
+                        for r in prev_rows:
+                            q = r['keys'][0]
+                            prev_map[q] = {
+                                'position': r['position'],
+                                'clicks': r['clicks'],
+                                'impressions': r['impressions'],
+                                'ctr': r['ctr']
+                            }
+
+                        # Calculate traffic totals
+                        wins['traffic']['clicks_current'] = sum(r['clicks'] for r in current_rows)
+                        wins['traffic']['impressions_current'] = sum(r['impressions'] for r in current_rows)
+                        wins['traffic']['clicks_prev'] = sum(r['clicks'] for r in prev_rows)
+                        wins['traffic']['impressions_prev'] = sum(r['impressions'] for r in prev_rows)
+
+                        # Ranking improvements for tracked keywords
+                        ranking_items = []
+                        for kw in tracked_keywords:
+                            curr = current_map.get(kw)
+                            prev = prev_map.get(kw)
+                            if curr:
+                                curr_pos = round(curr['position'], 1)
+                                prev_pos = round(prev['position'], 1) if prev else None
+                                improvement = round(prev_pos - curr_pos, 1) if prev_pos else 0
+
+                                item = {
+                                    'keyword': kw,
+                                    'current_position': curr_pos,
+                                    'previous_position': prev_pos,
+                                    'improvement': improvement,
+                                    'clicks': curr['clicks'],
+                                    'impressions': curr['impressions']
+                                }
+                                ranking_items.append(item)
+
+                                if curr_pos <= 3:
+                                    wins['rankings']['top3'] += 1
+                                if curr_pos <= 10:
+                                    wins['rankings']['top10'] += 1
+                                if improvement > 0:
+                                    wins['rankings']['improved'] += 1
+
+                        # Sort by improvement descending
+                        ranking_items.sort(key=lambda x: x['improvement'], reverse=True)
+                        wins['rankings']['items'] = ranking_items
+
+                        # Generate highlights
+                        if wins['rankings']['improved'] > 0:
+                            best = ranking_items[0] if ranking_items else None
+                            wins['highlights'].append({
+                                'type': 'rankings',
+                                'icon': 'trending-up',
+                                'color': 'violet',
+                                'title': f"{wins['rankings']['improved']} Keywords Improved",
+                                'subtitle': f"Best: '{best['keyword']}' moved up {best['improvement']} positions" if best else ''
+                            })
+
+                        if wins['rankings']['top3'] > 0:
+                            wins['highlights'].append({
+                                'type': 'top3',
+                                'icon': 'trophy',
+                                'color': 'amber',
+                                'title': f"{wins['rankings']['top3']} Keywords in Top 3",
+                                'subtitle': 'First page dominance'
+                            })
+
+                        click_delta = wins['traffic']['clicks_current'] - wins['traffic']['clicks_prev']
+                        if click_delta > 0:
+                            pct = round((click_delta / max(wins['traffic']['clicks_prev'], 1)) * 100, 1)
+                            wins['highlights'].append({
+                                'type': 'traffic',
+                                'icon': 'mouse-pointer-click',
+                                'color': 'blue',
+                                'title': f"+{click_delta:,} More Clicks",
+                                'subtitle': f"{pct}% increase vs previous period"
+                            })
+
+        except Exception as e:
+            logger.warning(f"Wins: Ranking fetch failed: {e}")
+
+        return jsonify(wins)
+
+    except Exception as e:
+        logger.error(f"Wins endpoint error: {e}\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# CAMPAIGN MANAGER DASHBOARD
+# =============================================================================
+
+@app.route('/api/cm-dashboard', methods=['GET'])
+@login_required
+def cm_dashboard():
+    """Aggregate data for the Campaign Manager overview dashboard."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    if not org_id:
+        return jsonify({'error': 'No organization'}), 400
+
+    client = supabase_admin or supabase
+    try:
+        # 1. All campaigns in the org
+        campaigns_res = client.table('campaigns').select('id, name, domain, status, created_at').eq('organization_id', org_id).order('created_at', desc=True).execute()
+        campaigns = campaigns_res.data or []
+
+        campaign_ids = [c['id'] for c in campaigns]
+        active_campaigns = [c for c in campaigns if c.get('status') == 'active']
+        inactive_campaigns = [c for c in campaigns if c.get('status') != 'active']
+
+        # 2. All tasks across these campaigns
+        all_tasks = []
+        if campaign_ids:
+            tasks_res = client.table('tasks').select('id, title, type, status, assigned_to, assigned_role, campaign_id, created_at, updated_at').in_('campaign_id', campaign_ids).execute()
+            all_tasks = tasks_res.data or []
+
+        pending = [t for t in all_tasks if t.get('status') == 'pending']
+        in_progress = [t for t in all_tasks if t.get('status') == 'in_progress']
+        done = [t for t in all_tasks if t.get('status') == 'done']
+
+        # 3. Team members
+        team_res = client.table('profiles').select('id, full_name, email, role').eq('organization_id', org_id).execute()
+        team = team_res.data or []
+
+        # 4. Workload: tasks per member
+        workload = {}
+        for t in all_tasks:
+            assignee = t.get('assigned_to') or 'Unassigned'
+            if assignee not in workload:
+                workload[assignee] = {'pending': 0, 'in_progress': 0, 'done': 0, 'total': 0}
+            workload[assignee]['total'] += 1
+            s = t.get('status', 'pending')
+            if s in workload[assignee]:
+                workload[assignee][s] += 1
+
+        # Map IDs to names
+        id_name = {m['id']: m.get('full_name') or m.get('email', 'Unknown') for m in team}
+        team_workload = []
+        for uid, stats in workload.items():
+            team_workload.append({
+                'id': uid,
+                'name': id_name.get(uid, uid if uid != 'Unassigned' else 'Unassigned'),
+                'role': next((m['role'] for m in team if m['id'] == uid), ''),
+                **stats
+            })
+        team_workload.sort(key=lambda x: x['total'], reverse=True)
+
+        # 5. Per-campaign breakdown
+        campaign_health = []
+        for c in campaigns:
+            ct = [t for t in all_tasks if t.get('campaign_id') == c['id']]
+            total = len(ct)
+            d = len([t for t in ct if t.get('status') == 'done'])
+            campaign_health.append({
+                'id': c['id'],
+                'name': c['name'],
+                'domain': c.get('domain', ''),
+                'status': c.get('status', 'active'),
+                'total_tasks': total,
+                'done_tasks': d,
+                'progress': round((d / total) * 100) if total > 0 else 0
+            })
+
+        # 6. Recent activity (last 10 updated tasks)
+        recent = sorted(all_tasks, key=lambda t: t.get('updated_at', ''), reverse=True)[:10]
+        recent_activity = [{
+            'title': t.get('title', 'Untitled'),
+            'status': t.get('status', 'pending'),
+            'type': t.get('type', ''),
+            'campaign_id': t.get('campaign_id', ''),
+            'campaign_name': next((c['name'] for c in campaigns if c['id'] == t.get('campaign_id')), 'Unknown'),
+            'updated_at': t.get('updated_at', '')
+        } for t in recent]
+
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_campaigns': len(campaigns),
+                'active_campaigns': len(active_campaigns),
+                'inactive_campaigns': len(inactive_campaigns),
+                'total_tasks': len(all_tasks),
+                'pending_tasks': len(pending),
+                'in_progress_tasks': len(in_progress),
+                'completed_tasks': len(done),
+                'team_size': len(team)
+            },
+            'team_workload': team_workload,
+            'campaign_health': campaign_health,
+            'recent_activity': recent_activity
+        })
+    except Exception as e:
+        logger.error(f"CM dashboard error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# PHASE 3: CONTENT PIECES — Full Lifecycle CRUD
+# =============================================================================
+
+@app.route('/api/content-pieces', methods=['GET'])
+@login_required
+def list_content_pieces():
+    """List content pieces for a campaign with optional status filter."""
+    campaign_id = request.args.get('campaign_id')
+    status_filter = request.args.get('status')  # brief, draft, review, revision, approved, published
+    
+    if not campaign_id:
+        return jsonify({'error': 'campaign_id required'}), 400
+    
+    db = supabase_admin or supabase
+    
+    try:
+        query = db.table('content_pieces').select('*').eq('campaign_id', campaign_id)
+        if status_filter:
+            query = query.eq('status', status_filter)
+        
+        result = query.order('updated_at', desc=True).limit(100).execute()
+        pieces = result.data or []
+        
+        # Summary stats
+        all_res = db.table('content_pieces').select('id, status').eq('campaign_id', campaign_id).execute()
+        all_pieces = all_res.data or []
+        stats = {
+            'total': len(all_pieces),
+            'brief': len([p for p in all_pieces if p['status'] == 'brief']),
+            'draft': len([p for p in all_pieces if p['status'] == 'draft']),
+            'review': len([p for p in all_pieces if p['status'] == 'review']),
+            'revision': len([p for p in all_pieces if p['status'] == 'revision']),
+            'approved': len([p for p in all_pieces if p['status'] == 'approved']),
+            'published': len([p for p in all_pieces if p['status'] == 'published'])
+        }
+        
+        return jsonify({'success': True, 'pieces': pieces, 'stats': stats})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/content-pieces', methods=['POST'])
+@login_required
+def create_content_piece():
+    """Create a new content piece (from brief, manual entry, or AI generation)."""
+    data = request.json or {}
+    campaign_id = data.get('campaign_id')
+    
+    if not campaign_id or not data.get('title'):
+        return jsonify({'error': 'campaign_id and title are required'}), 400
+    
+    db = supabase_admin or supabase
+    user = session.get('user', {})
+    
+    try:
+        piece = {
+            'campaign_id': campaign_id,
+            'title': data['title'],
+            'slug': data.get('slug', data['title'].lower().replace(' ', '-')[:80]),
+            'target_keyword': data.get('target_keyword', ''),
+            'secondary_keywords': data.get('secondary_keywords', []),
+            'funnel_stage': data.get('funnel_stage', 'tofu'),
+            'content_type': data.get('content_type', 'blog_post'),
+            'brief': data.get('brief', {}),
+            'outline': data.get('outline', []),
+            'draft_html': data.get('draft_html', ''),
+            'word_count': data.get('word_count', 0),
+            'meta_title': data.get('meta_title', ''),
+            'meta_description': data.get('meta_description', ''),
+            'status': data.get('status', 'brief'),
+            'assigned_to': data.get('assigned_to'),
+            'assigned_by': user.get('id'),
+            'cluster_id': data.get('cluster_id'),
+        }
+        
+        result = db.table('content_pieces').insert(piece).execute()
+        
+        return jsonify({'success': True, 'piece': result.data[0] if result.data else piece})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/content-pieces/<piece_id>', methods=['PUT'])
+@login_required
+def update_content_piece(piece_id):
+    """Update a content piece — status changes, content, reviewer notes, etc."""
+    data = request.json or {}
+    db = supabase_admin or supabase
+    
+    try:
+        update_fields = {}
+        allowed = ['title', 'slug', 'target_keyword', 'secondary_keywords', 'funnel_stage',
+                    'content_type', 'brief', 'outline', 'draft_html', 'word_count',
+                    'meta_title', 'meta_description', 'schema_markup', 'internal_links',
+                    'status', 'assigned_to', 'reviewer_notes', 'published_url', 'publish_platform']
+        
+        for key in allowed:
+            if key in data:
+                update_fields[key] = data[key]
+        
+        # Track revisions
+        if data.get('status') == 'revision':
+            # Increment revision count
+            existing = db.table('content_pieces').select('revision_count').eq('id', piece_id).single().execute()
+            if existing.data:
+                update_fields['revision_count'] = (existing.data.get('revision_count') or 0) + 1
+        
+        if data.get('status') == 'published' and data.get('published_url'):
+            from datetime import datetime
+            update_fields['published_at'] = datetime.utcnow().isoformat()
+        
+        # Auto-calculate word count if HTML provided
+        if 'draft_html' in update_fields and update_fields['draft_html']:
+            import re
+            text = re.sub(r'<[^>]+>', ' ', update_fields['draft_html'])
+            update_fields['word_count'] = len(text.split())
+        
+        update_fields['updated_at'] = datetime.utcnow().isoformat() if 'datetime' in dir() else __import__('datetime').datetime.utcnow().isoformat()
+        
+        result = db.table('content_pieces').update(update_fields).eq('id', piece_id).execute()
+        
+        return jsonify({'success': True, 'piece': result.data[0] if result.data else {}})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/content-pieces/<piece_id>', methods=['DELETE'])
+@login_required
+def delete_content_piece(piece_id):
+    """Delete a content piece."""
+    db = supabase_admin or supabase
+    try:
+        db.table('content_pieces').delete().eq('id', piece_id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# PHASE 3: STANDALONE AI ARTICLE GENERATION
+# =============================================================================
+
+@app.route('/api/generate-article', methods=['POST'])
+@login_required
+def generate_article():
+    """Generate a full SEO-optimized article using Gemini.
+    
+    Pipeline: Research → Outline → Chunked Sections → Polish
+    
+    Input: title, target_keyword, funnel_stage, campaign_id, optional brief data
+    Output: full HTML article, outline, meta tags, word_count
+    """
+    data = request.json or {}
+    campaign_id = data.get('campaign_id')
+    title = data.get('title')
+    target_keyword = data.get('target_keyword', title)
+    funnel_stage = data.get('funnel_stage', 'tofu')
+    word_target = data.get('word_target', 1800)
+    brief_data = data.get('brief', {})
+    content_piece_id = data.get('content_piece_id')  # Optionally update existing piece
+    
+    if not title:
+        return jsonify({'error': 'title is required'}), 400
+    
+    db = supabase_admin or supabase
+    
+    try:
+        # Get campaign context
+        project_loc = 'US'
+        project_lang = 'English'
+        brand_context = ''
+        
+        if campaign_id:
+            camp_res = db.table('campaigns').select('domain, settings').eq('id', campaign_id).single().execute()
+            if camp_res.data:
+                settings = camp_res.data.get('settings') or {}
+                project_loc = settings.get('location', 'US')
+                bc = settings.get('brand_config', {})
+                if bc:
+                    brand_context = f"\nBrand Voice: {bc.get('voice', 'professional')}\nUSP: {bc.get('usp', '')}\nTarget Audience: {bc.get('target_audience', '')}"
+        
+        # 1. Research via Gemini grounding
+        research_section = ""
+        try:
+            research = perform_gemini_research(
+                f"{title} {target_keyword} SEO guide", 
+                location=project_loc
+            )
+            if research:
+                research_section = f"# RESEARCH:\n{research}"
+        except Exception as re_err:
+            logger.warning(f"Research step failed (non-fatal): {re_err}")
+        
+        # 2. Generate outline
+        outline = generate_dynamic_outline(title, research_section, project_loc, gemini_client)
+        if not outline:
+            return jsonify({'error': 'Failed to generate outline'}), 500
+        
+        # 3. Generate sections (chunked for quality)
+        internal_links_str = ""
+        if brief_data.get('internal_links'):
+            internal_links_str = "\n".join([f"- {lnk}" for lnk in brief_data['internal_links']])
+        
+        full_content = generate_sections_chunked(
+            title, outline, research_section, project_loc, gemini_client, internal_links_str
+        )
+        
+        if not full_content:
+            return jsonify({'error': 'Failed to generate article sections'}), 500
+        
+        # 4. Final polish
+        cta_url = brief_data.get('cta_url', '')
+        generated_text = final_polish(
+            full_content, title, target_keyword, cta_url, project_loc, gemini_client
+        )
+        
+        if not generated_text:
+            generated_text = full_content  # Fall back to unpolished version
+        
+        # 5. Generate meta tags
+        meta_title = title[:60]
+        meta_description = ''
+        try:
+            meta_prompt = f"""Generate a compelling SEO meta description for this article.
+Title: {title}
+Primary Keyword: {target_keyword}
+Requirements: 150-160 characters, includes the keyword, has a call-to-action.
+Output ONLY the meta description text, nothing else."""
+            
+            meta_result = gemini_client.generate_content(prompt=meta_prompt, model_name="gemini-2.5-flash")
+            if meta_result:
+                meta_description = meta_result.strip()[:160]
+        except:
+            meta_description = f"Learn about {target_keyword}. Comprehensive guide covering everything you need to know."
+        
+        # Calculate word count
+        import re as re_mod
+        text_only = re_mod.sub(r'<[^>]+>', ' ', generated_text)
+        word_count = len(text_only.split())
+        
+        # 6. If content_piece_id provided, update the existing piece
+        if content_piece_id:
+            try:
+                db.table('content_pieces').update({
+                    'draft_html': generated_text,
+                    'outline': outline if isinstance(outline, list) else [{'content': outline}],
+                    'word_count': word_count,
+                    'meta_title': meta_title,
+                    'meta_description': meta_description,
+                    'status': 'draft',
+                    'updated_at': datetime.utcnow().isoformat()
+                }).eq('id', content_piece_id).execute()
+            except Exception as up_err:
+                logger.warning(f"Failed to update content piece: {up_err}")
+        
+        return jsonify({
+            'success': True,
+            'article': {
+                'title': title,
+                'html': generated_text,
+                'outline': outline,
+                'meta_title': meta_title,
+                'meta_description': meta_description,
+                'word_count': word_count,
+                'target_keyword': target_keyword,
+                'funnel_stage': funnel_stage
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Article generation error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# PHASE 3: LINK SEARCH & AUTO-RECOMMEND
+# =============================================================================
+
+@app.route('/api/link-search', methods=['GET'])
+@login_required
+def search_link_inventory():
+    """Search the link inventory with filters for niche, DA range, price range.
+    
+    Params:
+        q: search query (matches domain or niche)
+        niche: filter by niche
+        min_da: minimum domain authority
+        max_da: maximum domain authority
+        min_price: minimum price
+        max_price: maximum price
+        sort_by: da, price, traffic (default: da)
+        limit: max results (default: 20)
+    """
+    db = supabase_admin or supabase
+    
+    try:
+        q = request.args.get('q', '').strip()
+        niche = request.args.get('niche', '').strip()
+        min_da = int(request.args.get('min_da', 0))
+        max_da = int(request.args.get('max_da', 100))
+        min_price = float(request.args.get('min_price', 0))
+        max_price = float(request.args.get('max_price', 99999))
+        sort_by = request.args.get('sort_by', 'da')
+        limit = min(int(request.args.get('limit', 20)), 50)
+        
+        query = db.table('link_inventory').select('*').eq('is_active', True)
+        
+        # Filters
+        query = query.gte('da', min_da).lte('da', max_da)
+        query = query.gte('price', min_price).lte('price', max_price)
+        
+        if niche:
+            query = query.ilike('niche', f'%{niche}%')
+        
+        if q:
+            query = query.or_(f'domain.ilike.%{q}%,niche.ilike.%{q}%')
+        
+        # Sort
+        desc = True
+        if sort_by == 'price':
+            query = query.order('price', desc=False)
+        elif sort_by == 'traffic':
+            query = query.order('organic_traffic', desc=True)
+        else:
+            query = query.order('da', desc=True)
+        
+        result = query.limit(limit).execute()
+        links = result.data or []
+        
+        # Get available niches for filter dropdown
+        all_niches_res = db.table('link_inventory').select('niche').eq('is_active', True).execute()
+        niches = sorted(set(item['niche'] for item in (all_niches_res.data or []) if item.get('niche')))
+        
+        return jsonify({
+            'success': True,
+            'links': links,
+            'total': len(links),
+            'available_niches': niches
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/link-recommend', methods=['GET'])
+@login_required
+def recommend_links():
+    """Auto-recommend best backlinks for a campaign based on niche fit and anchor needs.
+    
+    Analyzes:
+    1. Campaign niche/domain to find relevant link sources
+    2. Existing placements to avoid duplicates
+    3. Anchor text distribution to suggest what's needed
+    4. Budget efficiency (best DA per dollar)
+    
+    Params: campaign_id, budget (optional, default 500), count (default 5)
+    """
+    campaign_id = request.args.get('campaign_id')
+    budget = float(request.args.get('budget', 500))
+    count = min(int(request.args.get('count', 5)), 15)
+    
+    if not campaign_id:
+        return jsonify({'error': 'campaign_id required'}), 400
+    
+    db = supabase_admin or supabase
+    
+    try:
+        # 1. Get campaign info
+        camp_res = db.table('campaigns').select('domain, name, settings').eq('id', campaign_id).single().execute()
+        if not camp_res.data:
+            return jsonify({'error': 'Campaign not found'}), 404
+        
+        campaign = camp_res.data
+        domain = campaign.get('domain', '')
+        settings = campaign.get('settings') or {}
+        niche = settings.get('niche', settings.get('brand_config', {}).get('industry', ''))
+        
+        # 2. Get existing placements to avoid duplicates
+        placements_res = db.table('link_placements').select('target_url').eq('campaign_id', campaign_id).execute()
+        existing_domains = set()
+        for p in (placements_res.data or []):
+            url = p.get('target_url', '')
+            if url:
+                try:
+                    existing_domains.add(url.split('/')[2].replace('www.', ''))
+                except:
+                    pass
+        
+        # 3. Get all available links from inventory
+        inv_res = db.table('link_inventory').select('*').eq('is_active', True).order('da', desc=True).execute()
+        all_links = inv_res.data or []
+        
+        # 4. Score each link
+        scored = []
+        for link in all_links:
+            link_domain = link.get('domain', '')
+            
+            # Skip if already placed
+            if link_domain.replace('www.', '') in existing_domains:
+                continue
+            
+            # Skip if over budget
+            if link.get('price', 0) > budget:
+                continue
+            
+            # Scoring: DA weight (40%) + niche relevance (30%) + value ratio (30%)
+            da_score = min(link.get('da', 0) / 100, 1.0) * 40
+            
+            # Niche relevance
+            link_niche = (link.get('niche', '') or '').lower()
+            niche_score = 0
+            if niche and niche.lower() in link_niche:
+                niche_score = 30  # Exact niche match
+            elif niche:
+                # Partial relevance for related niches
+                niche_map = {
+                    'saas': ['technology', 'software', 'startup'],
+                    'technology': ['saas', 'software', 'startup', 'coding'],
+                    'health': ['fitness', 'wellness', 'medical'],
+                    'finance': ['business', 'startup', 'investment'],
+                    'ecommerce': ['retail', 'shopping', 'business'],
+                    'travel': ['lifestyle', 'hospitality'],
+                }
+                related = niche_map.get(niche.lower(), [])
+                if link_niche in related:
+                    niche_score = 20
+                else:
+                    niche_score = 10  # Generic
+            else:
+                niche_score = 15  # No niche specified, moderate score
+            
+            # Value ratio: DA per dollar
+            price = max(link.get('price', 1), 1)
+            value_score = min((link.get('da', 0) / price) * 100, 30)
+            
+            total_score = da_score + niche_score + value_score
+            
+            scored.append({
+                **link,
+                'recommendation_score': round(total_score, 1),
+                'reason': f"DA {link.get('da', 0)} | {link.get('niche', 'General')} | ${price:.0f}"
+            })
+        
+        # Sort by recommendation score
+        scored.sort(key=lambda x: x['recommendation_score'], reverse=True)
+        recommendations = scored[:count]
+        
+        # 5. Generate anchor text suggestions
+        anchor_suggestions = []
+        if domain:
+            anchor_suggestions = [
+                {'type': 'branded', 'text': domain.replace('.com', '').replace('.io', '').title(), 'recommended_pct': '30-40%'},
+                {'type': 'exact_match', 'text': niche or 'target keyword', 'recommended_pct': '10-15%'},
+                {'type': 'partial_match', 'text': f'best {niche.lower() if niche else "solutions"}', 'recommended_pct': '15-20%'},
+                {'type': 'generic', 'text': 'click here / learn more', 'recommended_pct': '10-15%'},
+                {'type': 'url', 'text': f'https://{domain}', 'recommended_pct': '10-15%'},
+            ]
+        
+        return jsonify({
+            'success': True,
+            'recommendations': recommendations,
+            'total_available': len(scored),
+            'budget': budget,
+            'existing_placements': len(existing_domains),
+            'anchor_distribution': anchor_suggestions,
+            'estimated_cost': sum(r.get('price', 0) for r in recommendations)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# GOOGLE INTEGRATION — Metrics, Properties, Sync
+# =============================================================================
+
+@app.route('/api/google/metrics', methods=['POST'])
+@login_required
+def google_metrics():
+    """Fetch GSC/GA4 metrics for a property over a given duration."""
+    data = request.json
+    gsc_property = data.get('gsc_property')
+    duration = data.get('duration', '3m')
+
+    if not gsc_property:
+        return jsonify({'error': 'gsc_property is required'}), 400
+
+    user = session['user']
+    org_id = user.get('organization_id')
+    client = supabase_admin or supabase
+
+    duration_map = {'7d': 7, '14d': 14, '1m': 30, '3m': 90, '6m': 180, '1y': 365}
+    duration_days = duration_map.get(duration, 90)
+
+    try:
+        integration = client.table('agency_integrations').select('*').eq('organization_id', org_id).eq('provider', 'google').execute()
+
+        if not integration.data:
+            return jsonify({'error': 'Google integration not connected. Go to Settings → Integrations.'}), 400
+
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build as google_build
+        from api.google_integration import get_client_config
+        from datetime import timedelta, date
+
+        refresh_token = integration.data[0].get('refresh_token')
+        if not refresh_token:
+            return jsonify({'error': 'No Google refresh token found.'}), 400
+
+        client_config = get_client_config()
+        creds = Credentials(
+            None,
+            refresh_token=refresh_token,
+            client_id=client_config['web']['client_id'],
+            client_secret=client_config['web']['client_secret'],
+            token_uri=client_config['web']['token_uri']
+        )
+
+        gsc_service = google_build('searchconsole', 'v1', credentials=creds)
+
+        today = date.today()
+        current_start = (today - timedelta(days=duration_days)).isoformat()
+        current_end = today.isoformat()
+        prev_start = (today - timedelta(days=duration_days * 2)).isoformat()
+        prev_end = (today - timedelta(days=duration_days)).isoformat()
+
+        def _gsc_query(start, end, row_limit=5000):
+            body = {
+                'startDate': start,
+                'endDate': end,
+                'dimensions': ['query'],
+                'rowLimit': row_limit
+            }
+            resp = gsc_service.searchanalytics().query(siteUrl=gsc_property, body=body).execute()
+            return resp.get('rows', [])
+
+        current_rows = _gsc_query(current_start, current_end)
+        prev_rows = _gsc_query(prev_start, prev_end)
+
+        queries = [{
+            'query': r['keys'][0],
+            'clicks': r['clicks'],
+            'impressions': r['impressions'],
+            'ctr': round(r['ctr'], 4),
+            'position': round(r['position'], 1)
+        } for r in current_rows]
+
+        prev_queries = [{
+            'query': r['keys'][0],
+            'clicks': r['clicks'],
+            'impressions': r['impressions'],
+            'ctr': round(r['ctr'], 4),
+            'position': round(r['position'], 1)
+        } for r in prev_rows]
+
+        return jsonify({
+            'gsc': {
+                'queries': queries[:25],
+                'allQueries': queries,
+                'prevQueries': prev_queries,
+                'total_clicks': sum(r['clicks'] for r in current_rows),
+                'total_impressions': sum(r['impressions'] for r in current_rows)
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/google-metrics', methods=['POST'])
+@login_required
+def google_metrics_legacy():
+    """Legacy alias — routes to the same logic as /api/google/metrics."""
+    return google_metrics()
+
+
+@app.route('/api/google/properties', methods=['GET'])
+@login_required
+def google_properties():
+    """List GSC and GA4 properties available to the connected Google account."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    client = supabase_admin or supabase
+
+    try:
+        integration = client.table('agency_integrations').select('*').eq('organization_id', org_id).eq('provider', 'google').execute()
+
+        if not integration.data:
+            return jsonify({'gsc': [], 'ga4': []})
+
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build as google_build
+        from api.google_integration import get_client_config
+
+        refresh_token = integration.data[0].get('refresh_token')
+        if not refresh_token:
+            return jsonify({'gsc': [], 'ga4': []})
+
+        client_config = get_client_config()
+        creds = Credentials(
+            None,
+            refresh_token=refresh_token,
+            client_id=client_config['web']['client_id'],
+            client_secret=client_config['web']['client_secret'],
+            token_uri=client_config['web']['token_uri']
+        )
+
+        # Fetch GSC sites
+        gsc_service = google_build('searchconsole', 'v1', credentials=creds)
+        sites_response = gsc_service.sites().list().execute()
+        gsc_sites = sites_response.get('siteEntry', [])
+
+        gsc_props = [{
+            'property_url_or_id': s['siteUrl'],
+            'property_name': s['siteUrl'].replace('sc-domain:', '').replace('https://', '').rstrip('/')
+        } for s in gsc_sites]
+
+        return jsonify({
+            'gsc': gsc_props,
+            'ga4': []  # GA4 requires Analytics Admin API — added as separate integration later
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'gsc': [], 'ga4': []}), 200
+
+
+@app.route('/api/google/sync-properties', methods=['POST'])
+@login_required
+def google_sync_properties():
+    """Re-sync Google properties from the connected account."""
+    # This just re-fetches — same as GET /properties but POSTed for UI semantics
+    user = session['user']
+    org_id = user.get('organization_id')
+    client = supabase_admin or supabase
+
+    try:
+        integration = client.table('agency_integrations').select('*').eq('organization_id', org_id).eq('provider', 'google').execute()
+
+        if not integration.data:
+            return jsonify({'success': False, 'error': 'Google not connected'}), 400
+
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build as google_build
+        from api.google_integration import get_client_config
+
+        refresh_token = integration.data[0].get('refresh_token')
+        client_config = get_client_config()
+        creds = Credentials(
+            None,
+            refresh_token=refresh_token,
+            client_id=client_config['web']['client_id'],
+            client_secret=client_config['web']['client_secret'],
+            token_uri=client_config['web']['token_uri']
+        )
+
+        gsc_service = google_build('searchconsole', 'v1', credentials=creds)
+        sites_response = gsc_service.sites().list().execute()
+        gsc_sites = sites_response.get('siteEntry', [])
+
+        gsc_props = [{
+            'property_url_or_id': s['siteUrl'],
+            'property_name': s['siteUrl'].replace('sc-domain:', '').replace('https://', '').rstrip('/')
+        } for s in gsc_sites]
+
+        return jsonify({'success': True, 'gsc': gsc_props, 'ga4': [], 'synced': len(gsc_props)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/webflow/publish', methods=['POST'])
+@login_required
+def webflow_publish():
+    """Publish a content piece to a Webflow collection."""
+    data = request.json
+    api_key = data.get('api_key')
+    collection_id = data.get('collection_id')
+    page_id = data.get('page_id')
+
+    if not api_key or not collection_id:
+        return jsonify({'error': 'api_key and collection_id are required'}), 400
+
+    client = supabase_admin or supabase
+
+    try:
+        # Fetch the page content
+        page = client.table('pages').select('*').eq('id', page_id).single().execute()
+        if not page.data:
+            return jsonify({'error': 'Page not found'}), 404
+
+        page_data = page.data
+        title = page_data.get('title', 'Untitled')
+        html_content = page_data.get('html_content', '')
+        meta_description = page_data.get('meta_description', '')
+        slug = page_data.get('slug', title.lower().replace(' ', '-'))
+
+        # Webflow API v2
+        import requests as ext_requests
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+            'accept': 'application/json'
+        }
+
+        payload = {
+            'isArchived': False,
+            'isDraft': False,
+            'fieldData': {
+                'name': title,
+                'slug': slug,
+                'post-body': html_content,
+                'post-summary': meta_description
+            }
+        }
+
+        resp = ext_requests.post(
+            f'https://api.webflow.com/v2/collections/{collection_id}/items',
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+
+        if resp.status_code >= 400:
+            return jsonify({'error': f'Webflow API error: {resp.text}'}), resp.status_code
+
+        return jsonify({'success': True, 'webflow_item': resp.json()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# PHASE 4: EMBEDDED SOPs — Role & Task-Type Specific
+# =============================================================================
+
+SOP_LIBRARY = {
+    'technical': {
+        'title': 'Technical SEO Fix',
+        'role': 'Optimization Specialist',
+        'steps': [
+            'Review the flagged issue from the audit report',
+            'Reproduce the issue in browser DevTools or PageSpeed Insights',
+            'Identify root cause (missing tags, slow resources, broken links, etc.)',
+            'Implement the fix in the CMS or codebase',
+            'Validate fix using the same audit tool that flagged it',
+            'Document what was changed and why in the task notes',
+            'Mark task as Done'
+        ],
+        'quality_checks': [
+            'Page loads under 3 seconds after fix',
+            'No new console errors introduced',
+            'Schema validates in Google Rich Results Test',
+            'Fix verified on both mobile and desktop'
+        ]
+    },
+    'content': {
+        'title': 'Content Creation',
+        'role': 'Content Creator',
+        'steps': [
+            'Read the content brief and target keyword cluster',
+            'Review competitor articles ranking for the target keyword',
+            'Write the article following the provided outline structure',
+            'Include 2-3 internal links to related pages',
+            'Add a compelling meta title (≤60 chars) and meta description (≤160 chars)',
+            'Run content through readability check (target: Grade 8-10)',
+            'Submit draft for review in the Content Library',
+            'Address reviewer feedback and resubmit if needed',
+            'Publish to the designated platform (WordPress/Webflow)'
+        ],
+        'quality_checks': [
+            'Word count meets brief target (±10%)',
+            'Primary keyword in H1, first paragraph, and 2-3 H2s',
+            'All images have descriptive alt text',
+            'No AI-detectable patterns (run through humanization)',
+            'Internal links open correctly',
+            'CTA is clear and placed above the fold'
+        ]
+    },
+    'link_building': {
+        'title': 'Link Building Outreach',
+        'role': 'Link Builder',
+        'steps': [
+            'Review the recommended link opportunities from AI Recommendations',
+            'Verify the target domain DA and traffic in Ahrefs/Semrush',
+            'Check the anchor text plan for this campaign',
+            'Draft outreach email following brand voice guidelines',
+            'Send outreach and log in Placements tracker',
+            'Follow up after 3-5 business days if no response',
+            'Once placed, verify the link is live and DoFollow',
+            'Update placement status to Confirmed',
+            'Report the new backlink in the Wins of the Week'
+        ],
+        'quality_checks': [
+            'Link is DoFollow and contextually placed',
+            'Anchor text matches the planned distribution',
+            'Referring page is indexed in Google',
+            'No link farm signals on the referring domain',
+            'Link points to the correct target URL'
+        ]
+    },
+    'optimization': {
+        'title': 'On-Page Optimization',
+        'role': 'Optimization Specialist',
+        'steps': [
+            'Pull the current on-page data for the target URL',
+            'Compare against top 3 SERP competitors',
+            'Optimize title tag, meta description, and H1',
+            'Add/improve schema markup (FAQ, HowTo, Product, etc.)',
+            'Optimize image sizes and add lazy loading',
+            'Improve internal linking (add 2-3 contextual links)',
+            'Submit URL for re-indexing in Google Search Console',
+            'Monitor ranking changes over 2-4 weeks'
+        ],
+        'quality_checks': [
+            'Title tag ≤60 chars with primary keyword',
+            'Meta description ≤160 chars with CTA',
+            'Schema validates without errors',
+            'Page passes Core Web Vitals',
+            'No broken internal/external links'
+        ]
+    },
+    'reporting': {
+        'title': 'Client Report Generation',
+        'role': 'Reporting Manager',
+        'steps': [
+            'Pull analytics data from Google Analytics / Search Console',
+            'Compare current period vs previous period',
+            'Highlight top keyword movements (+/- rankings)',
+            'Document completed tasks and their impact',
+            'Add Wins of the Week section',
+            'Generate PDF/Slides export',
+            'Send to client with executive summary'
+        ],
+        'quality_checks': [
+            'Data matches source (GA/GSC) — no discrepancies',
+            'All charts have clear labels and context',
+            'Executive summary is under 200 words',
+            'Client brand name is correct throughout',
+            'Report covers the agreed reporting period'
+        ]
+    },
+    'strategy': {
+        'title': 'Content Strategy Research',
+        'role': 'Content Strategist',
+        'steps': [
+            'Audit existing content inventory against target keywords',
+            'Run keyword research for gaps and opportunities',
+            'Map keywords to funnel stages (ToFu/MoFu/BoFu)',
+            'Create topic clusters with pillar-spoke structure',
+            'Prioritize topics by opportunity score',
+            'Generate content briefs for top priorities',
+            'Add entries to the content calendar',
+            'Present strategy to Campaign Manager for approval'
+        ],
+        'quality_checks': [
+            'Every keyword has assigned funnel stage',
+            'No keyword cannibalization across pages',
+            'Topic clusters have clear pillar pages',
+            'Content calendar has realistic deadlines',
+            'Strategy aligns with brand voice and USP'
+        ]
+    }
+}
+
+@app.route('/api/sops', methods=['GET'])
+@login_required
+def get_sops():
+    """Get SOPs filtered by role or task type.
+    
+    Params:
+        role: filter by role name (e.g. 'Content Creator')
+        task_type: filter by task type (e.g. 'content', 'technical')
+    """
+    role = request.args.get('role', '').strip()
+    task_type = request.args.get('task_type', '').strip()
+    
+    results = []
+    
+    for sop_type, sop in SOP_LIBRARY.items():
+        # Filter by task type
+        if task_type and sop_type != task_type:
+            continue
+        # Filter by role
+        if role and role.lower() not in sop['role'].lower():
+            continue
+        results.append({
+            'type': sop_type,
+            **sop
+        })
+    
+    return jsonify({'success': True, 'sops': results})
+
+
 if __name__ == '__main__':
     print("Starting server...")
     port = int(os.getenv('PORT', 3000))
     print(f"Running on port {port}")
     app.run(host='0.0.0.0', port=port, debug=True)
+

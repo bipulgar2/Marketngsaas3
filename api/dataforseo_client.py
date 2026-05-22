@@ -1405,11 +1405,18 @@ def get_referring_domains(domain: str, limit: int = 1000, order_by: list = ["ran
         
         if response.status_code == 200:
             data = response.json()
-            if data['tasks'] and data['tasks'][0]['result']:
-                return data['tasks'][0]['result'][0]['items']
+            tasks = data.get('tasks') or []
+            if tasks and tasks[0]:
+                result_list = tasks[0].get('result') or []
+                if result_list and result_list[0]:
+                    items = result_list[0].get('items') or []
+                    print(f"DEBUG: get_referring_domains({domain}): got {len(items)} items", file=sys.stderr)
+                    return items
+        else:
+            print(f"DEBUG: get_referring_domains({domain}): API returned {response.status_code}", file=sys.stderr)
         return []
     except Exception as e:
-        print(f"Error fetching referring domains: {e}")
+        print(f"Error fetching referring domains for {domain}: {e}", file=sys.stderr)
         return []
 
 def run_full_site_audit(domain: str, max_pages: int = 10, mock: bool = False) -> Dict[str, Any]:
@@ -1698,7 +1705,7 @@ def _get_mock_audit_data(domain: str, max_pages: int) -> Dict[str, Any]:
 
 
 
-def fetch_domain_metrics(domain: str) -> Dict[str, Any]:
+def fetch_domain_metrics(domain: str, location_code: int = 2840) -> Dict[str, Any]:
     """
     Fetch domain-level metrics including TOTAL keyword count and TOTAL traffic.
     Uses DataForSEO Domain Rank Overview API.
@@ -1708,6 +1715,7 @@ def fetch_domain_metrics(domain: str) -> Dict[str, Any]:
     
     Args:
         domain: The domain to analyze
+        location_code: DataForSEO location code (default 2840=US, 2356=India, 2826=UK)
         
     Returns:
         Dict with total_keywords, total_traffic, and other domain metrics
@@ -1716,7 +1724,7 @@ def fetch_domain_metrics(domain: str) -> Dict[str, Any]:
     
     payload = [{
         "target": domain,
-        "location_code": 2356,  # India
+        "location_code": location_code,
         "language_code": "en"
     }]
     

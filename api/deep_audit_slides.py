@@ -244,6 +244,10 @@ def create_deep_audit_slides(data, domain, creds=None, screenshots=None, annotat
     if total_keywords == 0 and keywords:
         total_keywords = len(keywords)
     
+    # Final fallback: calculate traffic from keywords if still 0
+    if total_traffic == 0 and keywords:
+        total_traffic = sum((k.get('traffic_etv') or k.get('traffic_cost') or k.get('ranked_serp_element', {}).get('serp_item', {}).get('etv') or 0) for k in keywords)
+    
     print(f"DEBUG SLIDES: total_traffic = {total_traffic}, total_keywords = {total_keywords}", file=sys.stderr)
     
     # Get position breakdown from rank_overview if available
@@ -2488,6 +2492,8 @@ def create_authority_shift_slides(data, domain, creds=None, screenshots=None, an
             total_keywords = organic_metrics.get('count', 0) or 0
     if total_keywords == 0 and keywords:
         total_keywords = len(keywords)
+    if total_traffic == 0 and keywords:
+        total_traffic = sum((k.get('traffic_etv') or k.get('traffic_cost') or k.get('ranked_serp_element', {}).get('serp_item', {}).get('etv') or 0) for k in keywords)
 
     referring_domains = backlinks.get('referring_domains', 0) or 0
 

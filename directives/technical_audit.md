@@ -71,8 +71,29 @@ ISSUE_TO_TASK = {
 - **Slow crawls**: May take 15+ minutes
 - **Screenshots fail**: Fall back to DataForSEO screenshots
 - **Slides OAuth**: Requires valid Google credentials
+- **DataForSEO transient failures**: `save-audit-results` now retries core API calls (summary, pages) 3x with 5s/10s backoff
+- **Slides show 0 traffic/keywords**: Root cause was missing `domain_rank` in `projects.full_audit_data`. Fixed: now fetched via `get_domain_rank_overview()` during audit creation.
+- **Slides fallback indentation bug**: The `audits` table fallback in `generate_deep_audit_slides_endpoint` had misaligned indentation causing it to run outside the `else:` scope. Fixed.
+- **Data flow for slides**: Three paths to slides data (priority order): (1) `projects.full_audit_data`, (2) `site_audits.audit_data`, (3) `audits.results`. All three must have traffic/keywords/backlinks.
 
 ## Cost
 - On-page audit: ~$0.02-0.10 per audit
 - Lighthouse: ~$0.01 per URL
 - Screenshots: Free (Playwright) or ~$0.002 (DataForSEO)
+- Domain rank overview: ~$0.005 per call (added during audit creation)
+
+## Phase 2 Learnings (Competitor Analysis)
+
+### Location Code Flow
+- `fetch_domain_metrics(domain, location_code=2840)` now accepts a `location_code` parameter (default=US). Previously hardcoded to 2356 (India), which caused all traffic/keyword totals to report India-specific data.
+- `create_audit()` resolves location from `campaign.settings.location` via `location_code_for()`. For competitor audits, it prefers `competitor_country` from the POST body.
+- `save-audit-results` resolves `campaign_location` from `campaigns.settings` and passes it to `fetch_domain_metrics`.
+- `/api/client/stats` live fallback uses `resolved_location` from campaign settings.
+
+### Competitor Country Threading
+- Frontend (`dashboard.html`): `window.lastCompetitorCountry` captured from `#competitorCountryInput`, sent as `competitor_country` in `POST /api/audits` body.
+- Backend (`create_audit`): When `audit_type == 'competitor'` and `competitor_country` is provided, overrides the campaign's default location.
+- Gap analysis already correctly separates `client_location` and `competitor_location` via query params.
+
+### Campaign Query Pattern
+- Always select `'domain, settings'` from campaigns (not just `'domain'`) when you need location resolution. Previous bug: `create_audit` only selected `domain`, so `settings.location` was always `None`.

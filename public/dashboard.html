@@ -318,6 +318,8 @@
             ],
             'content': [
                 { id: 'all-links', label: 'All Links' },
+                { id: 'content-library', label: 'Content Library' },
+                { id: 'ai-writer', label: 'AI Writer' },
                 { id: 'bofu', label: 'BoFu (Products)' },
                 { id: 'mofu', label: 'MoFu (Silo Topics)' },
                 { id: 'tofu', label: 'ToFu (Sub-Silo)' }
@@ -341,12 +343,15 @@
             'links': [
                 { id: 'backlink-profile', label: 'Backlink Profile' },
                 { id: 'inventory', label: 'Link Inventory' },
+                { id: 'link-search', label: 'Search Portal' },
+                { id: 'link-recommend', label: 'AI Recommendations' },
                 { id: 'placements', label: 'Placements' },
                 { id: 'anchor-planner', label: 'Anchor Planner' },
                 { id: 'prospects', label: 'Prospects' }
             ],
             'tasks': [
-                { id: 'all-tasks', label: 'All Tasks' }
+                { id: 'all-tasks', label: 'All Tasks' },
+                { id: 'sop-library', label: 'SOPs' }
             ],
             'reports': [
                 { id: 'analytics', label: 'Analytics' },
@@ -421,25 +426,36 @@
 
         function buildSideTabs() {
             const container = document.getElementById('sideTabs');
-            const tabs = SIDE_TABS[currentTopTab] || [];
+            let tabs = SIDE_TABS[currentTopTab] || [];
+            
+            // Filter tabs based on role
+            if (currentTopTab === 'dashboard') {
+                if (currentUser && currentUser.role === 'viewer') {
+                    tabs = tabs.filter(t => t.id === 'overview' || t.id === 'settings');
+                } else if (currentUser && currentUser.role !== 'admin') {
+                    tabs = tabs.filter(t => t.id !== 'team'); // Only admins see team
+                }
+            }
+
             const titleMap = {
                 'dashboard': 'Dashboard',
                 'tech-audit': 'Tech Issues',
                 'audit-2': 'Site Audit',
                 'content': 'Content',
                 'keywords': 'Keywords',
+                'strategy': 'Strategy',
                 'competitors': 'Competitors',
-                'links': 'Links',
+                'links': 'Link Building',
                 'tasks': 'Tasks',
                 'reports': 'Reports',
-                'client-settings': 'Client Settings'
+                'client-settings': 'Settings'
             };
 
             document.getElementById('sidebarTitle').textContent = titleMap[currentTopTab] || 'Navigation';
 
             container.innerHTML = tabs.map(tab => `
                 <button onclick="switchSideTab('${tab.id}')" 
-                    class="side-tab w-full text-left text-sm text-gray-400 rounded transition-colors ${tab.id === currentSideTab ? 'active' : ''}">
+                    class="side-tab w-full flex items-center justify-between px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors ${tab.id === currentSideTab ? 'active' : ''}">
                     ${tab.label}
                 </button>
             `).join('');
@@ -567,6 +583,181 @@
             if (currentSideTab === 'overview') {
                 pageActions.innerHTML = '';
 
+                // ── Campaign Manager gets a specialized command-center ──
+                if (currentUser.role === 'campaign_manager') {
+                    contentArea.innerHTML = `<div class="flex items-center justify-center h-32 text-gray-500"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading command center...</div>`;
+                    lucide.createIcons();
+                    try {
+                        const resp = await fetch('/api/cm-dashboard');
+                        const data = await resp.json();
+                        if (!data.success) throw new Error(data.error || 'Failed to load');
+
+                        const s = data.stats;
+                        const roleNames = {
+                            'admin': 'Admin', 'campaign_manager': 'Campaign Mgr',
+                            'content_strategist': 'Content Strategist', 'content_creator': 'Content Creator',
+                            'optimization_specialist': 'Optimization', 'link_builder': 'Link Builder',
+                            'reporting_manager': 'Reporting Mgr', 'viewer': 'Viewer'
+                        };
+
+                        const workloadRows = (data.team_workload || []).map(w => {
+                            const pct = w.total > 0 ? Math.round((w.done / w.total) * 100) : 0;
+                            return `
+                                <tr class="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
+                                    <td class="py-3 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-7 h-7 rounded-full bg-violet-600/30 flex items-center justify-center text-violet-300 text-xs font-bold">${(w.name || '?')[0].toUpperCase()}</div>
+                                            <div>
+                                                <p class="text-sm text-white font-medium">${w.name}</p>
+                                                <p class="text-xs text-gray-500">${roleNames[w.role] || w.role}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="py-3 px-4 text-center text-sm text-yellow-400">${w.pending}</td>
+                                    <td class="py-3 px-4 text-center text-sm text-blue-400">${w.in_progress}</td>
+                                    <td class="py-3 px-4 text-center text-sm text-emerald-400">${w.done}</td>
+                                    <td class="py-3 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <div class="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                                <div class="h-full bg-gradient-to-r from-violet-500 to-emerald-500 rounded-full" style="width:${pct}%"></div>
+                                            </div>
+                                            <span class="text-xs text-gray-400 w-8 text-right">${pct}%</span>
+                                        </div>
+                                    </td>
+                                </tr>`;
+                        }).join('');
+
+                        const campaignCards = (data.campaign_health || []).map(c => {
+                            const statusCls = c.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-700 text-gray-400';
+                            return `
+                                <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-colors cursor-pointer" onclick="selectClient('${c.id}', true); switchTopTab('tech-audit');">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div>
+                                            <p class="text-sm font-semibold text-white">${c.name}</p>
+                                            <p class="text-xs text-gray-500">${c.domain}</p>
+                                        </div>
+                                        <span class="text-[10px] font-medium px-2 py-0.5 rounded-full ${statusCls}">${c.status}</span>
+                                    </div>
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <div class="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                            <div class="h-full bg-gradient-to-r from-violet-500 to-emerald-500 rounded-full transition-all" style="width:${c.progress}%"></div>
+                                        </div>
+                                        <span class="text-xs text-gray-400">${c.progress}%</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500">${c.done_tasks}/${c.total_tasks} tasks complete</p>
+                                </div>`;
+                        }).join('');
+
+                        const statusIcon = (st) => {
+                            const map = { 'pending': 'clock text-yellow-400', 'in_progress': 'loader-2 text-blue-400', 'done': 'check-circle text-emerald-400' };
+                            return map[st] || 'circle text-gray-400';
+                        };
+
+                        const activityRows = (data.recent_activity || []).map(a => {
+                            const ico = statusIcon(a.status);
+                            const timeAgo = a.updated_at ? new Date(a.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+                            return `
+                                <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-800/30 transition-colors">
+                                    <i data-lucide="${ico.split(' ')[0]}" class="w-4 h-4 flex-shrink-0 ${ico.split(' ').slice(1).join(' ')}"></i>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm text-white truncate">${a.title}</p>
+                                        <p class="text-xs text-gray-500">${a.campaign_name} · ${a.type}</p>
+                                    </div>
+                                    <span class="text-[10px] text-gray-600 flex-shrink-0">${timeAgo}</span>
+                                </div>`;
+                        }).join('');
+
+                        contentArea.innerHTML = `
+                            <div class="max-w-7xl mx-auto">
+                                <div class="mb-6">
+                                    <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                        <i data-lucide="layout-dashboard" class="w-6 h-6 text-blue-400"></i>
+                                        Command Center
+                                    </h2>
+                                    <p class="text-sm text-gray-400 mt-1">Cross-campaign overview & team workload</p>
+                                </div>
+
+                                <!-- Stats Grid -->
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="p-2 bg-blue-500/20 rounded-lg"><i data-lucide="building" class="w-5 h-5 text-blue-400"></i></div>
+                                            <div><p class="text-2xl font-bold text-white">${s.active_campaigns}</p><p class="text-xs text-gray-400">Active Campaigns</p></div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="p-2 bg-yellow-500/20 rounded-lg"><i data-lucide="clock" class="w-5 h-5 text-yellow-400"></i></div>
+                                            <div><p class="text-2xl font-bold text-white">${s.pending_tasks}</p><p class="text-xs text-gray-400">Pending</p></div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="p-2 bg-blue-500/20 rounded-lg"><i data-lucide="loader-2" class="w-5 h-5 text-blue-400"></i></div>
+                                            <div><p class="text-2xl font-bold text-white">${s.in_progress_tasks}</p><p class="text-xs text-gray-400">In Progress</p></div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="p-2 bg-emerald-500/20 rounded-lg"><i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i></div>
+                                            <div><p class="text-2xl font-bold text-white">${s.completed_tasks}</p><p class="text-xs text-gray-400">Completed</p></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                                    <!-- Team Workload -->
+                                    <div class="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                                        <div class="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                                            <h3 class="text-sm font-semibold text-white flex items-center gap-2"><i data-lucide="users" class="w-4 h-4 text-violet-400"></i> Team Workload</h3>
+                                            <span class="text-xs text-gray-500">${s.team_size} members</span>
+                                        </div>
+                                        <div class="overflow-y-auto max-h-[320px]">
+                                            <table class="w-full text-sm">
+                                                <thead class="text-xs uppercase text-gray-500 bg-gray-800/30 sticky top-0">
+                                                    <tr>
+                                                        <th class="py-2 px-4 text-left font-medium">Member</th>
+                                                        <th class="py-2 px-4 text-center font-medium">Pending</th>
+                                                        <th class="py-2 px-4 text-center font-medium">Active</th>
+                                                        <th class="py-2 px-4 text-center font-medium">Done</th>
+                                                        <th class="py-2 px-4 text-left font-medium">Progress</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>${workloadRows || '<tr><td colspan="5" class="text-center py-6 text-gray-500">No tasks assigned yet</td></tr>'}</tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <!-- Recent Activity -->
+                                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                                        <div class="px-4 py-3 border-b border-gray-800">
+                                            <h3 class="text-sm font-semibold text-white flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-amber-400"></i> Recent Activity</h3>
+                                        </div>
+                                        <div class="divide-y divide-gray-800/50 overflow-y-auto max-h-[320px]">
+                                            ${activityRows || '<p class="text-center py-8 text-gray-500 text-sm">No recent activity</p>'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Campaign Health -->
+                                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                                    <div class="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                                        <h3 class="text-sm font-semibold text-white flex items-center gap-2"><i data-lucide="heart-pulse" class="w-4 h-4 text-rose-400"></i> Campaign Health</h3>
+                                        <span class="text-xs text-gray-500">${s.total_campaigns} campaigns</span>
+                                    </div>
+                                    <div class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        ${campaignCards || '<p class="text-center py-6 text-gray-500 col-span-full">No campaigns yet</p>'}
+                                    </div>
+                                </div>
+                            </div>`;
+                        lucide.createIcons();
+                        return;
+                    } catch (err) {
+                        contentArea.innerHTML = `<div class="text-red-400 p-8 text-center">Error loading CM dashboard: ${err.message}</div>`;
+                        return;
+                    }
+                }
+
                 try {
                     let tasksUrl = '/api/tasks';
                     if (currentClient && currentClient.id) {
@@ -588,7 +779,8 @@
                     };
 
                     contentArea.innerHTML = `
-                        <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="grid ${currentUser.role !== 'viewer' ? 'grid-cols-4' : 'grid-cols-3'} gap-4 mb-6">
+                            ${currentUser.role !== 'viewer' ? `
                             <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
                                 <div class="flex items-center gap-3">
                                     <div class="p-2 bg-blue-500/20 rounded-lg">
@@ -596,10 +788,11 @@
                                     </div>
                                     <div>
                                         <p class="text-2xl font-bold text-white">${stats.clients}</p>
-                                        <p class="text-xs text-gray-400">Active Clients</p>
+                                        <p class="text-xs text-gray-400">${currentUser.role === 'admin' ? 'Active Clients' : 'My Campaigns'}</p>
                                     </div>
                                 </div>
                             </div>
+                            ` : ''}
                             <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
                                 <div class="flex items-center gap-3">
                                     <div class="p-2 bg-yellow-500/20 rounded-lg">
@@ -811,12 +1004,24 @@
             } else if (currentTopTab === 'competitors') {
                 await loadCompetitorContent();
             } else if (currentTopTab === 'tasks') {
-                await loadTasksContent();
+                if (currentSideTab === 'sop-library') {
+                    await renderSOPLibrary();
+                } else {
+                    await loadTasksContent();
+                }
             } else if (currentTopTab === 'links') {
                 if (currentSideTab === 'anchor-planner') {
                     await renderAnchorPlanner();
                 } else if (currentSideTab === 'inventory') {
                     await renderLinkMarketplace();
+                } else if (currentSideTab === 'placements') {
+                    await loadPlacementsTab();
+                } else if (currentSideTab === 'prospects') {
+                    await loadProspectsTab();
+                } else if (currentSideTab === 'link-search') {
+                    await renderLinkSearch();
+                } else if (currentSideTab === 'link-recommend') {
+                    await renderLinkRecommendations();
                 } else {
                     await loadLinksContent();
                 }
@@ -826,6 +1031,8 @@
                 await loadAnalyticsDashboard();
             } else if (currentTopTab === 'reports' && currentSideTab === 'tracked-keywords') {
                 await loadTrackedKeywordsDashboard();
+            } else if (currentTopTab === 'reports' && currentSideTab === 'wins') {
+                await loadWinsDashboard();
             } else if (currentTopTab === 'content') {
                 await loadContentTab();
             } else if (currentTopTab === 'strategy') {
@@ -1252,6 +1459,261 @@
                 if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i> Remove Selected'; }
                 showToast('Error removing keyword(s)', 'error');
             }
+        }
+
+        // =====================================================================
+        // WINS OF THE WEEK DASHBOARD
+        // =====================================================================
+        let _winsDuration = '30d';
+
+        async function loadWinsDashboard() {
+            const contentArea = document.getElementById('contentArea');
+
+            if (!currentClient || !currentClient.id) {
+                contentArea.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-64 text-gray-500">
+                        <i data-lucide="trophy" class="w-12 h-12 mb-4 text-gray-600"></i>
+                        <p class="text-lg font-medium">Select a project to view wins</p>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            contentArea.innerHTML = `
+                <div class="flex items-center justify-center p-16">
+                    <i data-lucide="loader-2" class="w-8 h-8 text-amber-500 animate-spin"></i>
+                    <span class="ml-3 text-gray-400">Loading wins data...</span>
+                </div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await fetch('/api/wins', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaign_id: currentClient.id, duration: _winsDuration })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                renderWinsDashboard(data);
+            } catch (err) {
+                console.error(err);
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-red-900/30 rounded-xl p-8 text-center max-w-2xl mx-auto mt-8">
+                        <i data-lucide="alert-circle" class="w-12 h-12 text-red-500 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">Failed to load wins</h3>
+                        <p class="text-gray-400 mb-2">${err.message}</p>
+                        <p class="text-xs text-gray-500">Make sure GSC is connected and tracked keywords are configured.</p>
+                    </div>`;
+                lucide.createIcons();
+            }
+        }
+
+        function renderWinsDashboard(data) {
+            const contentArea = document.getElementById('contentArea');
+            const highlights = data.highlights || [];
+            const rankings = data.rankings || {};
+            const tasks = data.tasks || {};
+            const traffic = data.traffic || {};
+
+            const colorMap = {
+                'emerald': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400', glow: 'rgba(16,185,129,0.15)' },
+                'violet': { bg: 'bg-violet-500/10', border: 'border-violet-500/20', text: 'text-violet-400', glow: 'rgba(139,92,246,0.15)' },
+                'amber': { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400', glow: 'rgba(245,158,11,0.15)' },
+                'blue': { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-400', glow: 'rgba(59,130,246,0.15)' },
+                'rose': { bg: 'bg-rose-500/10', border: 'border-rose-500/20', text: 'text-rose-400', glow: 'rgba(244,63,94,0.15)' }
+            };
+
+            // Duration selector
+            const durationSelector = `
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-gray-600 uppercase tracking-widest">Period</span>
+                    <select onchange="_winsDuration = this.value; loadWinsDashboard();" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer">
+                        <option value="7d" ${_winsDuration === '7d' ? 'selected' : ''}>7 Days</option>
+                        <option value="14d" ${_winsDuration === '14d' ? 'selected' : ''}>14 Days</option>
+                        <option value="30d" ${_winsDuration === '30d' ? 'selected' : ''}>30 Days</option>
+                        <option value="90d" ${_winsDuration === '90d' ? 'selected' : ''}>90 Days</option>
+                    </select>
+                </div>`;
+
+            // Highlight cards
+            let highlightHtml = '';
+            if (highlights.length > 0) {
+                highlightHtml = `
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-${Math.min(highlights.length, 4)} gap-4 mb-8">
+                        ${highlights.map(h => {
+                            const c = colorMap[h.color] || colorMap.violet;
+                            return `
+                                <div class="relative overflow-hidden ${c.bg} border ${c.border} rounded-xl p-5 transition-all hover:scale-[1.01]" style="box-shadow:0 0 40px ${c.glow}">
+                                    <div class="flex items-start gap-3">
+                                        <div class="${c.bg} ${c.text} p-2.5 rounded-lg">
+                                            <i data-lucide="${h.icon}" class="w-5 h-5"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-white font-bold text-lg leading-tight">${h.title}</p>
+                                            <p class="text-gray-400 text-xs mt-1">${h.subtitle}</p>
+                                        </div>
+                                    </div>
+                                    <div class="absolute -bottom-6 -right-6 opacity-5">
+                                        <i data-lucide="${h.icon}" class="w-24 h-24 ${c.text}"></i>
+                                    </div>
+                                </div>`;
+                        }).join('')}
+                    </div>`;
+            } else {
+                highlightHtml = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center mb-8">
+                        <i data-lucide="sun" class="w-10 h-10 text-amber-600 mx-auto mb-3"></i>
+                        <p class="text-gray-400">No major wins detected for this period yet.</p>
+                        <p class="text-xs text-gray-500 mt-1">Try extending the duration or check back as SEO progress compounds over time.</p>
+                    </div>`;
+            }
+
+            // Traffic overview cards
+            const clickDelta = traffic.clicks_current - traffic.clicks_prev;
+            const impDelta = traffic.impressions_current - traffic.impressions_prev;
+            const clickPct = traffic.clicks_prev > 0 ? ((clickDelta / traffic.clicks_prev) * 100).toFixed(1) : 'N/A';
+            const impPct = traffic.impressions_prev > 0 ? ((impDelta / traffic.impressions_prev) * 100).toFixed(1) : 'N/A';
+
+            const trafficHtml = (traffic.clicks_current > 0 || traffic.impressions_current > 0) ? `
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Clicks</p>
+                        <p class="text-2xl font-bold text-white">${fmtK(traffic.clicks_current)}</p>
+                        <span class="text-xs ${clickDelta >= 0 ? 'text-emerald-400' : 'text-red-400'}">${clickDelta >= 0 ? '▲' : '▼'} ${typeof clickPct === 'number' || !isNaN(clickPct) ? clickPct + '%' : clickPct}</span>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Impressions</p>
+                        <p class="text-2xl font-bold text-white">${fmtK(traffic.impressions_current)}</p>
+                        <span class="text-xs ${impDelta >= 0 ? 'text-emerald-400' : 'text-red-400'}">${impDelta >= 0 ? '▲' : '▼'} ${typeof impPct === 'number' || !isNaN(impPct) ? impPct + '%' : impPct}</span>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Rankings Improved</p>
+                        <p class="text-2xl font-bold text-violet-400">${rankings.improved || 0}</p>
+                        <span class="text-xs text-gray-500">of ${(rankings.items || []).length} tracked</span>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Tasks Done</p>
+                        <p class="text-2xl font-bold text-emerald-400">${tasks.completed || 0}</p>
+                        <span class="text-xs text-gray-500">of ${tasks.total || 0} total</span>
+                    </div>
+                </div>` : '';
+
+            // Rankings table
+            const rankingItems = rankings.items || [];
+            let rankingsHtml = '';
+            if (rankingItems.length > 0) {
+                const rows = rankingItems.map(r => {
+                    const improved = r.improvement > 0;
+                    const declined = r.improvement < 0;
+                    const posColor = r.current_position <= 3 ? 'text-amber-400' : r.current_position <= 10 ? 'text-emerald-400' : 'text-white';
+                    const changeHtml = r.previous_position !== null
+                        ? `<span class="inline-flex items-center gap-0.5 text-xs font-medium px-2 py-0.5 rounded-full ${improved ? 'bg-emerald-500/10 text-emerald-400' : declined ? 'bg-red-500/10 text-red-400' : 'bg-gray-800 text-gray-400'}">
+                            ${improved ? '▲' : declined ? '▼' : '—'} ${Math.abs(r.improvement)}
+                           </span>`
+                        : '<span class="text-xs text-gray-600">New</span>';
+                    const medal = r.current_position <= 1 ? '🥇' : r.current_position <= 2 ? '🥈' : r.current_position <= 3 ? '🥉' : '';
+
+                    return `
+                        <tr class="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                            <td class="py-3 px-4">
+                                <span class="text-sm text-white font-medium">${r.keyword}</span>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <span class="text-sm font-bold ${posColor}">${medal} #${r.current_position}</span>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <span class="text-sm text-gray-400">${r.previous_position !== null ? '#' + r.previous_position : '—'}</span>
+                            </td>
+                            <td class="py-3 px-4 text-center">${changeHtml}</td>
+                            <td class="py-3 px-4 text-right text-sm text-gray-300">${fmtK(r.clicks)}</td>
+                            <td class="py-3 px-4 text-right text-sm text-gray-400">${fmtK(r.impressions)}</td>
+                        </tr>`;
+                }).join('');
+
+                rankingsHtml = `
+                    <div class="mb-8">
+                        <h3 class="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                            <i data-lucide="trending-up" class="w-5 h-5 text-violet-400"></i>
+                            Keyword Rankings
+                        </h3>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-xs uppercase tracking-wider text-gray-500 bg-gray-900/70 border-b border-gray-800">
+                                        <th class="text-left py-3 px-4">Keyword</th>
+                                        <th class="text-center py-3 px-4">Position</th>
+                                        <th class="text-center py-3 px-4">Previous</th>
+                                        <th class="text-center py-3 px-4">Change</th>
+                                        <th class="text-right py-3 px-4">Clicks</th>
+                                        <th class="text-right py-3 px-4">Impressions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${rows}</tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            }
+
+            // Completed tasks section
+            const taskItems = tasks.items || [];
+            let tasksHtml = '';
+            if (taskItems.length > 0) {
+                const taskRows = taskItems.map(t => {
+                    const date = t.completed_at ? new Date(t.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+                    return `
+                        <div class="flex items-center gap-3 py-3 px-4 border-b border-gray-800/50 last:border-0 hover:bg-gray-800/20 transition-colors">
+                            <div class="bg-emerald-500/10 text-emerald-400 p-1.5 rounded-lg">
+                                <i data-lucide="check" class="w-4 h-4"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm text-white font-medium truncate">${t.title}</p>
+                                <p class="text-xs text-gray-500">${t.assigned_role || t.type || 'General'}</p>
+                            </div>
+                            <span class="text-xs text-gray-500 whitespace-nowrap">${date}</span>
+                        </div>`;
+                }).join('');
+
+                tasksHtml = `
+                    <div class="mb-8">
+                        <h3 class="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                            <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
+                            Completed Tasks
+                        </h3>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                            ${taskRows}
+                        </div>
+                    </div>`;
+            }
+
+            // Assemble the full dashboard
+            contentArea.innerHTML = `
+                <div class="max-w-6xl mx-auto">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                <i data-lucide="trophy" class="w-6 h-6 text-amber-400"></i>
+                                Wins of the Week
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1">${currentClient.name} — Last ${data.duration_days} days performance wins</p>
+                        </div>
+                        ${durationSelector}
+                    </div>
+
+                    ${highlightHtml}
+                    ${trafficHtml}
+                    ${rankingsHtml}
+                    ${tasksHtml}
+
+                    ${!rankingsHtml && !tasksHtml && !trafficHtml ? `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center">
+                            <i data-lucide="sparkles" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">Building momentum</h3>
+                            <p class="text-gray-400 mb-2">Set up tracked keywords and run audits to start accumulating wins.</p>
+                            <p class="text-xs text-gray-500">Go to Strategy → Keyword Research to discover opportunities, then track them in Reports → Tracked Keywords.</p>
+                        </div>` : ''}
+                </div>`;
+            lucide.createIcons();
         }
 
         // =====================================================================
@@ -2333,7 +2795,6 @@
             }).catch(() => {
                 prompt('Copy this invite link:', link);
             });
-            });
         }
 
         async function deleteTeamMember(memberId) {
@@ -2342,7 +2803,7 @@
                 const res = await fetch(`/api/team/${memberId}`, { method: 'DELETE' });
                 const data = await res.json();
                 if (data.success) {
-                    loadTeamView(); // Reload the view
+                    loadTabContent(); // Reload the view
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -2357,7 +2818,7 @@
                 const res = await fetch(`/api/team/invitations/${token}`, { method: 'DELETE' });
                 const data = await res.json();
                 if (data.success) {
-                    loadTeamView(); // Reload the view
+                    loadTabContent(); // Reload the view
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -2444,7 +2905,7 @@
                 
                 if (data.success) {
                     document.getElementById('editMemberModal').remove();
-                    loadTeamView(); // Reload view
+                    loadTabContent(); // Reload view
                 } else {
                     alert(data.error || 'Failed to update member');
                     btn.textContent = 'Save Changes';
@@ -3392,6 +3853,11 @@
                                 </table>
                             </div>
                         </div >
+                        <div id="scorecardContainer" class="mb-6">
+                            <div class="flex items-center justify-center h-16 text-gray-500 text-sm">
+                                <i data-lucide="loader-2" class="w-4 h-4 animate-spin mr-2"></i> Computing competitive scores...
+                            </div>
+                        </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
                                 <h4 class="text-white font-medium mb-2 flex items-center gap-2">
@@ -3405,6 +3871,9 @@
                         </div>
                     `;
                     contentArea.innerHTML = tableHTML;
+
+                    // Async: Fetch and render scorecards
+                    _fetchAndRenderScorecard(currentClient.id);
 
                     // Prompt for minimum 3 competitors
                     if (audits.length < 3) {
@@ -3466,6 +3935,124 @@
             lucide.createIcons();
         }
         // ==========================================================================
+        // COMPETITOR SCORECARD (Brand Authority + Funnel + Multi-Param Scoring)
+        // ==========================================================================
+        async function _fetchAndRenderScorecard(campaignId) {
+            const container = document.getElementById('scorecardContainer');
+            if (!container) return;
+            
+            try {
+                const resp = await fetch(`/api/competitors/scorecard?campaign_id=${campaignId}`);
+                const data = await resp.json();
+                
+                if (!data.success || !data.scorecards || data.scorecards.length === 0) {
+                    container.innerHTML = '';
+                    return;
+                }
+                
+                const cards = data.scorecards;
+                
+                // Helper: score color
+                const scoreColor = (s) => s >= 70 ? 'text-emerald-400' : s >= 40 ? 'text-amber-400' : 'text-red-400';
+                const scoreBg = (s) => s >= 70 ? 'bg-emerald-500' : s >= 40 ? 'bg-amber-500' : 'bg-red-500';
+                const scoreRing = (s) => s >= 70 ? 'border-emerald-500' : s >= 40 ? 'border-amber-500' : 'border-red-500';
+                
+                let html = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                        <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                                <i data-lucide="gauge" class="w-5 h-5 text-violet-400"></i>
+                                Competitive Scorecard
+                            </h3>
+                            <span class="text-xs text-gray-500">${cards.length} domains analyzed</span>
+                        </div>
+                        
+                        <!-- Score Cards Grid -->
+                        <div class="p-4 space-y-4">
+                `;
+                
+                for (const card of cards) {
+                    const isClient = card.is_client;
+                    const borderClass = isClient ? 'border-violet-500/40 bg-violet-900/10' : 'border-gray-700 bg-gray-800/30';
+                    const badge = isClient ? '<span class="bg-violet-600/30 text-violet-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">You</span>' : '';
+                    
+                    const ba = card.brand_authority || 0;
+                    const cs = card.competitive_score || 0;
+                    const fs = card.funnel_score || {};
+                    const pb = card.parameter_breakdown || {};
+                    
+                    html += `
+                        <div class="border ${borderClass} rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-semibold text-white text-sm">${card.domain}</span>
+                                    ${badge}
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div class="text-center">
+                                        <div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Authority</div>
+                                        <div class="w-12 h-12 rounded-full border-3 ${scoreRing(ba)} flex items-center justify-center" style="border-width:3px">
+                                            <span class="text-sm font-bold ${scoreColor(ba)}">${ba}</span>
+                                        </div>
+                                    </div>
+                                    <div class="text-center">
+                                        <div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Score</div>
+                                        <div class="w-12 h-12 rounded-full border-3 ${scoreRing(cs)} flex items-center justify-center" style="border-width:3px">
+                                            <span class="text-sm font-bold ${scoreColor(cs)}">${cs}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Funnel Distribution -->
+                            <div class="mb-3">
+                                <div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1.5">Funnel Orientation</div>
+                                <div class="flex h-3 rounded-full overflow-hidden bg-gray-700">
+                                    ${fs.tofu ? `<div class="bg-blue-500 transition-all" style="width:${fs.tofu}%" title="ToFu: ${fs.tofu}%"></div>` : ''}
+                                    ${fs.mofu ? `<div class="bg-amber-500 transition-all" style="width:${fs.mofu}%" title="MoFu: ${fs.mofu}%"></div>` : ''}
+                                    ${fs.bofu ? `<div class="bg-emerald-500 transition-all" style="width:${fs.bofu}%" title="BoFu: ${fs.bofu}%"></div>` : ''}
+                                </div>
+                                <div class="flex justify-between mt-1 text-[10px]">
+                                    <span class="text-blue-400">ToFu ${fs.tofu || 0}%</span>
+                                    <span class="text-amber-400">MoFu ${fs.mofu || 0}%</span>
+                                    <span class="text-emerald-400">BoFu ${fs.bofu || 0}%</span>
+                                </div>
+                            </div>
+                            
+                            <!-- 6-Dimension Breakdown -->
+                            <div class="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                                ${Object.entries(pb).map(([key, val]) => {
+                                    const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                    return `
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[10px] text-gray-400 w-24 truncate" title="${label}">${label}</span>
+                                            <div class="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                                <div class="${scoreBg(val)} h-full rounded-full transition-all" style="width:${val}%"></div>
+                                            </div>
+                                            <span class="text-[10px] ${scoreColor(val)} font-mono w-6 text-right">${val}</span>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+                
+                container.innerHTML = html;
+                lucide.createIcons();
+                
+            } catch (err) {
+                console.warn('Scorecard fetch failed (non-fatal):', err);
+                container.innerHTML = '';
+            }
+        }
+
+        // ==========================================================================
         // SLIDE GENERATION (Hidden Iframe Flow)
         // ==========================================================================
         function startSlideGeneration(auditId, templateType = 'default') {
@@ -3506,7 +4093,7 @@
             // Create hidden iframe — pass template_type
             const iframe = document.createElement('iframe');
             iframe.id = 'slideGenIframe';
-            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}`;
+            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}&role=${currentUser?.role || ''}`;
             iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1400px;height:900px;opacity:0;pointer-events:none;';
             document.body.appendChild(iframe);
 
@@ -3641,7 +4228,8 @@
                         campaign_id: currentClient.id,
                         max_pages: maxPages,
                         type: 'competitor',
-                        competitor_domain: cleanDomain
+                        competitor_domain: cleanDomain,
+                        competitor_country: window.lastCompetitorCountry || 'US'
                     })
                 }).catch(e => {
                     console.error("Error adding competitor:", cleanDomain, e);
@@ -3744,7 +4332,7 @@
                         </span>
                     </td>
                     <td class="px-6 py-4">
-                        <select onchange="updateTaskRole('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500">
+                        <select ${currentUser.role === 'viewer' ? 'disabled' : ''} onchange="updateTaskRole('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 disabled:opacity-50 disabled:cursor-not-allowed">
                             <option value="">Unassigned</option>
                             <option value="Campaign Manager" ${t.assigned_role === 'Campaign Manager' ? 'selected' : ''}>Campaign Manager</option>
                             <option value="Content Strategist" ${t.assigned_role === 'Content Strategist' ? 'selected' : ''}>Content Strategist</option>
@@ -3755,7 +4343,7 @@
                         </select>
                     </td>
                     <td class="px-6 py-4">
-                        <select onchange="updateTaskAssignee('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 max-w-[120px]">
+                        <select ${currentUser.role === 'viewer' ? 'disabled' : ''} onchange="updateTaskAssignee('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 max-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed">
                             <option value="">Any</option>
                             ${(window.teamMembers || []).map(m => `
                                 <option value="${m.id}" ${t.assigned_to === m.id ? 'selected' : ''}>
@@ -3768,7 +4356,7 @@
                         ${getPriorityBadge(t.priority)}
                     </td>
                     <td class="px-6 py-4">
-                        <select onchange="updateTaskStatus('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 ${t.status === 'done' ? 'text-green-500' : 'text-gray-300'} text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500">
+                        <select ${currentUser.role === 'viewer' ? 'disabled' : ''} onchange="updateTaskStatus('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 ${t.status === 'done' ? 'text-green-500' : 'text-gray-300'} text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 disabled:opacity-50 disabled:cursor-not-allowed">
                             <option value="pending" ${t.status === 'pending' ? 'selected' : ''} class="text-gray-300">Pending</option>
                             <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''} class="text-gray-300">In Progress</option>
                             <option value="done" ${t.status === 'done' ? 'selected' : ''} class="text-green-500">Done</option>
@@ -4678,6 +5266,265 @@
                     </div>`;
             }
             lucide.createIcons();
+        }
+
+        // =====================================================================
+        // LINK PLACEMENTS TAB
+        // =====================================================================
+        async function loadPlacementsTab() {
+            const contentArea = document.getElementById('contentArea');
+            if (!currentClient) {
+                contentArea.innerHTML = `<div class="text-center text-gray-500 py-12">Select a project to view link placements.</div>`;
+                return;
+            }
+
+            contentArea.innerHTML = `<div class="flex items-center justify-center p-12"><i data-lucide="loader-2" class="w-8 h-8 text-violet-500 animate-spin"></i><span class="ml-3 text-gray-400">Loading placements...</span></div>`;
+            lucide.createIcons();
+
+            try {
+                const resp = await fetch(`/api/link-placements?campaign_id=${currentClient.id}`);
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'Failed to load placements');
+
+                const stats = data.stats || {};
+                const orders = data.orders || [];
+
+                const statusBadge = (s) => {
+                    const map = {
+                        'processing': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                        'in_progress': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+                        'completed': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                        'pending': 'bg-gray-800 text-gray-400 border-gray-700',
+                        'cancelled': 'bg-red-500/10 text-red-400 border-red-500/20'
+                    };
+                    const cls = map[s] || map.pending;
+                    return `<span class="text-xs font-medium px-2 py-0.5 rounded-full border ${cls}">${(s || 'pending').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>`;
+                };
+
+                let ordersHtml = '';
+                if (orders.length > 0) {
+                    ordersHtml = orders.map(o => {
+                        const date = o.created_at ? new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+                        const itemRows = (o.items || []).map(it => `
+                            <tr class="border-b border-gray-800/40 hover:bg-gray-800/20 transition-colors">
+                                <td class="py-2.5 px-4">
+                                    <span class="text-sm text-white font-medium">${it.domain}</span>
+                                    <span class="ml-2 text-xs text-gray-500">${it.niche}</span>
+                                </td>
+                                <td class="py-2.5 px-4 text-center"><span class="text-xs font-mono text-violet-400">DA ${it.da}</span></td>
+                                <td class="py-2.5 px-4 text-sm text-gray-300 max-w-[200px] truncate">${it.target_url || '—'}</td>
+                                <td class="py-2.5 px-4 text-sm text-gray-400">${it.anchor_text || '—'}</td>
+                                <td class="py-2.5 px-4 text-right text-sm text-white">$${it.price.toFixed(2)}</td>
+                            </tr>`).join('');
+
+                        return `
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-4">
+                                <div class="flex items-center justify-between p-4 border-b border-gray-800">
+                                    <div class="flex items-center gap-3">
+                                        <div class="bg-violet-500/10 text-violet-400 p-2 rounded-lg">
+                                            <i data-lucide="package" class="w-4 h-4"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm text-white font-medium">Order #${o.order_id.slice(0, 8)}</p>
+                                            <p class="text-xs text-gray-500">${date} · ${o.items.length} link${o.items.length !== 1 ? 's' : ''}</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        ${statusBadge(o.status)}
+                                        <span class="text-sm font-bold text-white">$${o.total_amount.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="text-xs uppercase tracking-wider text-gray-500 bg-gray-900/70">
+                                            <th class="text-left py-2 px-4">Domain</th>
+                                            <th class="text-center py-2 px-4">DA</th>
+                                            <th class="text-left py-2 px-4">Target URL</th>
+                                            <th class="text-left py-2 px-4">Anchor</th>
+                                            <th class="text-right py-2 px-4">Price</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${itemRows}</tbody>
+                                </table>
+                            </div>`;
+                    }).join('');
+                } else {
+                    ordersHtml = `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center">
+                            <i data-lucide="package-open" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">No placements yet</h3>
+                            <p class="text-gray-400">Purchase links from the <button onclick="switchSideTab('inventory')" class="text-violet-400 hover:underline">Inventory</button> tab to see them here.</p>
+                        </div>`;
+                }
+
+                contentArea.innerHTML = `
+                    <div class="max-w-6xl mx-auto">
+                        <div class="mb-6">
+                            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                <i data-lucide="bookmark-check" class="w-6 h-6 text-violet-400"></i>
+                                Link Placements
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1">${currentClient.name} — Purchased links & fulfillment tracking</p>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Links</p>
+                                <p class="text-2xl font-bold text-white">${stats.total_links || 0}</p>
+                            </div>
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Spent</p>
+                                <p class="text-2xl font-bold text-emerald-400">$${(stats.total_spent || 0).toFixed(2)}</p>
+                            </div>
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">In Progress</p>
+                                <p class="text-2xl font-bold text-amber-400">${stats.active_orders || 0}</p>
+                            </div>
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Completed</p>
+                                <p class="text-2xl font-bold text-violet-400">${stats.completed_orders || 0}</p>
+                            </div>
+                        </div>
+
+                        ${ordersHtml}
+                    </div>`;
+                lucide.createIcons();
+            } catch (err) {
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-red-900/50 rounded-xl p-8 text-center max-w-2xl mx-auto mt-8">
+                        <i data-lucide="alert-triangle" class="w-12 h-12 text-red-400 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">Failed to load placements</h3>
+                        <p class="text-gray-400">${err.message}</p>
+                    </div>`;
+                lucide.createIcons();
+            }
+        }
+
+        // =====================================================================
+        // LINK PROSPECTS TAB
+        // =====================================================================
+        async function loadProspectsTab() {
+            const contentArea = document.getElementById('contentArea');
+            if (!currentClient) {
+                contentArea.innerHTML = `<div class="text-center text-gray-500 py-12">Select a project to view link prospects.</div>`;
+                return;
+            }
+
+            contentArea.innerHTML = `<div class="flex items-center justify-center p-12"><i data-lucide="loader-2" class="w-8 h-8 text-blue-500 animate-spin"></i><span class="ml-3 text-gray-400">Analyzing competitor backlinks for prospects...</span></div>`;
+            lucide.createIcons();
+
+            try {
+                // Reuse competitor backlink data to surface prospects
+                const resp = await fetch(`/api/client/backlinks?campaign_id=${currentClient.id}`);
+                const data = await resp.json();
+
+                const domains = data.referring_domains || [];
+                const fmt = (n) => (n || 0).toLocaleString();
+
+                // Build prospect cards from referring domains that aren't already linking to us
+                // Sort by rank (higher = better quality prospect)
+                const prospects = domains
+                    .filter(d => d.rank && d.rank > 20)
+                    .sort((a, b) => (b.rank || 0) - (a.rank || 0))
+                    .slice(0, 50);
+
+                const qualityBadge = (rank) => {
+                    if (rank >= 60) return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">High Quality</span>';
+                    if (rank >= 40) return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">Medium</span>';
+                    return '<span class="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 border border-gray-700">Standard</span>';
+                };
+
+                let tableHtml = '';
+                if (prospects.length > 0) {
+                    const rows = prospects.map((d, i) => `
+                        <tr class="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                            <td class="py-3 px-4 text-gray-500 text-xs">${i + 1}</td>
+                            <td class="py-3 px-4">
+                                <a href="https://${d.domain}" target="_blank" class="text-sm text-white font-medium hover:text-blue-400 transition-colors flex items-center gap-1">
+                                    ${d.domain} <i data-lucide="external-link" class="w-3 h-3 opacity-40"></i>
+                                </a>
+                            </td>
+                            <td class="py-3 px-4 text-center"><span class="text-sm font-mono font-bold text-violet-400">${d.rank || '—'}</span></td>
+                            <td class="py-3 px-4 text-center text-sm text-gray-300">${fmt(d.backlinks)}</td>
+                            <td class="py-3 px-4 text-center">${qualityBadge(d.rank || 0)}</td>
+                            <td class="py-3 px-4 text-right text-xs text-gray-500">${d.first_seen ? d.first_seen.split('T')[0] : '—'}</td>
+                        </tr>`).join('');
+
+                    tableHtml = `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                            <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-white">Link Opportunities</h3>
+                                    <p class="text-sm text-gray-400">${prospects.length} high-value domains from competitor analysis</p>
+                                </div>
+                            </div>
+                            <div class="overflow-y-auto max-h-[520px]">
+                                <table class="w-full text-sm">
+                                    <thead class="text-xs uppercase bg-gray-800/50 text-gray-400 sticky top-0">
+                                        <tr>
+                                            <th class="py-2.5 px-4 text-left font-medium">#</th>
+                                            <th class="py-2.5 px-4 text-left font-medium">Domain</th>
+                                            <th class="py-2.5 px-4 text-center font-medium">DR</th>
+                                            <th class="py-2.5 px-4 text-center font-medium">Backlinks</th>
+                                            <th class="py-2.5 px-4 text-center font-medium">Quality</th>
+                                            <th class="py-2.5 px-4 text-right font-medium">First Seen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${rows}</tbody>
+                                </table>
+                            </div>
+                        </div>`;
+                } else {
+                    tableHtml = `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center">
+                            <i data-lucide="search" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">No prospects found</h3>
+                            <p class="text-gray-400">Run a backlink analysis from the <button onclick="switchSideTab('backlink-profile')" class="text-blue-400 hover:underline">Backlink Profile</button> tab first.</p>
+                        </div>`;
+                }
+
+                // Stats row
+                const high = prospects.filter(d => d.rank >= 60).length;
+                const mid = prospects.filter(d => d.rank >= 40 && d.rank < 60).length;
+                const std = prospects.filter(d => d.rank < 40).length;
+
+                contentArea.innerHTML = `
+                    <div class="max-w-6xl mx-auto">
+                        <div class="mb-6">
+                            <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                <i data-lucide="compass" class="w-6 h-6 text-blue-400"></i>
+                                Link Prospects
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1">${currentClient.name} — Outreach opportunities from competitor backlink analysis</p>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 mb-6">
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">High Quality (DR 60+)</p>
+                                <p class="text-2xl font-bold text-emerald-400">${high}</p>
+                            </div>
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Medium (DR 40-59)</p>
+                                <p class="text-2xl font-bold text-amber-400">${mid}</p>
+                            </div>
+                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Standard (DR 20-39)</p>
+                                <p class="text-2xl font-bold text-gray-400">${std}</p>
+                            </div>
+                        </div>
+
+                        ${tableHtml}
+                    </div>`;
+                lucide.createIcons();
+            } catch (err) {
+                contentArea.innerHTML = `
+                    <div class="bg-gray-900 border border-red-900/50 rounded-xl p-8 text-center max-w-2xl mx-auto mt-8">
+                        <i data-lucide="alert-triangle" class="w-12 h-12 text-red-400 mx-auto mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">Failed to load prospects</h3>
+                        <p class="text-gray-400">${err.message}</p>
+                    </div>`;
+                lucide.createIcons();
+            }
         }
 
         async function loadTasksContent() {
@@ -7120,6 +7967,10 @@
 
             if (currentSideTab === 'all-links') {
                 renderAllLinks();
+            } else if (currentSideTab === 'content-library') {
+                renderContentLibrary();
+            } else if (currentSideTab === 'ai-writer') {
+                renderAIWriter();
             } else if (currentSideTab === 'bofu') {
                 renderBoFu();
             } else if (currentSideTab === 'mofu') {
@@ -8422,7 +9273,7 @@
             // Use a hidden iframe to render audit-dashboard.html, capture screenshots, and generate slides
             const iframe = document.createElement('iframe');
             iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1400px;height:900px;border:none;opacity:0;pointer-events:none;';
-            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}`;
+            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}&role=${currentUser?.role || ''}`;
             document.body.appendChild(iframe);
 
             const timeout = setTimeout(() => {
@@ -8478,6 +9329,258 @@
             }
 
             window.addEventListener('message', handleMessage);
+        }
+
+        // =================================================================
+        // PHASE 3: CONTENT LIBRARY
+        // =================================================================
+        async function renderContentLibrary() {
+            const ca = document.getElementById('contentArea');
+            if (!currentClient) { ca.innerHTML = '<div class="text-gray-400 text-center p-8">Select a campaign first.</div>'; return; }
+            ca.innerHTML = '<div class="flex items-center justify-center p-12"><i data-lucide="loader-2" class="w-6 h-6 animate-spin text-violet-500 mr-2"></i><span class="text-gray-400">Loading content library...</span></div>';
+            lucide.createIcons();
+            try {
+                const resp = await fetch(`/api/content-pieces?campaign_id=${currentClient.id}`);
+                const data = await resp.json();
+                const pieces = data.pieces || [];
+                const stats = data.stats || {};
+                const statusColors = { brief:'bg-gray-700 text-gray-300', draft:'bg-blue-900/50 text-blue-300', review:'bg-amber-900/50 text-amber-300', revision:'bg-orange-900/50 text-orange-300', approved:'bg-emerald-900/50 text-emerald-300', published:'bg-violet-900/50 text-violet-300' };
+                ca.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <div><h2 class="text-xl font-bold text-white">Content Library</h2><p class="text-sm text-gray-400">${stats.total || 0} pieces across all stages</p></div>
+                        <button onclick="showCreateContentModal()" class="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm flex items-center gap-2 transition-colors"><i data-lucide="plus" class="w-4 h-4"></i> New Content</button>
+                    </div>
+                    <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
+                        ${['brief','draft','review','revision','approved','published'].map(s => `<div class="bg-gray-900 border border-gray-800 rounded-lg p-3 text-center cursor-pointer hover:border-violet-500/50 transition-colors" onclick="filterContentByStatus('${s}')"><p class="text-lg font-bold text-white">${stats[s]||0}</p><p class="text-[10px] uppercase text-gray-500">${s}</p></div>`).join('')}
+                    </div>
+                    ${pieces.length ? `<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"><table class="w-full text-sm"><thead class="bg-gray-800/50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Title</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Keyword</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">Funnel</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">Status</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">Words</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">Actions</th></tr></thead><tbody class="divide-y divide-gray-800">${pieces.map(p => `<tr class="hover:bg-gray-800/30 transition-colors"><td class="px-4 py-3 text-white font-medium">${p.title||'Untitled'}</td><td class="px-4 py-3 text-gray-400">${p.target_keyword||'—'}</td><td class="px-4 py-3 text-center"><span class="text-xs uppercase font-medium ${p.funnel_stage==='bofu'?'text-emerald-400':p.funnel_stage==='mofu'?'text-blue-400':'text-gray-400'}">${p.funnel_stage||'—'}</span></td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded text-xs font-medium ${statusColors[p.status]||'bg-gray-700 text-gray-300'}">${p.status}</span></td><td class="px-4 py-3 text-center text-gray-400">${(p.word_count||0).toLocaleString()}</td><td class="px-4 py-3 text-center"><button onclick="advanceContentStatus('${p.id}','${p.status}')" class="text-violet-400 hover:text-violet-300 text-xs mr-2">Advance</button><button onclick="deleteContentPiece('${p.id}')" class="text-red-400 hover:text-red-300 text-xs">Delete</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="text-center text-gray-500 py-12 bg-gray-900 border border-gray-800 rounded-xl"><i data-lucide="file-text" class="w-8 h-8 mx-auto mb-2 opacity-40"></i><p>No content pieces yet. Create your first one!</p></div>'}
+                </div>`;
+                lucide.createIcons();
+            } catch(e) { ca.innerHTML = `<div class="text-red-400 text-center p-8">Error: ${e.message}</div>`; }
+        }
+        async function filterContentByStatus(status) {
+            const ca = document.getElementById('contentArea');
+            try {
+                const resp = await fetch(`/api/content-pieces?campaign_id=${currentClient.id}&status=${status}`);
+                const data = await resp.json();
+                // Re-render with filtered — simplified: just re-call
+                renderContentLibrary();
+            } catch(e) { console.error(e); }
+        }
+        function showCreateContentModal() {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50';
+            modal.id = 'createContentModal';
+            modal.innerHTML = `<div class="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-lg"><h3 class="text-lg font-bold text-white mb-4">Create Content Piece</h3><div class="space-y-3"><input id="ccTitle" placeholder="Article Title" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"><input id="ccKeyword" placeholder="Target Keyword" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"><select id="ccFunnel" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"><option value="tofu">ToFu</option><option value="mofu">MoFu</option><option value="bofu">BoFu</option></select><select id="ccType" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"><option value="blog_post">Blog Post</option><option value="landing_page">Landing Page</option><option value="pillar">Pillar Page</option><option value="guest_post">Guest Post</option></select></div><div class="flex gap-3 mt-5"><button onclick="submitCreateContent()" class="flex-1 bg-violet-600 hover:bg-violet-700 text-white rounded-lg py-2 text-sm">Create</button><button onclick="document.getElementById('createContentModal').remove()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white rounded-lg py-2 text-sm">Cancel</button></div></div>`;
+            document.body.appendChild(modal);
+        }
+        async function submitCreateContent() {
+            const title = document.getElementById('ccTitle').value.trim();
+            if (!title) return alert('Title is required');
+            try {
+                await fetch('/api/content-pieces', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ campaign_id: currentClient.id, title, target_keyword: document.getElementById('ccKeyword').value.trim(), funnel_stage: document.getElementById('ccFunnel').value, content_type: document.getElementById('ccType').value }) });
+                document.getElementById('createContentModal').remove();
+                renderContentLibrary();
+            } catch(e) { alert('Error: '+e.message); }
+        }
+        async function advanceContentStatus(pieceId, current) {
+            const flow = ['brief','draft','review','revision','approved','published'];
+            const idx = flow.indexOf(current);
+            const next = idx < flow.length-1 ? flow[idx+1] : current;
+            if (next === current) return;
+            try {
+                await fetch(`/api/content-pieces/${pieceId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status: next }) });
+                renderContentLibrary();
+            } catch(e) { alert('Error: '+e.message); }
+        }
+        async function deleteContentPiece(pieceId) {
+            if (!confirm('Delete this content piece?')) return;
+            try { await fetch(`/api/content-pieces/${pieceId}`, { method:'DELETE' }); renderContentLibrary(); } catch(e) { alert(e.message); }
+        }
+
+        // =================================================================
+        // PHASE 3: AI WRITER
+        // =================================================================
+        async function renderAIWriter() {
+            const ca = document.getElementById('contentArea');
+            if (!currentClient) { ca.innerHTML = '<div class="text-gray-400 text-center p-8">Select a campaign first.</div>'; return; }
+            ca.innerHTML = `
+            <div class="max-w-3xl mx-auto space-y-6">
+                <div><h2 class="text-xl font-bold text-white">AI Article Writer</h2><p class="text-sm text-gray-400">Generate a full SEO-optimized article using Gemini AI</p></div>
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
+                    <input id="awTitle" placeholder="Article title (e.g. 'Best CRM Software for Small Business')" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white">
+                    <input id="awKeyword" placeholder="Primary keyword" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white">
+                    <div class="grid grid-cols-2 gap-4">
+                        <select id="awFunnel" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white"><option value="tofu">ToFu (Awareness)</option><option value="mofu">MoFu (Consideration)</option><option value="bofu">BoFu (Decision)</option></select>
+                        <input id="awWords" type="number" placeholder="Word target (default: 1800)" value="1800" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white">
+                    </div>
+                    <button onclick="generateArticle()" id="awBtn" class="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-lg py-3 font-medium flex items-center justify-center gap-2 transition-all"><i data-lucide="sparkles" class="w-4 h-4"></i> Generate Article</button>
+                </div>
+                <div id="awResult"></div>
+            </div>`;
+            lucide.createIcons();
+        }
+        async function generateArticle() {
+            const title = document.getElementById('awTitle').value.trim();
+            if (!title) return alert('Enter an article title');
+            const btn = document.getElementById('awBtn');
+            const result = document.getElementById('awResult');
+            btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating (this takes 30-60s)...'; lucide.createIcons();
+            result.innerHTML = '<div class="bg-gray-900 border border-gray-800 rounded-xl p-6"><div class="flex items-center gap-3 text-gray-400"><i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> AI is researching, outlining, and writing your article...</div></div>';
+            lucide.createIcons();
+            try {
+                const resp = await fetch('/api/generate-article', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ campaign_id: currentClient.id, title, target_keyword: document.getElementById('awKeyword').value.trim() || title, funnel_stage: document.getElementById('awFunnel').value, word_target: parseInt(document.getElementById('awWords').value) || 1800 }) });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'Generation failed');
+                const a = data.article;
+                result.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                        <div><h3 class="font-semibold text-white">${a.title}</h3><p class="text-xs text-gray-400">${(a.word_count||0).toLocaleString()} words · ${a.funnel_stage} · Keyword: ${a.target_keyword}</p></div>
+                        <div class="flex gap-2">
+                            <button onclick="saveArticleAsContent()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs">Save to Library</button>
+                            <button onclick="copyArticleHtml()" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs">Copy HTML</button>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-800/30 border-b border-gray-800"><p class="text-xs text-gray-500 uppercase mb-1">Meta Description</p><p class="text-sm text-gray-300">${a.meta_description||'—'}</p></div>
+                    <div class="p-6 prose prose-invert prose-sm max-w-none max-h-[600px] overflow-y-auto" id="articleOutput">${a.html}</div>
+                </div>`;
+                window._lastGeneratedArticle = a;
+            } catch(e) { result.innerHTML = `<div class="text-red-400 bg-red-900/20 border border-red-800 rounded-xl p-4">${e.message}</div>`; }
+            btn.disabled = false; btn.innerHTML = '<i data-lucide="sparkles" class="w-4 h-4"></i> Generate Article'; lucide.createIcons();
+        }
+        async function saveArticleAsContent() {
+            const a = window._lastGeneratedArticle; if (!a) return;
+            try {
+                await fetch('/api/content-pieces', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ campaign_id: currentClient.id, title: a.title, target_keyword: a.target_keyword, funnel_stage: a.funnel_stage, draft_html: a.html, word_count: a.word_count, meta_title: a.meta_title, meta_description: a.meta_description, status: 'draft' }) });
+                alert('Saved to Content Library!');
+            } catch(e) { alert('Error: '+e.message); }
+        }
+        function copyArticleHtml() { const el = document.getElementById('articleOutput'); if (el) { navigator.clipboard.writeText(el.innerHTML); alert('HTML copied!'); } }
+
+        // =================================================================
+        // PHASE 3: LINK SEARCH PORTAL
+        // =================================================================
+        async function renderLinkSearch() {
+            const ca = document.getElementById('contentArea');
+            ca.innerHTML = `
+            <div class="space-y-6">
+                <div><h2 class="text-xl font-bold text-white">Link Search Portal</h2><p class="text-sm text-gray-400">Search and filter the backlink inventory</p></div>
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <input id="lsQuery" placeholder="Search domain/niche..." class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                        <select id="lsNiche" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"><option value="">All Niches</option></select>
+                        <input id="lsMinDA" type="number" placeholder="Min DA" value="0" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                        <input id="lsMaxPrice" type="number" placeholder="Max Price" value="9999" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                        <button onclick="executeLinkSearch()" class="bg-violet-600 hover:bg-violet-700 text-white rounded-lg px-3 py-2 text-sm">Search</button>
+                    </div>
+                </div>
+                <div id="lsResults"><div class="text-center text-gray-500 py-8">Enter search criteria and click Search</div></div>
+            </div>`;
+            // Load niches
+            try { const r = await fetch('/api/link-search?limit=1'); const d = await r.json(); (d.available_niches||[]).forEach(n => { document.getElementById('lsNiche').innerHTML += `<option value="${n}">${n}</option>`; }); } catch(e) {}
+            lucide.createIcons();
+        }
+        async function executeLinkSearch() {
+            const results = document.getElementById('lsResults');
+            results.innerHTML = '<div class="flex items-center justify-center p-8"><i data-lucide="loader-2" class="w-5 h-5 animate-spin text-violet-500 mr-2"></i><span class="text-gray-400">Searching...</span></div>';
+            lucide.createIcons();
+            const params = new URLSearchParams({ q: document.getElementById('lsQuery').value, niche: document.getElementById('lsNiche').value, min_da: document.getElementById('lsMinDA').value, max_price: document.getElementById('lsMaxPrice').value, limit: 20 });
+            try {
+                const resp = await fetch(`/api/link-search?${params}`);
+                const data = await resp.json();
+                const links = data.links || [];
+                if (!links.length) { results.innerHTML = '<div class="text-center text-gray-500 py-8">No links found matching your criteria.</div>'; return; }
+                results.innerHTML = `<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"><table class="w-full text-sm"><thead class="bg-gray-800/50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Domain</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-400">DA</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Niche</th><th class="px-4 py-3 text-right text-xs font-medium text-gray-400">Traffic</th><th class="px-4 py-3 text-right text-xs font-medium text-gray-400">Price</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-400">TAT</th></tr></thead><tbody class="divide-y divide-gray-800">${links.map(l => `<tr class="hover:bg-gray-800/30"><td class="px-4 py-3 text-white font-medium">${l.domain}</td><td class="px-4 py-3 text-center"><span class="font-bold ${l.da>=50?'text-emerald-400':l.da>=30?'text-blue-400':'text-gray-400'}">${l.da}</span></td><td class="px-4 py-3 text-gray-400">${l.niche}</td><td class="px-4 py-3 text-right text-gray-400">${(l.organic_traffic||0).toLocaleString()}</td><td class="px-4 py-3 text-right text-white font-medium">$${l.price}</td><td class="px-4 py-3 text-center text-gray-400">${l.tat_days}d</td></tr>`).join('')}</tbody></table></div>`;
+            } catch(e) { results.innerHTML = `<div class="text-red-400 p-4">${e.message}</div>`; }
+        }
+
+        // =================================================================
+        // PHASE 3: AI LINK RECOMMENDATIONS
+        // =================================================================
+        async function renderLinkRecommendations() {
+            const ca = document.getElementById('contentArea');
+            if (!currentClient) { ca.innerHTML = '<div class="text-gray-400 text-center p-8">Select a campaign first.</div>'; return; }
+            ca.innerHTML = '<div class="flex items-center justify-center p-12"><i data-lucide="loader-2" class="w-6 h-6 animate-spin text-violet-500 mr-2"></i><span class="text-gray-400">Analyzing your campaign for link recommendations...</span></div>';
+            lucide.createIcons();
+            try {
+                const resp = await fetch(`/api/link-recommend?campaign_id=${currentClient.id}&budget=1000&count=8`);
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error);
+                const recs = data.recommendations || [];
+                const anchors = data.anchor_distribution || [];
+                ca.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between"><div><h2 class="text-xl font-bold text-white">AI Link Recommendations</h2><p class="text-sm text-gray-400">${data.total_available} links evaluated · ${data.existing_placements} existing placements excluded</p></div><p class="text-sm text-gray-400">Est. cost: <span class="text-white font-bold">$${(data.estimated_cost||0).toFixed(0)}</span></p></div>
+                    ${recs.length ? `<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"><table class="w-full text-sm"><thead class="bg-gray-800/50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Domain</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-400">Score</th><th class="px-4 py-3 text-center text-xs font-medium text-gray-400">DA</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-400">Niche</th><th class="px-4 py-3 text-right text-xs font-medium text-gray-400">Price</th></tr></thead><tbody class="divide-y divide-gray-800">${recs.map((r,i) => `<tr class="hover:bg-gray-800/30"><td class="px-4 py-3 text-white font-medium">${i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':''}${r.domain}</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded text-xs font-bold ${r.recommendation_score>=60?'bg-emerald-900/30 text-emerald-400':r.recommendation_score>=40?'bg-blue-900/30 text-blue-400':'bg-gray-800 text-gray-400'}">${r.recommendation_score}</span></td><td class="px-4 py-3 text-center font-bold ${r.da>=50?'text-emerald-400':'text-blue-400'}">${r.da}</td><td class="px-4 py-3 text-gray-400">${r.niche}</td><td class="px-4 py-3 text-right text-white">$${r.price}</td></tr>`).join('')}</tbody></table></div>` : '<div class="text-gray-500 text-center py-8">No recommendations available.</div>'}
+                    ${anchors.length ? `<div class="bg-gray-900 border border-gray-800 rounded-xl p-5"><h3 class="text-sm font-semibold text-white mb-3">Recommended Anchor Text Distribution</h3><div class="grid grid-cols-2 md:grid-cols-5 gap-3">${anchors.map(a => `<div class="bg-gray-800 rounded-lg p-3"><p class="text-xs text-gray-500 uppercase">${a.type}</p><p class="text-sm text-white font-medium mt-1">${a.text}</p><p class="text-xs text-violet-400 mt-1">${a.recommended_pct}</p></div>`).join('')}</div></div>` : ''}
+                </div>`;
+                lucide.createIcons();
+            } catch(e) { ca.innerHTML = `<div class="text-red-400 text-center p-8">${e.message}</div>`; }
+        }
+
+        // =================================================================
+        // PHASE 4: EMBEDDED SOP LIBRARY
+        // =================================================================
+        async function renderSOPLibrary() {
+            const ca = document.getElementById('contentArea');
+            ca.innerHTML = '<div class="flex items-center justify-center p-12"><i data-lucide="loader-2" class="w-6 h-6 animate-spin text-violet-500 mr-2"></i><span class="text-gray-400">Loading SOPs...</span></div>';
+            lucide.createIcons();
+            try {
+                const resp = await fetch('/api/sops');
+                const data = await resp.json();
+                const sops = data.sops || [];
+                const typeColors = {
+                    technical: 'border-red-500/30 bg-red-900/10',
+                    content: 'border-blue-500/30 bg-blue-900/10',
+                    link_building: 'border-emerald-500/30 bg-emerald-900/10',
+                    optimization: 'border-amber-500/30 bg-amber-900/10',
+                    reporting: 'border-violet-500/30 bg-violet-900/10',
+                    strategy: 'border-cyan-500/30 bg-cyan-900/10'
+                };
+                const typeIcons = {
+                    technical: 'wrench', content: 'file-text', link_building: 'link',
+                    optimization: 'search', reporting: 'bar-chart-3', strategy: 'compass'
+                };
+                ca.innerHTML = `
+                <div class="space-y-6">
+                    <div><h2 class="text-xl font-bold text-white">Standard Operating Procedures</h2>
+                    <p class="text-sm text-gray-400">${sops.length} SOPs covering all operational roles</p></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${sops.map(sop => `
+                        <div class="bg-gray-900 border ${typeColors[sop.type] || 'border-gray-800'} rounded-xl overflow-hidden">
+                            <div class="p-4 border-b border-gray-800 flex items-center justify-between cursor-pointer" onclick="this.parentElement.querySelector('.sop-body').classList.toggle('hidden')">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg ${typeColors[sop.type] || 'bg-gray-800'} flex items-center justify-center">
+                                        <i data-lucide="${typeIcons[sop.type] || 'book-open'}" class="w-4 h-4 text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-white text-sm">${sop.title}</h3>
+                                        <p class="text-xs text-gray-500">${sop.role}</p>
+                                    </div>
+                                </div>
+                                <i data-lucide="chevron-down" class="w-4 h-4 text-gray-500"></i>
+                            </div>
+                            <div class="sop-body hidden">
+                                <div class="p-4 space-y-3">
+                                    <p class="text-xs uppercase font-semibold text-gray-500 tracking-wider">Steps</p>
+                                    <ol class="space-y-2">
+                                        ${sop.steps.map((s, i) => `<li class="flex gap-3 text-sm"><span class="flex-shrink-0 w-6 h-6 rounded-full bg-gray-800 text-gray-400 flex items-center justify-center text-xs font-bold">${i+1}</span><span class="text-gray-300 pt-0.5">${s}</span></li>`).join('')}
+                                    </ol>
+                                </div>
+                                <div class="p-4 border-t border-gray-800">
+                                    <p class="text-xs uppercase font-semibold text-emerald-500 tracking-wider mb-2">Quality Checks</p>
+                                    <ul class="space-y-1.5">
+                                        ${sop.quality_checks.map(q => `<li class="flex items-start gap-2 text-sm text-gray-400"><i data-lucide="check-circle" class="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5"></i>${q}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>`).join('')}
+                    </div>
+                </div>`;
+                lucide.createIcons();
+            } catch(e) { ca.innerHTML = `<div class="text-red-400 text-center p-8">${e.message}</div>`; }
         }
     </script>
 

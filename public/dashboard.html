@@ -2731,7 +2731,7 @@
                                                 <button onclick="showEditMemberModal('${m.id}', '${m.role}', '${(m.assigned_campaigns || []).join(',')}')" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors mr-2">
                                                     Edit
                                                 </button>
-                                                ${userData && userData.id !== m.id ? `
+                                                ${currentUser && currentUser.id !== m.id ? `
                                                 <button onclick="deleteTeamMember('${m.id}')" class="text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 px-3 py-1.5 rounded-lg transition-colors">
                                                     Remove
                                                 </button>

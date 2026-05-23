@@ -904,16 +904,16 @@ def list_campaigns():
         response = query.order('created_at', desc=True).execute()
         campaigns = response.data or []
         
-        # For non-admin/non-campaign_manager roles, filter to only assigned campaigns
+        # For non-admin roles, filter to only assigned campaigns
         user_role = user.get('role', 'viewer')
         assigned = user.get('assigned_campaigns', [])
         
-        if user_role in ['admin', 'campaign_manager']:
+        if user_role == 'admin':
             pass  # Full visibility — see all org campaigns
         elif assigned:
-            campaigns = [c for c in campaigns if c['id'] in assigned]
+            campaigns = [c for c in campaigns if str(c['id']) in assigned]
         else:
-            # Non-privileged role with no assignments sees nothing
+            # Non-admin role with no assignments sees nothing
             campaigns = []
         
         return jsonify({'campaigns': campaigns})
@@ -2067,8 +2067,14 @@ def list_tasks():
              return jsonify({'tasks': []})
 
         # Filter based on role (Permissions within Org)
-        if user['role'] not in ['admin', 'campaign_manager']:
-            # Regular users see only their assigned tasks
+        if user['role'] == 'admin':
+            pass # Admin sees all
+        elif user.get('assigned_campaigns'):
+            # DB query fetching all is fine for now, we'll filter in memory below
+            # But we could also use `.in_('campaign_id', assigned_campaigns)` combined with `or_` but Supabase Python client doesn't support complex ORs easily
+            pass
+        else:
+            # Regular users with no assigned campaigns see only their assigned tasks
             query = query.eq('assigned_to', user['id'])
         
         if campaign_id:
@@ -2080,11 +2086,11 @@ def list_tasks():
         response = query.order('created_at', desc=True).execute()
         tasks = response.data or []
 
-        # For non-admin/non-campaign_manager roles, further filter by assigned campaigns
+        # For non-admin roles, filter by assigned campaigns
         user_role = user.get('role', 'viewer')
         assigned = user.get('assigned_campaigns', [])
         
-        if user_role in ['admin', 'campaign_manager']:
+        if user_role == 'admin':
             pass  # Full visibility — see all org tasks
         elif assigned:
             # Keep tasks that are either in an assigned campaign OR directly assigned to user

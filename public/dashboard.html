@@ -377,6 +377,19 @@
                 currentUser = data.user;
                 window._allowedTabs = data.allowed_tabs || ['dashboard'];
 
+                // Ensure currentTopTab is valid for this user
+                if (!window._allowedTabs.includes(currentTopTab)) {
+                    currentTopTab = window._allowedTabs[0];
+                }
+
+                // Ensure currentSideTab is valid for the current top tab
+                if (SIDE_TABS[currentTopTab]) {
+                    const validSideTabs = SIDE_TABS[currentTopTab].map(t => t.id);
+                    if (!validSideTabs.includes(currentSideTab)) {
+                        currentSideTab = validSideTabs[0];
+                    }
+                }
+
                 // Reset active audit on full reload
                 activeAudit = null;
 
@@ -495,13 +508,16 @@
                 selector.innerHTML = '<option value="">Select Client...</option>' +
                     clients.map(c => `<option value="${c.id}">${c.name} (${c.domain})</option>`).join('');
 
-                // Restore selected client from URL
+                // Restore selected client from URL or auto-select
                 const params = new URLSearchParams(window.location.search);
                 const clientId = params.get('client');
-                if (clientId) {
-                    selector.value = clientId;
-                    currentClient = clients.find(c => c.id === clientId);
-                    // Rebuild tabs to show client-only tabs (like Settings)
+                
+                if (clientId && clients.find(c => c.id === clientId)) {
+                    selectClient(clientId, true); // skipReload=true because init() calls loadContent()
+                    buildTopTabs();
+                } else if (clients.length === 1 || (currentUser && currentUser.role === 'viewer' && clients.length > 0)) {
+                    // Auto-select if only 1 campaign exists, or if user is a Client
+                    selectClient(clients[0].id, true);
                     buildTopTabs();
                 }
             } catch (error) {

@@ -1195,15 +1195,28 @@ Respond ONLY with valid JSON in this exact format, no markdown:
         
         # Clean markdown
         text = result.strip()
-        if text.startswith('```json'): text = text[7:]
-        if text.startswith('```'): text = text[3:]
-        if text.endswith('```'): text = text[:-3]
-        text = text.strip()
-        
+        import re
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            text = json_match.group(0)
+            
         import json
         parsed = json.loads(text)
+        clusters_data = parsed.get('clusters', [])
         
-        return jsonify({'success': True, 'clusters': parsed.get('clusters', [])})
+        # Persist to campaign settings
+        campaign_id = data.get('campaign_id')
+        if campaign_id:
+            try:
+                db = supabase_admin or supabase
+                camp_res = db.table('campaigns').select('settings').eq('id', campaign_id).single().execute()
+                settings = camp_res.data.get('settings', {}) if camp_res.data else {}
+                settings['topic_clusters'] = clusters_data
+                db.table('campaigns').update({'settings': settings}).eq('id', campaign_id).execute()
+            except Exception as e:
+                logger.error(f"Error saving topic clusters: {e}")
+        
+        return jsonify({'success': True, 'clusters': clusters_data})
         
     except json.JSONDecodeError as e:
         logger.error(f"Topic Clusters JSON Parse Error: {e}\nRaw: {text[:500]}")
@@ -1295,14 +1308,36 @@ Create a detailed content brief. Respond ONLY with valid JSON, no markdown:
             return jsonify({'error': 'Empty response from AI'}), 500
         
         text = result.strip()
-        if text.startswith('```json'): text = text[7:]
-        if text.startswith('```'): text = text[3:]
-        if text.endswith('```'): text = text[:-3]
-        text = text.strip()
-        
+        import re
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            text = json_match.group(0)
+            
         import json
         parsed = json.loads(text)
         
+        # Persist brief to content_pieces
+        db = supabase_admin or supabase
+        campaign_id = data.get('campaign_id')
+        user = session.get('user', {})
+        
+        if campaign_id:
+            try:
+                piece = {
+                    'campaign_id': campaign_id,
+                    'title': parsed.get('title', keyword),
+                    'target_keyword': keyword,
+                    'funnel_stage': funnel_stage,
+                    'content_type': 'blog_post',
+                    'brief': parsed,
+                    'outline': parsed.get('outline', []),
+                    'status': 'brief',
+                    'assigned_by': user.get('id')
+                }
+                db.table('content_pieces').insert(piece).execute()
+            except Exception as e:
+                logger.error(f"Error saving brief to DB: {e}")
+                
         return jsonify({'success': True, 'brief': parsed})
         
     except json.JSONDecodeError as e:
@@ -1388,15 +1423,28 @@ Respond ONLY with valid JSON, no markdown:
             return jsonify({'error': 'Empty response from AI'}), 500
         
         text = result.strip()
-        if text.startswith('```json'): text = text[7:]
-        if text.startswith('```'): text = text[3:]
-        if text.endswith('```'): text = text[:-3]
-        text = text.strip()
-        
+        import re
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            text = json_match.group(0)
+            
         import json
         parsed = json.loads(text)
+        topics_data = parsed.get('topics', [])
         
-        return jsonify({'success': True, 'topics': parsed.get('topics', [])})
+        # Persist to campaign settings
+        campaign_id = data.get('campaign_id')
+        if campaign_id:
+            try:
+                db = supabase_admin or supabase
+                camp_res = db.table('campaigns').select('settings').eq('id', campaign_id).single().execute()
+                settings = camp_res.data.get('settings', {}) if camp_res.data else {}
+                settings['guest_posts'] = topics_data
+                db.table('campaigns').update({'settings': settings}).eq('id', campaign_id).execute()
+            except Exception as e:
+                logger.error(f"Error saving guest posts: {e}")
+                
+        return jsonify({'success': True, 'topics': topics_data})
         
     except json.JSONDecodeError as e:
         logger.error(f"Guest Post JSON Parse Error: {e}")

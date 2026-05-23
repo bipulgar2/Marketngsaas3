@@ -6762,6 +6762,33 @@
         // =====================================================================
         // STRATEGY TAB — MAIN ROUTER
         // =====================================================================
+        window.passToAIBrief = function(keyword, funnel) {
+            document.querySelectorAll('[data-target="strategy"]')[0]?.click();
+            setTimeout(() => {
+                loadStrategySubTab('ai-briefs');
+                setTimeout(() => {
+                    const kwInput = document.getElementById('briefKeywordInput');
+                    const fnSelect = document.getElementById('briefFunnelSelect');
+                    if (kwInput) kwInput.value = keyword || '';
+                    if (fnSelect) fnSelect.value = funnel || 'mofu';
+                    document.getElementById('briefGenBtn')?.focus();
+                }, 100);
+            }, 100);
+        };
+
+        window.passToAIWriter = function(title, keyword, funnel) {
+            document.querySelectorAll('[data-target="ai-writer"]')[0]?.click();
+            setTimeout(() => {
+                const awTitle = document.getElementById('awTitle');
+                const awKeyword = document.getElementById('awKeyword');
+                const awFunnel = document.getElementById('awFunnel');
+                if (awTitle) awTitle.value = title || '';
+                if (awKeyword) awKeyword.value = keyword || '';
+                if (awFunnel) awFunnel.value = funnel || 'mofu';
+                document.getElementById('awBtn')?.focus();
+            }, 100);
+        };
+
         async function loadStrategyTab() {
             const contentArea = document.getElementById('contentArea');
             
@@ -7331,6 +7358,27 @@
             }
         }
 
+        function passToAIBrief(keyword, funnel) {
+            navigateTo('ai-briefs');
+            setTimeout(() => {
+                const input = document.getElementById('briefKeywordInput');
+                const select = document.getElementById('briefFunnelSelect');
+                if (input) input.value = keyword;
+                if (select) select.value = funnel;
+                generateBrief();
+            }, 100);
+        }
+
+        function passToAIWriter(title, keyword, funnel) {
+            navigateTo('ai-writer');
+            setTimeout(() => {
+                const input = document.getElementById('writerTopicInput');
+                const textarea = document.getElementById('writerOutlineInput');
+                if (input) input.value = title;
+                if (textarea) textarea.value = `Targeting keyword: ${keyword}\nFunnel stage: ${funnel}`;
+            }, 100);
+        }
+
         // =====================================================================
         // TOPIC CLUSTERS — AI-powered keyword grouping
         // =====================================================================
@@ -7339,6 +7387,10 @@
         async function renderTopicClusters() {
             const contentArea = document.getElementById('contentArea');
             const hasResearch = _kwResearchResults && _kwResearchResults.length > 0;
+            
+            if (_topicClustersData.length === 0 && currentClient?.settings?.topic_clusters) {
+                _topicClustersData = currentClient.settings.topic_clusters;
+            }
 
             contentArea.innerHTML = `
                 <div class="max-w-6xl mx-auto">
@@ -7427,12 +7479,15 @@
                 const res = await fetch('/api/generate-topic-clusters', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keywords: keywords, brand_config: brandConfig })
+                    body: JSON.stringify({ campaign_id: currentClient.id, keywords: keywords, brand_config: brandConfig })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
                 _topicClustersData = data.clusters || [];
+                if (currentClient && currentClient.settings) {
+                    currentClient.settings.topic_clusters = _topicClustersData;
+                }
                 results.innerHTML = renderClusterCards(_topicClustersData);
                 lucide.createIcons();
             } catch (error) {
@@ -7448,77 +7503,53 @@
         function renderClusterCards(clusters) {
             if (!clusters || clusters.length === 0) return '<div class="text-gray-500 text-center py-8">No clusters generated.</div>';
             
+            const esc = (s) => (s || '').replace(/</g, '&lt;');
             const funnelBadge = (stage) => {
-                if (stage === 'tofu') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-900/40 text-red-400 border border-red-800/40">ToFu · Awareness</span>';
-                if (stage === 'mofu') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-900/40 text-amber-400 border border-amber-800/40">MoFu · Consideration</span>';
-                if (stage === 'bofu') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-800/40">BoFu · Decision</span>';
+                if (stage === 'tofu') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-900/40 text-red-400 border border-red-800/40">ToFu</span>';
+                if (stage === 'mofu') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-900/40 text-amber-400 border border-amber-800/40">MoFu</span>';
+                if (stage === 'bofu') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-800/40">BoFu</span>';
                 return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-700 text-gray-400">' + (stage || 'Unknown') + '</span>';
             };
             
-            const funnelColor = (stage) => {
-                if (stage === 'tofu') return 'border-red-900/50';
-                if (stage === 'mofu') return 'border-amber-900/50';
-                if (stage === 'bofu') return 'border-emerald-900/50';
-                return 'border-gray-800';
-            };
-
-            // Stats
             const totalKws = clusters.reduce((s, c) => s + (c.supporting_keywords?.length || 0) + 1, 0);
-            const tofuCount = clusters.filter(c => c.funnel_stage === 'tofu').length;
-            const mofuCount = clusters.filter(c => c.funnel_stage === 'mofu').length;
-            const bofuCount = clusters.filter(c => c.funnel_stage === 'bofu').length;
-
+            
             let html = `
-                <div class="grid grid-cols-4 gap-3 mb-4">
-                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 text-center">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3">
                         <div class="text-2xl font-bold text-white">${clusters.length}</div>
                         <div class="text-[10px] text-gray-500 uppercase">Clusters</div>
                     </div>
-                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 text-center">
+                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3">
                         <div class="text-2xl font-bold text-purple-400">${totalKws}</div>
                         <div class="text-[10px] text-gray-500 uppercase">Keywords Mapped</div>
-                    </div>
-                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 text-center">
-                        <div class="text-2xl font-bold text-red-400">${tofuCount}</div>
-                        <div class="text-[10px] text-gray-500 uppercase">ToFu Clusters</div>
-                    </div>
-                    <div class="bg-gray-900 border border-gray-800 rounded-lg p-3 text-center">
-                        <div class="text-lg font-bold">
-                            <span class="text-amber-400">${mofuCount}</span>
-                            <span class="text-gray-600 mx-1">/</span>
-                            <span class="text-emerald-400">${bofuCount}</span>
-                        </div>
-                        <div class="text-[10px] text-gray-500 uppercase">MoFu / BoFu</div>
                     </div>
                 </div>
             `;
 
             html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
-            clusters.forEach((cluster, i) => {
-                const supporting = cluster.supporting_keywords || [];
+            clusters.forEach((c, i) => {
+                const kwList = (c.supporting_keywords || []).map(kw => `<div class="text-xs text-gray-400 px-2 py-1 bg-gray-800/50 rounded inline-block mr-1 mb-1 border border-gray-700/50 hover:border-purple-500/30 transition cursor-default group" title="Create brief for this keyword"><span class="group-hover:hidden">${esc(kw)}</span><span class="hidden group-hover:inline text-purple-400" onclick="passToAIBrief('${esc(kw)}', '${c.funnel_stage}')">Create Brief <i data-lucide="arrow-right" class="w-3 h-3 inline"></i></span></div>`).join('');
+                
                 html += `
-                    <div class="bg-gray-900 border ${funnelColor(cluster.funnel_stage)} rounded-xl p-5 hover:bg-gray-850 transition">
-                        <div class="flex items-start justify-between mb-3">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-purple-900/50 transition">
+                        <div class="p-4 border-b border-gray-800 bg-gray-800/30 flex items-start justify-between">
                             <div>
-                                <h3 class="text-white font-semibold text-sm flex items-center gap-2">
-                                    <span class="w-6 h-6 rounded-full bg-purple-900/50 text-purple-400 text-xs flex items-center justify-center font-bold">${i+1}</span>
-                                    ${cluster.cluster_name || 'Unnamed Cluster'}
+                                <h3 class="text-sm font-bold text-white mb-1 flex items-center gap-2">
+                                    <i data-lucide="layers" class="w-4 h-4 text-purple-400"></i> ${esc(c.cluster_name)}
                                 </h3>
-                                <p class="text-xs text-gray-500 mt-0.5">/${cluster.pillar_slug || ''}</p>
+                                <div class="text-xs text-gray-500 flex items-center gap-2">
+                                    <span class="text-purple-300 font-medium">${esc(c.pillar_keyword)}</span>
+                                </div>
                             </div>
-                            ${funnelBadge(cluster.funnel_stage)}
+                            <div class="flex flex-col items-end gap-2">
+                                ${funnelBadge(c.funnel_stage)}
+                                <button onclick="passToAIBrief('${esc(c.pillar_keyword)}', '${c.funnel_stage}')" class="text-[10px] bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded transition">Create AI Brief</button>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <div class="text-[10px] text-gray-500 uppercase mb-1">Pillar Page</div>
-                            <div class="text-sm text-purple-300 font-medium">${cluster.pillar_title || cluster.pillar_keyword}</div>
-                            <div class="text-xs text-gray-500 mt-0.5">Primary: <span class="text-gray-300">${cluster.pillar_keyword}</span></div>
-                        </div>
-                        ${cluster.content_angle ? '<p class="text-xs text-gray-400 mb-3 italic">"' + cluster.content_angle + '"</p>' : ''}
-                        <div class="mb-1">
-                            <div class="text-[10px] text-gray-500 uppercase mb-1.5">Supporting Keywords (${supporting.length})</div>
-                            <div class="flex flex-wrap gap-1">
-                                ${supporting.slice(0, 12).map(kw => '<span class="px-2 py-0.5 bg-gray-800 border border-gray-700 rounded text-[11px] text-gray-300">' + kw + '</span>').join('')}
-                                ${supporting.length > 12 ? '<span class="px-2 py-0.5 bg-gray-800 rounded text-[11px] text-gray-500">+' + (supporting.length - 12) + ' more</span>' : ''}
+                        <div class="p-4 space-y-4">
+                            <div>
+                                <div class="text-[10px] text-gray-500 uppercase mb-1">Supporting Keywords (${c.supporting_keywords?.length || 0})</div>
+                                <div class="flex flex-wrap">${kwList}</div>
                             </div>
                         </div>
                     </div>
@@ -7611,7 +7642,7 @@
                 const res = await fetch('/api/generate-content-brief', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keyword, funnel_stage: funnel, brand_config: brandConfig })
+                    body: JSON.stringify({ campaign_id: currentClient.id, keyword, funnel_stage: funnel, brand_config: brandConfig })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
@@ -7671,6 +7702,7 @@
                         ${intentBadge(brief.search_intent)}
                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-700 text-gray-300">${brief.recommended_format || 'Guide'}</span>
                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-700 text-gray-300">${fmtNum(brief.recommended_word_count || 1500)} words</span>
+                        <button onclick="passToAIWriter('${esc(brief.title).replace(/'/g, "\\'")}', '${esc(brief.target_keyword).replace(/'/g, "\\'")}', '${brief.funnel_stage}')" class="ml-auto px-3 py-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded shadow-md text-xs font-semibold transition-all flex items-center gap-1.5"><i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> Pass to AI Writer</button>
                     </div>
                     <h3 class="text-lg font-bold text-white mb-1">${esc(brief.title)}</h3>
                     <p class="text-sm text-gray-400 italic">${esc(brief.meta_description)}</p>
@@ -7768,7 +7800,6 @@
                         </div>
                         <div class="flex items-center gap-2">
                             ${hasClusters ? '<button onclick="importClustersToCalendar()" class="px-3 py-1.5 bg-purple-600/20 border border-purple-700 text-purple-400 rounded-lg text-xs font-medium hover:bg-purple-600/30 transition"><i data-lucide="download" class="w-3 h-3 inline mr-1"></i>Import Clusters</button>' : ''}
-                            ${_guestPostTopics && _guestPostTopics.length > 0 ? '<button onclick="importGuestPostsToCalendar()" class="px-3 py-1.5 bg-rose-600/20 border border-rose-700 text-rose-400 rounded-lg text-xs font-medium hover:bg-rose-600/30 transition"><i data-lucide="link" class="w-3 h-3 inline mr-1"></i>Import Guest Posts</button>' : ''}
                             <button onclick="addCalendarItem()" class="px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-lg text-xs font-medium transition flex items-center gap-1">
                                 <i data-lucide="plus" class="w-3 h-3"></i> Add Item
                             </button>
@@ -7929,35 +7960,17 @@
             showToast(`Imported ${count} pillar pages to backlog`, 'success');
         }
 
-        function importGuestPostsToCalendar() {
-            if (!_guestPostTopics || _guestPostTopics.length === 0) return;
-            let count = 0;
-            _guestPostTopics.forEach(topic => {
-                const exists = _calendarItems.some(i => i.title === topic.title && i.type === 'link-building');
-                if (!exists) {
-                    _calendarItems.push({
-                        title: '🔗 ' + (topic.title || 'Guest Post'),
-                        status: 'planned',
-                        date: null,
-                        funnel: topic.funnel_stage || 'mofu',
-                        type: 'link-building',
-                        anchor: topic.anchor_text,
-                        targetPage: topic.target_page
-                    });
-                    count++;
-                }
-            });
-            renderCalendarGrid();
-            showToast(`Imported ${count} guest post items to backlog`, 'success');
-        }
-
         // =====================================================================
         // GUEST POST TOPICS — Link building outreach
         // =====================================================================
-        let _guestPostTopics = [];
+        let _guestPostsData = [];
 
         async function renderGuestPosts() {
             const contentArea = document.getElementById('contentArea');
+            
+            if (_guestPostsData.length === 0 && currentClient?.settings?.guest_posts) {
+                _guestPostsData = currentClient.settings.guest_posts;
+            }
 
             contentArea.innerHTML = `
                 <div class="max-w-6xl mx-auto">
@@ -7975,7 +7988,7 @@
                     </div>
 
                     <div id="gpResults">
-                        ${_guestPostTopics.length > 0 ? renderGuestPostCards(_guestPostTopics) : `
+                        ${_guestPostsData.length > 0 ? renderGuestPostsList(_guestPostsData) : `
                             <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
                                 <i data-lucide="mail" class="w-10 h-10 text-gray-600 mx-auto mb-3"></i>
                                 <p class="text-gray-400">Click Generate to get AI-powered guest post topic suggestions.</p>
@@ -8008,17 +8021,16 @@
                 const res = await fetch('/api/generate-guest-post-topics', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        brand_config: brandConfig,
-                        tracked_keywords: currentClient.tracked_keywords || [],
-                        clusters: _topicClustersData || []
-                    })
+                    body: JSON.stringify({ campaign_id: currentClient.id, brand_config: brandConfig })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                _guestPostTopics = data.topics || [];
-                results.innerHTML = renderGuestPostCards(_guestPostTopics);
+                _guestPostsData = data.topics || [];
+                if (currentClient && currentClient.settings) {
+                    currentClient.settings.guest_posts = _guestPostsData;
+                }
+                results.innerHTML = renderGuestPostsList(_guestPostsData);
                 lucide.createIcons();
             } catch (error) {
                 console.error(error);
@@ -8030,9 +8042,10 @@
             }
         }
 
-        function renderGuestPostCards(topics) {
+        function renderGuestPostsList(topics) {
             if (!topics || topics.length === 0) return '<div class="text-gray-500 text-center py-8">No topics generated.</div>';
 
+            const esc = (s) => (s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
             const diffBadge = (d) => {
                 if (d === 'easy') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-900/40 text-emerald-400">Easy</span>';
                 if (d === 'medium') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-900/40 text-amber-400">Medium</span>';
@@ -8092,7 +8105,8 @@
                             </div>
                             <div>
                                 <div class="text-[10px] text-gray-500 uppercase mb-0.5">Content Type</div>
-                                <div class="text-gray-300">${topic.content_type || 'Article'}</div>
+                                <div class="text-gray-300 mb-2">${topic.content_type || 'Article'}</div>
+                                <button onclick="passToAIBrief('${esc(topic.title).replace(/'/g, "\\'")}', '${topic.funnel_stage}')" class="px-3 py-1.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white rounded text-xs font-medium shadow w-full text-center transition">Create AI Brief</button>
                             </div>
                             <div>
                                 <div class="text-[10px] text-gray-500 uppercase mb-0.5">Anchor Text</div>

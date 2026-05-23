@@ -3906,7 +3906,7 @@ def save_audit_results():
 @app.route('/api/audit-links', methods=['GET'])
 @login_required
 def get_audit_links():
-    """Fetch all crawled URLs from the audit results for a campaign."""
+    """Fetch all crawled URLs from the CLIENT's own site audit (not competitor audits)."""
     try:
         project_id = request.args.get('project_id')
         if not project_id:
@@ -3914,8 +3914,27 @@ def get_audit_links():
             
         client = supabase_admin or supabase
         
-        # We need to find the audit associated with this campaign
-        result = client.table('audits').select('results').eq('campaign_id', project_id).order('created_at', desc=True).limit(1).execute()
+        # CRITICAL: Only fetch from 'technical' audits (the client's own site audit),
+        # never from 'competitor' audits which belong to rival domains.
+        # Also only return completed audits that actually have pages data.
+        result = (client.table('audits')
+                  .select('results')
+                  .eq('campaign_id', project_id)
+                  .eq('type', 'technical')
+                  .eq('status', 'done')
+                  .order('created_at', desc=True)
+                  .limit(1)
+                  .execute())
+        
+        if not result.data:
+            # Fallback: try any non-competitor audit (could be 'crawling' status if just started)
+            result = (client.table('audits')
+                      .select('results')
+                      .eq('campaign_id', project_id)
+                      .neq('type', 'competitor')
+                      .order('created_at', desc=True)
+                      .limit(1)
+                      .execute())
         
         if not result.data:
             return jsonify({"pages": []})

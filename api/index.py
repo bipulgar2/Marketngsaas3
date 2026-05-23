@@ -4022,8 +4022,40 @@ def generate_deep_audit_slides_endpoint():
         
         if not domain or domain == 'unknown':
            domain = audit_data.get('domain', 'Website')
-           
-        logger.info(f"Generating slides for {domain}")
+        
+        # Fetch pagespeed on-the-fly if missing from audit data
+        if not audit_data.get('pagespeed') and domain and domain != 'unknown' and domain != 'Website':
+            try:
+                from execution.pagespeed_insights import fetch_pagespeed_scores
+                import time as _time
+                ps_data = {}
+                mobile = fetch_pagespeed_scores(f"https://{domain}", strategy="mobile")
+                if mobile and mobile.get('success') is not False:
+                    ps_data['mobile'] = {'scores': mobile.get('scores', {}), 'metrics': mobile.get('metrics', {})}
+                    ps_data['scores'] = mobile.get('scores', {})
+                    ps_data['metrics'] = mobile.get('metrics', {})
+                _time.sleep(3)
+                desktop = fetch_pagespeed_scores(f"https://{domain}", strategy="desktop")
+                if desktop and desktop.get('success') is not False:
+                    ps_data['desktop'] = {'scores': desktop.get('scores', {}), 'metrics': desktop.get('metrics', {})}
+                if ps_data:
+                    audit_data['pagespeed'] = ps_data
+                    logger.info(f"Slides: fetched pagespeed on-the-fly for {domain}")
+            except Exception as ps_err:
+                logger.warning(f"Slides: on-the-fly pagespeed failed: {ps_err}")
+        
+        # Fetch domain metrics on-the-fly if missing (for ranking opportunities in slides)
+        if not audit_data.get('total_traffic') and not audit_data.get('domain_metrics') and domain and domain != 'unknown' and domain != 'Website':
+            try:
+                from api.dataforseo_client import fetch_domain_metrics
+                dm = fetch_domain_metrics(domain)
+                if dm and dm.get('success'):
+                    audit_data['total_traffic'] = dm.get('total_traffic', 0)
+                    audit_data['total_keywords'] = dm.get('total_keywords', 0)
+                    audit_data['domain_metrics'] = dm
+                    logger.info(f"Slides: fetched domain metrics on-the-fly for {domain}")
+            except Exception as dm_err:
+                logger.warning(f"Slides: on-the-fly domain metrics failed: {dm_err}")
         
         # Get Google credentials
         creds = get_google_credentials()
@@ -4031,21 +4063,15 @@ def generate_deep_audit_slides_endpoint():
             return jsonify({"error": "Google credentials not available"}), 500
         
         # Upload screenshots to Supabase Storage if present
+        # NOTE: We do NOT auto-fetch screenshots via DataForSEO anymore.
+        # Only process screenshots that the frontend explicitly sends.
         processed_screenshots = {}
         try:
             if not isinstance(screenshots, dict):
                 screenshots = {}
-
-            # Fallback for Homepage
-            try:
-                hp = screenshots.get('homepage')
-                is_homepage_missing = not hp or len(str(hp)) < 100
-                if is_homepage_missing and domain and domain != 'unknown':
-                    homepage_b64 = capture_screenshot_with_fallback(domain)
-                    if homepage_b64:
-                        screenshots['homepage'] = homepage_b64
-            except Exception as e:
-                logger.error(f"Homepage fallback error: {e}")
+            
+            # No automatic screenshot fetching — only use what frontend sent
+            logger.info(f"Slides: processing {len(screenshots)} screenshots from frontend (no auto-fetch)")
 
             if screenshots:
                 import base64
@@ -4258,12 +4284,57 @@ def site_audit_save_results():
         pages_result = get_page_issues(task_id, limit=200)
         pages = pages_result.get('pages', [])
 
-        existing = client.table('site_audits').select('audit_data').eq('id', audit_id).execute()
+        existing = client.table('site_audits').select('audit_data, domain').eq('id', audit_id).execute()
         audit_data = existing.data[0].get('audit_data', {}) if existing.data else {}
+        domain = existing.data[0].get('domain', '') if existing.data else ''
 
         audit_data['summary'] = summary.get('summary', {})
         audit_data['pages'] = pages
         audit_data['status'] = 'completed'
+        
+        # --- Fetch PageSpeed Insights (mobile + desktop) ---
+        if domain:
+            try:
+                from execution.pagespeed_insights import fetch_pagespeed_scores
+                import time as _time
+                pagespeed = {}
+                
+                mobile_result = fetch_pagespeed_scores(f"https://{domain}", strategy="mobile")
+                if mobile_result and mobile_result.get('success') is not False:
+                    pagespeed['mobile'] = {
+                        'scores': mobile_result.get('scores', {}),
+                        'metrics': mobile_result.get('metrics', {})
+                    }
+                    pagespeed['scores'] = mobile_result.get('scores', {})
+                    pagespeed['metrics'] = mobile_result.get('metrics', {})
+                
+                _time.sleep(3)  # Avoid Google rate limit
+                
+                desktop_result = fetch_pagespeed_scores(f"https://{domain}", strategy="desktop")
+                if desktop_result and desktop_result.get('success') is not False:
+                    pagespeed['desktop'] = {
+                        'scores': desktop_result.get('scores', {}),
+                        'metrics': desktop_result.get('metrics', {})
+                    }
+                
+                if pagespeed:
+                    audit_data['pagespeed'] = pagespeed
+                    logger.info(f"[site-audit] Fetched PageSpeed for {domain}: mobile={bool(pagespeed.get('mobile'))}, desktop={bool(pagespeed.get('desktop'))}")
+            except Exception as ps_err:
+                logger.warning(f"[site-audit] PageSpeed fetch failed (non-fatal): {ps_err}")
+        
+        # --- Fetch domain metrics for ranking opportunities ---
+        if domain:
+            try:
+                from api.dataforseo_client import fetch_domain_metrics
+                domain_metrics = fetch_domain_metrics(domain)
+                if domain_metrics and domain_metrics.get('success'):
+                    audit_data['domain_metrics'] = domain_metrics
+                    audit_data['total_traffic'] = domain_metrics.get('total_traffic', audit_data.get('total_traffic', 0))
+                    audit_data['total_keywords'] = domain_metrics.get('total_keywords', audit_data.get('total_keywords', 0))
+                    logger.info(f"[site-audit] Domain metrics: traffic={domain_metrics.get('total_traffic')}, keywords={domain_metrics.get('total_keywords')}")
+            except Exception as dm_err:
+                logger.warning(f"[site-audit] Domain metrics fetch failed (non-fatal): {dm_err}")
 
         client.table('site_audits').update({
             'status': 'completed',

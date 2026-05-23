@@ -460,23 +460,24 @@ def create_deep_audit_slides(data, domain, creds=None, screenshots=None, annotat
     requests.extend(create_slide_scare_explainer(generate_id(), sc['title'], sc['body'], sc['stat']))
 
     # Slide: Website Speed
+    # Always extract pagespeed data regardless of screenshots
+    pagespeed_data = data.get('pagespeed', {})
+    if isinstance(pagespeed_data, str):
+        try:
+            import json
+            pagespeed_data = json.loads(pagespeed_data)
+        except:
+            pagespeed_data = {}
+    # Extract mobile/desktop scores from nested structure
+    mobile_ps = pagespeed_data.get('mobile', {})
+    desktop_ps = pagespeed_data.get('desktop', {})
+    mobile_scores = mobile_ps.get('scores', pagespeed_data.get('scores', {}))
+    desktop_scores = desktop_ps.get('scores', {})
+    mobile_perf = mobile_scores.get('performance', 0) or 0
+    desktop_perf = desktop_scores.get('performance', 0) or 0
+    performance_score = mobile_perf if mobile_perf else desktop_perf
+    
     if screenshots and screenshots.get('speed_analysis'):
-        # Get actual performance score from pagespeed data (handle nested mobile/desktop structure)
-        pagespeed_data = data.get('pagespeed', {})
-        if isinstance(pagespeed_data, str):
-            try:
-                import json
-                pagespeed_data = json.loads(pagespeed_data)
-            except:
-                pagespeed_data = {}
-        # Extract mobile/desktop scores from nested structure
-        mobile_ps = pagespeed_data.get('mobile', {})
-        desktop_ps = pagespeed_data.get('desktop', {})
-        mobile_scores = mobile_ps.get('scores', pagespeed_data.get('scores', {}))
-        desktop_scores = desktop_ps.get('scores', {})
-        mobile_perf = mobile_scores.get('performance', 0) or 0
-        desktop_perf = desktop_scores.get('performance', 0) or 0
-        performance_score = mobile_perf if mobile_perf else desktop_perf
         # Build annotation with BOTH mobile and desktop scores
         speed_parts = []
         if mobile_perf:
@@ -489,8 +490,12 @@ def create_deep_audit_slides(data, domain, creds=None, screenshots=None, annotat
             speed_annotation = annotations.get('speed_analysis', get_speed_annotation(performance_score))
         requests.extend(create_slide_image(generate_id(), "WEBSITE SPEED", screenshots['speed_analysis'], speed_annotation))
     else:
-        avg_load_time = sum(p.get('load_time', 0) for p in pages) / max(1, len(pages)) if pages else 0
-        requests.extend(create_slide_speed(generate_id(), avg_load_time))
+        # No screenshot — use text-based speed slide with actual PageSpeed data if available
+        if performance_score > 0:
+            requests.extend(create_slide_speed_with_scores(generate_id(), mobile_perf, desktop_perf, pagespeed_data))
+        else:
+            avg_load_time = sum(p.get('load_time', 0) for p in pages) / max(1, len(pages)) if pages else 0
+            requests.extend(create_slide_speed(generate_id(), avg_load_time))
 
 
     # 25. Thank You
@@ -1669,6 +1674,78 @@ def create_slide_speed(sid, load_time):
     reqs.append({'createShape': {'objectId': f"{sid}_lt", 'shapeType': 'TEXT_BOX', 'elementProperties': {'pageObjectId': sid, 'size': {'height': {'magnitude': 30, 'unit': 'PT'}, 'width': {'magnitude': 300, 'unit': 'PT'}}, 'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': 220, 'translateY': 320, 'unit': 'PT'}}}})
     reqs.append({'insertText': {'objectId': f"{sid}_lt", 'text': f"Average Load Time: {load_time/1000:.2f}s"}})
     reqs.append({'updateTextStyle': {'objectId': f"{sid}_lt", 'style': {'fontSize': {'magnitude': 14, 'unit': 'PT'}, 'foregroundColor': {'opaqueColor': {'rgbColor': COLORS['primary']}}, 'bold': False}, 'fields': 'fontSize,foregroundColor,bold'}})
+    
+    return reqs
+
+def create_slide_speed_with_scores(sid, mobile_score, desktop_score, pagespeed_data=None):
+    """Create a speed slide showing actual PageSpeed mobile + desktop scores as visual gauges."""
+    reqs = create_basic_slide(sid, "Website Speed Analysis")
+    
+    def score_color(s):
+        if s >= 90: return COLORS['success']
+        elif s >= 50: return COLORS['warning']
+        return COLORS['error']
+    
+    def score_label(s):
+        if s >= 90: return "Good"
+        elif s >= 50: return "Needs Work"
+        return "Poor"
+    
+    # --- Mobile Score Circle (left) ---
+    if mobile_score and mobile_score > 0:
+        mc = score_color(mobile_score)
+        reqs.append({'createShape': {'objectId': f"{sid}_mc", 'shapeType': 'ELLIPSE', 'elementProperties': {'pageObjectId': sid, 'size': {'height': {'magnitude': 130, 'unit': 'PT'}, 'width': {'magnitude': 130, 'unit': 'PT'}}, 'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': 120, 'translateY': 140, 'unit': 'PT'}}}})
+        reqs.append({'updateShapeProperties': {'objectId': f"{sid}_mc", 'shapeProperties': {'outline': {'outlineFill': {'solidFill': {'color': {'rgbColor': mc}}}, 'weight': {'magnitude': 10, 'unit': 'PT'}}, 'shapeBackgroundFill': {'solidFill': {'color': {'rgbColor': COLORS['white']}}}}, 'fields': 'outline,shapeBackgroundFill'}})
+        reqs.append({'createShape': {'objectId': f"{sid}_ms", 'shapeType': 'TEXT_BOX', 'elementProperties': {'pageObjectId': sid, 'size': {'height': {'magnitude': 50, 'unit': 'PT'}, 'width': {'magnitude': 90, 'unit': 'PT'}}, 'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': 140, 'translateY': 175, 'unit': 'PT'}}}})
+        reqs.append({'insertText': {'objectId': f"{sid}_ms", 'text': str(mobile_score)}})
+        reqs.append({'updateTextStyle': {'objectId': f"{sid}_ms", 'style': {'fontSize': {'magnitude': 40, 'unit': 'PT'}, 'foregroundColor': {'opaqueColor': {'rgbColor': mc}}, 'bold': True}, 'fields': 'fontSize,foregroundColor,bold'}})
+        reqs.append({'updateParagraphStyle': {'objectId': f"{sid}_ms", 'style': {'alignment': 'CENTER'}, 'fields': 'alignment'}})
+        # Mobile label
+        reqs.append({'createShape': {'objectId': f"{sid}_ml", 'shapeType': 'TEXT_BOX', 'elementProperties': {'pageObjectId': sid, 'size': {'height': {'magnitude': 25, 'unit': 'PT'}, 'width': {'magnitude': 130, 'unit': 'PT'}}, 'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': 120, 'translateY': 280, 'unit': 'PT'}}}})
+        reqs.append({'insertText': {'objectId': f"{sid}_ml", 'text': f"📱 Mobile ({score_label(mobile_score)})"}})
+        reqs.append({'updateTextStyle': {'objectId': f"{sid}_ml", 'style': {'fontSize': {'magnitude': 13, 'unit': 'PT'}, 'foregroundColor': {'opaqueColor': {'rgbColor': {'red': 0.3, 'green': 0.3, 'blue': 0.3}}}, 'bold': True}, 'fields': 'fontSize,foregroundColor,bold'}})
+        reqs.append({'updateParagraphStyle': {'objectId': f"{sid}_ml", 'style': {'alignment': 'CENTER'}, 'fields': 'alignment'}})
+    
+    # --- Desktop Score Circle (right) ---
+    if desktop_score and desktop_score > 0:
+        dc = score_color(desktop_score)
+        reqs.append({'createShape': {'objectId': f"{sid}_dc", 'shapeType': 'ELLIPSE', 'elementProperties': {'pageObjectId': sid, 'size': {'height': {'magnitude': 130, 'unit': 'PT'}, 'width': {'magnitude': 130, 'unit': 'PT'}}, 'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': 460, 'translateY': 140, 'unit': 'PT'}}}})
+        reqs.append({'updateShapeProperties': {'objectId': f"{sid}_dc", 'shapeProperties': {'outline': {'outlineFill': {'solidFill': {'color': {'rgbColor': dc}}}, 'weight': {'magnitude': 10, 'unit': 'PT'}}, 'shapeBackgroundFill': {'solidFill': {'color': {'rgbColor': COLORS['white']}}}}, 'fields': 'outline,shapeBackgroundFill'}})
+        reqs.append({'createShape': {'objectId': f"{sid}_ds", 'shapeType': 'TEXT_BOX', 'elementProperties': {'pageObjectId': sid, 'size': {'height': {'magnitude': 50, 'unit': 'PT'}, 'width': {'magnitude': 90, 'unit': 'PT'}}, 'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': 480, 'translateY': 175, 'unit': 'PT'}}}})
+        reqs.append({'insertText': {'objectId': f"{sid}_ds", 'text': str(desktop_score)}})
+        reqs.append({'updateTextStyle': {'objectId': f"{sid}_ds", 'style': {'fontSize': {'magnitude': 40, 'unit': 'PT'}, 'foregroundColor': {'opaqueColor': {'rgbColor': dc}}, 'bold': True}, 'fields': 'fontSize,foregroundColor,bold'}})
+        reqs.append({'updateParagraphStyle': {'objectId': f"{sid}_ds", 'style': {'alignment': 'CENTER'}, 'fields': 'alignment'}})
+        # Desktop label
+        reqs.append({'createShape': {'objectId': f"{sid}_dl", 'shapeType': 'TEXT_BOX', 'elementProperties': {'pageObjectId': sid, 'size': {'height': {'magnitude': 25, 'unit': 'PT'}, 'width': {'magnitude': 130, 'unit': 'PT'}}, 'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': 460, 'translateY': 280, 'unit': 'PT'}}}})
+        reqs.append({'insertText': {'objectId': f"{sid}_dl", 'text': f"🖥️ Desktop ({score_label(desktop_score)})"}})
+        reqs.append({'updateTextStyle': {'objectId': f"{sid}_dl", 'style': {'fontSize': {'magnitude': 13, 'unit': 'PT'}, 'foregroundColor': {'opaqueColor': {'rgbColor': {'red': 0.3, 'green': 0.3, 'blue': 0.3}}}, 'bold': True}, 'fields': 'fontSize,foregroundColor,bold'}})
+        reqs.append({'updateParagraphStyle': {'objectId': f"{sid}_dl", 'style': {'alignment': 'CENTER'}, 'fields': 'alignment'}})
+    
+    # --- Core Web Vitals metrics row (bottom) ---
+    if pagespeed_data:
+        mobile_metrics = pagespeed_data.get('mobile', {}).get('metrics', pagespeed_data.get('metrics', {}))
+        if mobile_metrics:
+            cwv_parts = []
+            lcp = mobile_metrics.get('largest_contentful_paint')
+            if lcp: cwv_parts.append(f"LCP: {lcp/1000:.1f}s" if isinstance(lcp, (int, float)) and lcp > 100 else f"LCP: {lcp}s")
+            fid = mobile_metrics.get('first_input_delay') or mobile_metrics.get('total_blocking_time')
+            if fid: cwv_parts.append(f"TBT: {fid}ms" if isinstance(fid, (int, float)) else f"TBT: {fid}")
+            cls_val = mobile_metrics.get('cumulative_layout_shift')
+            if cls_val is not None: cwv_parts.append(f"CLS: {cls_val}")
+            
+            if cwv_parts:
+                cwv_text = "Core Web Vitals (Mobile):  " + "  |  ".join(cwv_parts)
+                reqs.append({'createShape': {'objectId': f"{sid}_cwv", 'shapeType': 'TEXT_BOX', 'elementProperties': {'pageObjectId': sid, 'size': {'height': {'magnitude': 30, 'unit': 'PT'}, 'width': {'magnitude': 500, 'unit': 'PT'}}, 'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': 110, 'translateY': 320, 'unit': 'PT'}}}})
+                reqs.append({'insertText': {'objectId': f"{sid}_cwv", 'text': cwv_text}})
+                reqs.append({'updateTextStyle': {'objectId': f"{sid}_cwv", 'style': {'fontSize': {'magnitude': 12, 'unit': 'PT'}, 'foregroundColor': {'opaqueColor': {'rgbColor': COLORS['primary']}}, 'bold': False}, 'fields': 'fontSize,foregroundColor,bold'}})
+                reqs.append({'updateParagraphStyle': {'objectId': f"{sid}_cwv", 'style': {'alignment': 'CENTER'}, 'fields': 'alignment'}})
+    
+    # Divider line
+    reqs.append({'createShape': {'objectId': f"{sid}_div", 'shapeType': 'TEXT_BOX', 'elementProperties': {'pageObjectId': sid, 'size': {'height': {'magnitude': 20, 'unit': 'PT'}, 'width': {'magnitude': 350, 'unit': 'PT'}}, 'transform': {'scaleX': 1, 'scaleY': 1, 'translateX': 185, 'translateY': 105, 'unit': 'PT'}}}})
+    overall = mobile_score if mobile_score else desktop_score
+    reqs.append({'insertText': {'objectId': f"{sid}_div", 'text': f"Performance Score: {overall}/100 — {score_label(overall)}"}})
+    reqs.append({'updateTextStyle': {'objectId': f"{sid}_div", 'style': {'fontSize': {'magnitude': 16, 'unit': 'PT'}, 'foregroundColor': {'opaqueColor': {'rgbColor': score_color(overall)}}, 'bold': True}, 'fields': 'fontSize,foregroundColor,bold'}})
+    reqs.append({'updateParagraphStyle': {'objectId': f"{sid}_div", 'style': {'alignment': 'CENTER'}, 'fields': 'alignment'}})
     
     return reqs
 

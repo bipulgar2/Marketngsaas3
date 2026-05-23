@@ -357,16 +357,24 @@ def start_onpage_audit(domain: str, max_pages: int = 200) -> Dict[str, Any]:
     """
     endpoint = f"{DATAFORSEO_API_URL}/on_page/task_post"
     
+    # Ensure domain is clean (no protocol, no trailing slash)
+    domain = domain.replace('https://', '').replace('http://', '').strip('/')
+    domain = domain.split('/')[0]  # Remove any path
+    
+    print(f"DEBUG start_onpage_audit: domain='{domain}', max_pages={max_pages}", file=sys.stderr, flush=True)
+    
     payload = [{
         "target": domain,
         "max_crawl_pages": max_pages,
         "load_resources": True,
         "enable_javascript": True,
-        "enable_browser_rendering": True,
-        "enable_xhr": True,
+        "enable_browser_rendering": False,
+        "enable_xhr": False,
         "check_spell": True,
         "calculate_keyword_density": True,
-        "store_raw_html": False
+        "store_raw_html": False,
+        "force_sitewide_checks": True,
+        "custom_user_agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
     }]
     
     try:
@@ -379,19 +387,27 @@ def start_onpage_audit(domain: str, max_pages: int = 200) -> Dict[str, Any]:
         response.raise_for_status()
         data = response.json()
         
+        print(f"DEBUG start_onpage_audit: response status_code={data.get('status_code')}, status_message={data.get('status_message')}", file=sys.stderr, flush=True)
+        
         if data.get('status_code') == 20000 and data.get('tasks'):
             tasks = data.get('tasks') or []
             if len(tasks) > 0 and tasks[0] is not None:
                 task = tasks[0]
+                task_id = task.get('id') if isinstance(task, dict) else None
+                task_status = task.get('status_code') if isinstance(task, dict) else None
+                task_msg = task.get('status_message') if isinstance(task, dict) else 'Unknown'
+                print(f"DEBUG start_onpage_audit: task_id={task_id}, task_status={task_status}, task_msg={task_msg}", file=sys.stderr, flush=True)
                 return {
                     "success": True,
-                    "task_id": task.get('id') if isinstance(task, dict) else None,
-                    "status": task.get('status_message') if isinstance(task, dict) else 'Unknown',
+                    "task_id": task_id,
+                    "status": task_msg,
                     "cost": task.get('cost', 0) if isinstance(task, dict) else 0
                 }
             else:
+                print(f"DEBUG start_onpage_audit: empty task list. Full response: {data}", file=sys.stderr, flush=True)
                 return {"success": False, "error": "API returned empty or null task list"}
         else:
+            print(f"DEBUG start_onpage_audit: API error. Full response: {data}", file=sys.stderr, flush=True)
             return {
                 "success": False,
                 "error": data.get('status_message', 'Unknown error')

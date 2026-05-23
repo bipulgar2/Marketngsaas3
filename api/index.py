@@ -2412,6 +2412,21 @@ def get_audit(audit_id):
                         'pages': pages
                     })
                     
+                    # Also merge keyword/traffic data from projects table into results
+                    # so that competitor stats are always findable from audits.results
+                    if 'total_keywords' not in new_results or not new_results.get('total_keywords'):
+                        try:
+                            proj_merge = client.table('projects').select('full_audit_data').eq('audit_id', audit_id).limit(1).execute()
+                            if proj_merge.data:
+                                fad = proj_merge.data[0].get('full_audit_data') or {}
+                                new_results.setdefault('total_keywords', fad.get('total_keywords', 0))
+                                new_results.setdefault('total_traffic', fad.get('total_traffic', 0))
+                                new_results.setdefault('keywords', fad.get('organic_keywords', []))
+                                new_results.setdefault('backlinks_summary', fad.get('backlinks_summary', {}))
+                                new_results.setdefault('domain_rank', fad.get('domain_rank', 0))
+                        except Exception:
+                            pass
+                    
                     update_data = {
                         'status': 'completed',
                         'results': new_results
@@ -2653,10 +2668,10 @@ def get_client_stats():
                 comp_domain = aud_res.data[0]['results'].get('competitor_domain')
                 if comp_domain:
                     resolved_domain = comp_domain.replace('https://', '').replace('http://', '').split('/')[0].strip('www.')
-                    # Try site_audits table
-                    sa_res = db.table('site_audits').select('full_audit_data').ilike('domain', f"%{resolved_domain}%").limit(1).execute()
+                    # Try site_audits table (column is 'audit_data', not 'full_audit_data')
+                    sa_res = db.table('site_audits').select('audit_data').ilike('domain', f"%{resolved_domain}%").limit(1).execute()
                     if sa_res.data:
-                        proj = sa_res.data[0].get('full_audit_data') or {}
+                        proj = sa_res.data[0].get('audit_data') or {}
             
             # Fallback to projects
             if not proj:
@@ -2676,9 +2691,9 @@ def get_client_stats():
             resolved_location = (camp_data.get('settings') or {}).get('location', 'US')
             if domain:
                 resolved_domain = domain.replace('https://', '').replace('http://', '').split('/')[0].strip('www.')
-                sa_res = db.table('site_audits').select('full_audit_data').ilike('domain', f"%{resolved_domain}%").limit(1).execute()
+                sa_res = db.table('site_audits').select('audit_data').ilike('domain', f"%{resolved_domain}%").limit(1).execute()
                 if sa_res.data:
-                    proj = sa_res.data[0].get('full_audit_data') or {}
+                    proj = sa_res.data[0].get('audit_data') or {}
             
             if not proj:
                 aud_res = db.table('audits').select('id').eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(1).execute()
@@ -2692,6 +2707,21 @@ def get_client_stats():
         keywords_raw = proj.get('organic_keywords') or proj.get('keywords', [])
         total_kw = proj.get('total_keywords', len(keywords_raw))
         total_traffic = proj.get('total_traffic', 0)
+        
+        # Fallback: if proj was empty and we have an audit_id, try audits.results directly
+        # (competitor audits store keywords/traffic in audits.results at creation time)
+        if not keywords_raw and not total_kw and audit_id:
+            try:
+                aud_direct = db.table('audits').select('results').eq('id', audit_id).limit(1).execute()
+                if aud_direct.data:
+                    aud_results = aud_direct.data[0].get('results') or {}
+                    keywords_raw = aud_results.get('keywords', [])
+                    total_kw = aud_results.get('total_keywords', 0) or 0
+                    total_traffic = aud_results.get('total_traffic', 0) or 0
+                    if not resolved_domain:
+                        resolved_domain = aud_results.get('competitor_domain', '')
+            except Exception:
+                pass
         
         # LIVE FALLBACK: If no stored data exists but we have a domain, fetch live from DataForSEO
         if not keywords_raw and resolved_domain:
@@ -3195,19 +3225,22 @@ def _collect_domain_data(db, domain, campaign_id=None, audit_id=None):
     }
     
     try:
-        # Try site_audits first
-        sa_res = db.table('site_audits').select('full_audit_data').ilike('domain', f"%{domain}%").limit(1).execute()
+        # Try site_audits first (column is 'audit_data', not 'full_audit_data')
+        sa_res = db.table('site_audits').select('audit_data').ilike('domain', f"%{domain}%").limit(1).execute()
         if sa_res.data:
-            fad = sa_res.data[0].get('full_audit_data') or {}
+            fad = sa_res.data[0].get('audit_data') or {}
             data['total_keywords'] = fad.get('total_keywords', 0) or 0
             data['total_traffic'] = fad.get('total_traffic', 0) or 0
             data['backlinks_total'] = fad.get('backlinks_total', 0) or 0
-            data['referring_domains'] = fad.get('referring_domains', 0) or 0
+            ref_dom = fad.get('referring_domains', 0)
+            data['referring_domains'] = len(ref_dom) if isinstance(ref_dom, list) else (ref_dom or 0)
             data['domain_rank'] = fad.get('domain_rank', 0) or 0
             data['top_keywords'] = fad.get('organic_keywords', []) or []
-            return data
+            if data['total_keywords'] or data['total_traffic']:
+                return data
         
         # Try projects table
+        proj_res = type('obj', (object,), {'data': []})()
         if audit_id:
             proj_res = db.table('projects').select('full_audit_data').eq('audit_id', audit_id).limit(1).execute()
         elif campaign_id:
@@ -3215,19 +3248,43 @@ def _collect_domain_data(db, domain, campaign_id=None, audit_id=None):
             aud_res = db.table('audits').select('id').eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(1).execute()
             if aud_res.data:
                 proj_res = db.table('projects').select('full_audit_data').eq('audit_id', aud_res.data[0]['id']).limit(1).execute()
-            else:
-                proj_res = type('obj', (object,), {'data': []})()
-        else:
-            proj_res = type('obj', (object,), {'data': []})()
         
         if proj_res.data:
             fad = proj_res.data[0].get('full_audit_data') or {}
             data['total_keywords'] = fad.get('total_keywords', 0) or 0
             data['total_traffic'] = fad.get('total_traffic', 0) or 0
             data['backlinks_total'] = fad.get('backlinks_total', 0) or 0
-            data['referring_domains'] = fad.get('referring_domains', 0) or 0
+            ref_dom = fad.get('referring_domains', 0)
+            data['referring_domains'] = len(ref_dom) if isinstance(ref_dom, list) else (ref_dom or 0)
             data['domain_rank'] = fad.get('domain_rank', 0) or 0
             data['top_keywords'] = fad.get('organic_keywords', []) or []
+            if data['total_keywords'] or data['total_traffic']:
+                return data
+        
+        # Fallback: try audits.results directly (competitor audits store data here)
+        if audit_id:
+            aud_direct = db.table('audits').select('results').eq('id', audit_id).limit(1).execute()
+            if aud_direct.data:
+                results = aud_direct.data[0].get('results') or {}
+                data['total_keywords'] = results.get('total_keywords', 0) or 0
+                data['total_traffic'] = results.get('total_traffic', 0) or 0
+                bl_summary = results.get('backlinks_summary') or results.get('backlinks', {})
+                if isinstance(bl_summary, dict):
+                    data['backlinks_total'] = bl_summary.get('total_backlinks', 0) or 0
+                    data['referring_domains'] = bl_summary.get('total_referring_domains', 0) or 0
+                data['top_keywords'] = results.get('keywords', []) or []
+                
+        # Fallback for campaign: try fetching live from DataForSEO if still empty
+        if not data['total_keywords'] and not data['total_traffic'] and domain:
+            try:
+                from api.dataforseo_client import fetch_domain_metrics
+                dm = fetch_domain_metrics(domain)
+                if dm and dm.get('success'):
+                    data['total_keywords'] = dm.get('total_keywords', 0) or 0
+                    data['total_traffic'] = dm.get('total_traffic', 0) or 0
+            except Exception:
+                pass
+                
     except Exception as e:
         logger.warning(f"_collect_domain_data({domain}): {e}")
     

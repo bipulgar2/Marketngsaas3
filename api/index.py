@@ -1929,14 +1929,37 @@ Respond ONLY with valid JSON, no markdown:
             return jsonify({'error': 'Empty response from AI'}), 500
         
         text = result.strip()
-        if text.startswith('```json'): text = text[7:]
-        if text.startswith('```'): text = text[3:]
-        if text.endswith('```'): text = text[:-3]
-        text = text.strip()
-        
+        import re
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            text = json_match.group(0)
+            
         import json
         parsed = json.loads(text)
         
+        # Persist schema to campaign settings
+        campaign_id = data.get('campaign_id')
+        # If this is a manual addition (only 1 page) and there's existing schema, the frontend will handle appending.
+        # However, we will also just return the raw parsed here, frontend merges it.
+        if campaign_id:
+            try:
+                db = supabase_admin or supabase
+                camp_res = db.table('campaigns').select('settings').eq('id', campaign_id).single().execute()
+                settings = camp_res.data.get('settings', {}) if camp_res.data else {}
+                
+                # If there's an existing schema and this was just a 1-page generation, we don't want to wipe the old pages out completely here if it was a manual addition, but frontend handles that. 
+                # Actually, to be safe, we will let frontend manage the state and not strictly overwrite if len(pages) == 1? No, we just write what's given. Wait, if we overwrite with just 1 page, we lose previous.
+                # Let's read `is_manual_append` flag from request.
+                is_manual = data.get('is_manual', False)
+                if is_manual and 'schema_markup' in settings:
+                    settings['schema_markup']['pages'].extend(parsed.get('pages', []))
+                else:
+                    settings['schema_markup'] = parsed
+                    
+                db.table('campaigns').update({'settings': settings}).eq('id', campaign_id).execute()
+            except Exception as e:
+                logger.error(f"Error saving schema markup: {e}")
+                
         return jsonify({'success': True, 'schema': parsed})
         
     except json.JSONDecodeError as e:

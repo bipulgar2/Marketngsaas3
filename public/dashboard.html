@@ -5031,6 +5031,10 @@
                 return;
             }
 
+            if (!_schemaData && currentClient?.settings?.schema_markup) {
+                _schemaData = currentClient.settings.schema_markup;
+            }
+
             contentArea.innerHTML = `
                 <div class="max-w-6xl mx-auto">
                     <div class="flex items-center justify-between mb-5">
@@ -5041,10 +5045,29 @@
                             </h2>
                             <p class="text-sm text-gray-400 mt-1">AI-generated JSON-LD structured data for your pages to unlock rich results in search.</p>
                         </div>
-                        <button onclick="generateSchemaMarkup()" id="schemaGenBtn" class="px-5 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2">
-                            <i data-lucide="sparkles" class="w-4 h-4"></i> Generate Schema
-                        </button>
                     </div>
+                    
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-5">
+                        <div class="flex flex-col md:flex-row gap-4 items-end">
+                            <div class="flex-1 w-full">
+                                <label class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1 block">Generate Site-Wide Schema</label>
+                                <button onclick="generateSchemaMarkup()" id="schemaGenBtn" class="w-full px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 shadow">
+                                    <i data-lucide="sparkles" class="w-4 h-4"></i> Generate For Top Pages
+                                </button>
+                            </div>
+                            <div class="hidden md:flex items-center text-gray-600 text-xs px-2">OR</div>
+                            <div class="flex-1 w-full relative">
+                                <label class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1 block">Generate For Specific URL</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="url" id="schemaUrlInput" placeholder="https://example.com/page" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none w-full">
+                                    <button onclick="generateSchemaMarkup(true)" id="schemaManualBtn" class="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-cyan-400 border border-gray-700 rounded-lg text-sm font-semibold transition flex items-center gap-2 flex-shrink-0">
+                                        <i data-lucide="plus" class="w-4 h-4"></i> Add
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="schemaResults">
                         ${_schemaData ? renderSchemaCards(_schemaData) : `
                             <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
@@ -5059,13 +5082,26 @@
             lucide.createIcons();
         }
 
-        async function generateSchemaMarkup() {
+        async function generateSchemaMarkup(isManual = false) {
             const btn = document.getElementById('schemaGenBtn');
+            const manualBtn = document.getElementById('schemaManualBtn');
+            const urlInput = document.getElementById('schemaUrlInput');
             const results = document.getElementById('schemaResults');
-            btn.disabled = true;
-            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating...';
-            lucide.createIcons();
-            results.innerHTML = '<div class="flex items-center justify-center h-24 text-gray-500"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>AI is analyzing pages and generating schema...</div>';
+
+            if (isManual && urlInput && !urlInput.value.trim()) {
+                showNotification('Please enter a valid URL', 'error');
+                return;
+            }
+
+            const activeBtn = isManual ? manualBtn : btn;
+            const originalText = activeBtn.innerHTML;
+            if(activeBtn) {
+                activeBtn.disabled = true;
+                activeBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
+            }
+            if(!isManual) {
+                results.innerHTML = '<div class="flex items-center justify-center h-24 text-gray-500"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>AI is analyzing pages and generating schema...</div>';
+            }
             lucide.createIcons();
 
             // Get brand config
@@ -5076,27 +5112,31 @@
                 brandConfig = bcData.brand_config || {};
             } catch(e) {}
 
-            // Get pages from latest audit
             let pages = [];
-            try {
-                const audRes = await fetch(`/api/audits?campaign_id=${currentClient.id}`);
-                const audData = await audRes.json();
-                const audits = audData.audits || [];
-                if (audits.length > 0) {
-                    const latest = audits[0];
-                    const detRes = await fetch(`/api/audits/${latest.id}`);
-                    const detData = await detRes.json();
-                    const auditPages = detData.audit?.pages || [];
-                    pages = auditPages.slice(0, 20).map(p => ({
-                        url: p.url || '',
-                        title: (p.meta?.title) || ''
-                    }));
-                }
-            } catch(e) {}
+            if (isManual) {
+                pages = [{ url: urlInput.value.trim(), title: 'Manual Page' }];
+            } else {
+                // Get pages from latest audit
+                try {
+                    const audRes = await fetch(`/api/audits?campaign_id=${currentClient.id}`);
+                    const audData = await audRes.json();
+                    const audits = audData.audits || [];
+                    if (audits.length > 0) {
+                        const latest = audits[0];
+                        const detRes = await fetch(`/api/audits/${latest.id}`);
+                        const detData = await detRes.json();
+                        const auditPages = detData.audit?.pages || [];
+                        pages = auditPages.slice(0, 20).map(p => ({
+                            url: p.url || '',
+                            title: (p.meta?.title) || ''
+                        }));
+                    }
+                } catch(e) {}
 
-            if (pages.length === 0) {
-                // Fallback: use domain homepage
-                pages = [{ url: 'https://' + (currentClient.domain || ''), title: 'Homepage' }];
+                if (pages.length === 0) {
+                    // Fallback: use domain homepage
+                    pages = [{ url: 'https://' + (currentClient.domain || ''), title: 'Homepage' }];
+                }
             }
 
             try {
@@ -5104,22 +5144,38 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        campaign_id: currentClient.id,
                         pages,
                         brand_config: brandConfig,
-                        domain: currentClient.domain || ''
+                        domain: currentClient.domain || '',
+                        is_manual: isManual
                     })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                _schemaData = data.schema;
+                if (isManual && _schemaData && _schemaData.pages) {
+                    _schemaData.pages.push(...(data.schema.pages || []));
+                    if (currentClient && currentClient.settings) currentClient.settings.schema_markup = _schemaData;
+                } else {
+                    _schemaData = data.schema;
+                    if (currentClient && currentClient.settings) currentClient.settings.schema_markup = _schemaData;
+                }
+
                 results.innerHTML = renderSchemaCards(_schemaData);
+                if (urlInput) urlInput.value = '';
                 lucide.createIcons();
             } catch(error) {
-                results.innerHTML = '<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400">Error:</span> <span class="text-gray-400">' + error.message + '</span></div>';
+                if(!isManual) {
+                    results.innerHTML = '<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400">Error:</span> <span class="text-gray-400">' + error.message + '</span></div>';
+                } else {
+                    showNotification(error.message, 'error');
+                }
             } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i data-lucide="sparkles" class="w-4 h-4"></i> Generate Schema';
+                if(activeBtn) {
+                    activeBtn.disabled = false;
+                    activeBtn.innerHTML = originalText;
+                }
                 lucide.createIcons();
             }
         }

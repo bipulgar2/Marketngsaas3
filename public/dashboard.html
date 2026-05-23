@@ -4855,10 +4855,11 @@
                         </div>
                         ${steps.length > 0 ? `
                         <div class="w-2/5 overflow-y-auto bg-gray-950/50">
-                            <div class="px-5 py-3 border-b border-gray-800 bg-gray-900/80 sticky top-0 z-10">
+                            <div class="px-5 py-3 border-b border-gray-800 bg-gray-900/80 sticky top-0 z-10 flex items-center justify-between">
                                 <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2"><i data-lucide="book-open" class="w-3.5 h-3.5 text-violet-400"></i>How to Fix (SOP)</h3>
+                                ${(currentUser?.role === 'admin' || currentUser?.role === 'campaign_manager') && sop?.id ? `<button onclick="toggleSopEditMode('${sop.id}')" class="text-xs text-violet-400 hover:text-violet-300 font-medium flex items-center gap-1"><i data-lucide="edit-2" class="w-3 h-3"></i>Edit</button>` : ''}
                             </div>
-                            <div class="p-5 space-y-1">
+                            <div class="p-5 space-y-1" id="sopViewMode">
                                 <div class="bg-violet-500/5 border border-violet-500/10 rounded-lg px-4 py-3 mb-4">
                                     <p class="text-xs text-violet-300 font-medium flex items-center gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5"></i> Issue Detected</p>
                                     <p class="text-sm text-gray-300 mt-1">${issueDesc}</p>
@@ -4901,6 +4902,22 @@
                                     </div>
                                 </div>` : ''}
                             </div>
+                            
+                            <!-- Edit Mode (Hidden by default) -->
+                            <div class="p-5 hidden" id="sopEditMode">
+                                <div class="mb-4">
+                                    <label class="block text-xs font-medium text-gray-400 mb-1">Issue Description</label>
+                                    <textarea id="editSopIssue" rows="2" class="w-full bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 focus:border-violet-500 focus:outline-none">${issueDesc}</textarea>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-xs font-medium text-gray-400 mb-2">Steps (One per line)</label>
+                                    <textarea id="editSopSteps" rows="8" class="w-full bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 focus:border-violet-500 focus:outline-none font-mono leading-relaxed">${steps.map(s => typeof s === 'object' ? s.text : s).join('\\n')}</textarea>
+                                </div>
+                                <div class="flex gap-3">
+                                    <button onclick="saveSopEdit('${sop?.id}')" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white py-2 rounded-lg text-sm font-medium transition-colors">Save Changes</button>
+                                    <button onclick="toggleSopEditMode()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm font-medium border border-gray-700 transition-colors">Cancel</button>
+                                </div>
+                            </div>
                         </div>` : ''}
                     </div>
                     <div class="px-6 py-4 border-t border-gray-800 flex items-center justify-between flex-shrink-0">
@@ -4934,6 +4951,50 @@
                 }
             } catch(e) { console.error('Failed to submit note', e); }
         }
+
+        window.toggleSopEditMode = function() {
+            const view = document.getElementById('sopViewMode');
+            const edit = document.getElementById('sopEditMode');
+            if (view && edit) {
+                view.classList.toggle('hidden');
+                edit.classList.toggle('hidden');
+            }
+        };
+
+        window.saveSopEdit = async function(sopId) {
+            if (!sopId || sopId === 'undefined') return;
+            const issueDesc = document.getElementById('editSopIssue')?.value || '';
+            const stepsRaw = document.getElementById('editSopSteps')?.value || '';
+            
+            // Convert newline-separated string back to step array objects
+            const steps = stepsRaw.split('\n')
+                .map(s => s.trim())
+                .filter(s => s.length > 0)
+                .map((text, i) => ({ order: i + 1, text: text }));
+
+            try {
+                const res = await fetch(`/api/sops/${sopId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ issue_description: issueDesc, steps: steps })
+                });
+                
+                if (res.ok) {
+                    // Clear cache so it fetches fresh data on next open
+                    delete _sopCache[Object.keys(_sopCache).find(k => _sopCache[k]?.id === sopId)];
+                    showNotification('SOP updated successfully', 'success');
+                    
+                    // Close the modal (user can reopen to see changes)
+                    document.getElementById('taskDetailModal')?.remove();
+                } else {
+                    const err = await res.json();
+                    showNotification(err.error || 'Failed to update SOP', 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                showNotification('Network error updating SOP', 'error');
+            }
+        };
 
 
 

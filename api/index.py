@@ -8854,15 +8854,41 @@ def get_sops():
         res = query.order('created_at', desc=True).execute()
         sops = res.data or []
 
-        # If looking up by issue_key and not found, fallback to SOP_LIBRARY defaults
+        # If looking up by issue_key and not found in DB, auto-seed it from defaults so they can edit it
         if issue_key and not sops:
             fallback = SOP_LIBRARY.get(issue_key)
+            if not fallback:
+                for key, val in TASK_SOP_DEFAULTS.items():
+                    if issue_key.startswith(key):
+                        fallback = val
+                        break
+            
             if fallback:
-                return jsonify({'sop': {'issue_key': issue_key, 'is_default': True, **fallback}, 'source': 'fallback'})
-            # Also try matching from TASK_SOP_DEFAULTS
-            for key, val in TASK_SOP_DEFAULTS.items():
-                if issue_key.startswith(key):
-                    return jsonify({'sop': {'issue_key': issue_key, 'is_default': True, **val}, 'source': 'fallback'})
+                steps = [{'order': i+1, 'text': s} for i, s in enumerate(fallback.get('steps', []))]
+                sop_data = {
+                    'organization_id': org_id,
+                    'issue_key': issue_key,
+                    'title': fallback.get('title', issue_key),
+                    'issue_description': fallback.get('issue', f"Standard operating procedure for {issue_key}"),
+                    'steps': steps,
+                    'quality_checks': fallback.get('quality_checks', []),
+                    'category': fallback.get('category', 'onpage'),
+                    'assigned_role': fallback.get('role', None),
+                    'is_default': True,
+                    'created_by': user.get('id'),
+                    'updated_by': user.get('id')
+                }
+                try:
+                    insert_res = client.table('sops').upsert(sop_data, on_conflict='organization_id,issue_key').execute()
+                    if insert_res.data:
+                        new_sop = insert_res.data[0]
+                        new_sop['notes'] = []
+                        return jsonify({'sop': new_sop, 'source': 'auto-seeded'})
+                except Exception as db_err:
+                    logger.error(f"Failed to auto-seed SOP {issue_key}: {db_err}")
+                    # Fallback to in-memory if DB insert fails
+                    return jsonify({'sop': {'issue_key': issue_key, 'is_default': True, **fallback}, 'source': 'fallback'})
+            
             return jsonify({'sop': None, 'source': 'none'})
 
         if issue_key and sops:

@@ -311,7 +311,7 @@ def get_google_metrics():
         return jsonify({'error': 'Authentication required'}), 401
     
     user_role = session['user'].get('role', 'viewer')
-    if user_role not in ['admin', 'campaign_manager', 'reporting_manager']:
+    if user_role not in ['admin', 'campaign_manager', 'reporting_manager', 'viewer']:
         return jsonify({'error': 'Insufficient permissions'}), 403
         
     try:
@@ -327,6 +327,26 @@ def get_google_metrics():
         
         if not gsc_property and not ga4_property:
             return jsonify({'error': 'Must provide gsc_property or ga4_property'}), 400
+            
+        # Security check for viewers: Ensure requested properties belong to an assigned campaign
+        if user_role == 'viewer':
+            assigned = session['user'].get('assigned_campaigns', [])
+            if not assigned:
+                return jsonify({'error': 'No campaigns assigned'}), 403
+                
+            # Verify the properties against the assigned campaigns
+            campaigns_resp = client.table('campaigns').select('settings').in_('id', assigned).execute()
+            valid_properties = set()
+            if campaigns_resp.data:
+                for c in campaigns_resp.data:
+                    settings = c.get('settings') or {}
+                    if settings.get('gsc_property'): valid_properties.add(settings['gsc_property'])
+                    if settings.get('ga4_property'): valid_properties.add(settings['ga4_property'])
+            
+            if gsc_property and gsc_property not in valid_properties:
+                return jsonify({'error': 'Access to this GSC property denied'}), 403
+            if ga4_property and ga4_property not in valid_properties:
+                return jsonify({'error': 'Access to this GA4 property denied'}), 403
             
         # Get the integration credentials
         integration = client.table('agency_integrations').select('*').eq('organization_id', org_id).eq('provider', 'google').execute()

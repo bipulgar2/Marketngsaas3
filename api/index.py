@@ -906,7 +906,10 @@ def list_campaigns():
         
         # For non-admin roles, filter to only assigned campaigns
         user_role = user.get('role', 'viewer')
-        assigned = user.get('assigned_campaigns', [])
+        
+        # Fresh fetch of assigned campaigns to prevent stale session issues
+        profile_res = client.table('profiles').select('assigned_campaigns').eq('id', user['id']).execute()
+        assigned = profile_res.data[0].get('assigned_campaigns', []) if profile_res.data else []
         
         if user_role == 'admin':
             pass  # Full visibility — see all org campaigns
@@ -2066,12 +2069,16 @@ def list_tasks():
         else:
              return jsonify({'tasks': []})
 
+        # Fresh fetch of assigned campaigns to prevent stale session issues
+        profile_res = client.table('profiles').select('assigned_campaigns').eq('id', user['id']).execute()
+        assigned = profile_res.data[0].get('assigned_campaigns', []) if profile_res.data else []
+
         # Filter based on role (Permissions within Org)
-        if user['role'] == 'admin':
+        user_role = user.get('role', 'viewer')
+        if user_role == 'admin':
             pass # Admin sees all
-        elif user.get('assigned_campaigns'):
+        elif assigned:
             # DB query fetching all is fine for now, we'll filter in memory below
-            # But we could also use `.in_('campaign_id', assigned_campaigns)` combined with `or_` but Supabase Python client doesn't support complex ORs easily
             pass
         else:
             # Regular users with no assigned campaigns see only their assigned tasks
@@ -2087,9 +2094,6 @@ def list_tasks():
         tasks = response.data or []
 
         # For non-admin roles, filter by assigned campaigns
-        user_role = user.get('role', 'viewer')
-        assigned = user.get('assigned_campaigns', [])
-        
         if user_role == 'admin':
             pass  # Full visibility — see all org tasks
         elif assigned:
@@ -7886,14 +7890,27 @@ def cm_dashboard():
     """Aggregate data for the Campaign Manager overview dashboard."""
     user = session['user']
     org_id = user.get('organization_id')
+    user_role = user.get('role', 'viewer')
     if not org_id:
         return jsonify({'error': 'No organization'}), 400
 
     client = supabase_admin or supabase
     try:
+        # Fresh fetch of assigned campaigns to prevent stale session issues
+        profile_res = client.table('profiles').select('assigned_campaigns').eq('id', user['id']).execute()
+        assigned = profile_res.data[0].get('assigned_campaigns', []) if profile_res.data else []
+
         # 1. All campaigns in the org
-        campaigns_res = client.table('campaigns').select('id, name, domain, status, created_at').eq('organization_id', org_id).order('created_at', desc=True).execute()
+        campaigns_query = client.table('campaigns').select('id, name, domain, status, created_at').eq('organization_id', org_id)
+        campaigns_res = campaigns_query.order('created_at', desc=True).execute()
         campaigns = campaigns_res.data or []
+
+        # Filter by assigned campaigns for non-admin roles
+        if user_role != 'admin':
+            if assigned:
+                campaigns = [c for c in campaigns if str(c['id']) in assigned]
+            else:
+                campaigns = []
 
         campaign_ids = [c['id'] for c in campaigns]
         active_campaigns = [c for c in campaigns if c.get('status') == 'active']

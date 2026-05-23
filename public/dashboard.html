@@ -4320,18 +4320,21 @@
                 return `<span class="px-2 py-1 rounded text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20">Low</span>`;
             };
 
-            const renderTaskRow = (t) => `
-                <tr class="hover:bg-gray-800/30 transition-colors ${t.status === 'done' ? 'opacity-60' : ''}">
+            const renderTaskRow = (t, idx) => `
+                <tr class="hover:bg-gray-800/30 transition-colors cursor-pointer ${t.status === 'done' ? 'opacity-60' : ''}" onclick="openTaskDetail('${t.id}')">
                     <td class="px-6 py-4">
-                        <div class="font-medium text-white ${t.status === 'done' ? 'line-through' : ''}">${t.title}</div>
+                        <div class="flex items-center gap-2">
+                            <div class="font-medium text-white ${t.status === 'done' ? 'line-through' : ''}">${t.title}</div>
+                            ${(t.checklist && t.checklist.length > 0) ? `<span class="text-[10px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">click to expand</span>` : ''}
+                        </div>
                         <div class="text-gray-500 text-xs mt-1 ${t.status === 'done' ? 'line-through' : ''}">${t.description}</div>
                     </td>
-                    <td class="px-6 py-4">
+                    <td class="px-6 py-4" onclick="event.stopPropagation()">
                         <span class="px-2 py-1 rounded text-xs bg-gray-800 text-gray-300 border border-gray-700">
                             ${t.type}
                         </span>
                     </td>
-                    <td class="px-6 py-4">
+                    <td class="px-6 py-4" onclick="event.stopPropagation()">
                         <select ${currentUser.role === 'viewer' ? 'disabled' : ''} onchange="updateTaskRole('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 disabled:opacity-50 disabled:cursor-not-allowed">
                             <option value="">Unassigned</option>
                             <option value="Campaign Manager" ${t.assigned_role === 'Campaign Manager' ? 'selected' : ''}>Campaign Manager</option>
@@ -4342,7 +4345,7 @@
                             <option value="Reporting Manager" ${t.assigned_role === 'Reporting Manager' ? 'selected' : ''}>Reporting Manager</option>
                         </select>
                     </td>
-                    <td class="px-6 py-4">
+                    <td class="px-6 py-4" onclick="event.stopPropagation()">
                         <select ${currentUser.role === 'viewer' ? 'disabled' : ''} onchange="updateTaskAssignee('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 max-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed">
                             <option value="">Any</option>
                             ${(window.teamMembers || []).map(m => `
@@ -4352,10 +4355,10 @@
                             `).join('')}
                         </select>
                     </td>
-                     <td class="px-6 py-4">
+                     <td class="px-6 py-4" onclick="event.stopPropagation()">
                         ${getPriorityBadge(t.priority)}
                     </td>
-                    <td class="px-6 py-4">
+                    <td class="px-6 py-4" onclick="event.stopPropagation()">
                         <select ${currentUser.role === 'viewer' ? 'disabled' : ''} onchange="updateTaskStatus('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 ${t.status === 'done' ? 'text-green-500' : 'text-gray-300'} text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 disabled:opacity-50 disabled:cursor-not-allowed">
                             <option value="pending" ${t.status === 'pending' ? 'selected' : ''} class="text-gray-300">Pending</option>
                             <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''} class="text-gray-300">In Progress</option>
@@ -4454,6 +4457,455 @@
                         </div>
                     </div>`;
             }
+            lucide.createIcons();
+        }
+
+        // =====================================================================
+        // TASK DETAIL MODAL — Affected Pages + SOP
+        // =====================================================================
+        const TASK_SOP_MAP = {
+            'Fix Missing Page Titles': {
+                issue: 'Page has no <title> tag defined',
+                steps: [
+                    'Open the page in your CMS or HTML editor',
+                    'Locate the <head> section of the page',
+                    'Add a <title> tag: <title>Primary Keyword – Brand Name</title>',
+                    'Keep it under 60 characters for full SERP visibility',
+                    'Include primary keyword near the beginning',
+                    'Make it unique — no other page should share this title',
+                    'Save & re-crawl the page to verify'
+                ]
+            },
+            'Rewrite Duplicate Page Titles': {
+                issue: 'Title tag is identical to another page on this site',
+                steps: [
+                    'Identify which pages share the same title (listed below)',
+                    'Determine the unique focus keyword for each page',
+                    'Rewrite each title to be unique: include the page-specific keyword',
+                    'Format: Primary Keyword – Secondary Modifier | Brand',
+                    'Ensure no two pages share the same title after edits',
+                    'Publish changes and re-crawl to confirm'
+                ]
+            },
+            'Shorten Page Titles': {
+                issue: 'Title exceeds 65 characters and gets truncated in SERPs',
+                steps: [
+                    'Review the current title on each affected page',
+                    'Cut filler words: "best", "top", "great" unless they\'re the keyword',
+                    'Move brand name to the end or remove if space is tight',
+                    'Target 50-60 characters for optimal display',
+                    'Preserve the primary keyword in the shortened title',
+                    'Test using a SERP preview tool (e.g., mangools.com/serp-simulator)'
+                ]
+            },
+            'Add Meta Descriptions': {
+                issue: 'Page has no meta description — Google will auto-generate one',
+                steps: [
+                    'Open the page in your CMS or code editor',
+                    'Add: <meta name="description" content="...">',
+                    'Write a compelling 120-155 character summary',
+                    'Include the primary keyword naturally',
+                    'Add a call-to-action (Learn more, Get started, Shop now)',
+                    'Make it unique per page — never copy/paste across pages',
+                    'Publish and verify in Google Search Console'
+                ]
+            },
+            'Rewrite Duplicate Meta Descriptions': {
+                issue: 'Meta description is identical to another page',
+                steps: [
+                    'Identify all pages sharing the same description',
+                    'Write a unique description for each page\'s specific content',
+                    'Include page-specific keywords and unique value propositions',
+                    'Keep each description between 120-155 characters',
+                    'Add differentiating CTAs per page',
+                    'Publish and re-crawl'
+                ]
+            },
+            'Shorten Meta Descriptions': {
+                issue: 'Description exceeds 155 characters and will be truncated',
+                steps: [
+                    'Trim descriptions to 120-155 characters',
+                    'Put the most important information first',
+                    'Remove redundant phrases or filler content',
+                    'Keep the CTA intact — it drives clicks',
+                    'Preview in a SERP simulator to confirm display'
+                ]
+            },
+            'Add H1 Tags': {
+                issue: 'Page is missing an H1 heading entirely',
+                steps: [
+                    'Every page must have exactly one <h1> tag',
+                    'The H1 should contain the primary keyword for that page',
+                    'Place it as the first visible heading on the page',
+                    'Make it descriptive — it tells users and Google what the page is about',
+                    'Don\'t use the same H1 text as the title tag (use a variation)',
+                    'Verify with Chrome DevTools: Ctrl+F → search for <h1>'
+                ]
+            },
+            'Fix Multiple H1 Tags': {
+                issue: 'Page has more than one H1 tag — confuses heading hierarchy',
+                steps: [
+                    'Inspect the page HTML for all <h1> elements',
+                    'Keep only the most relevant one as <h1>',
+                    'Downgrade all others to <h2> or <h3> as appropriate',
+                    'Check your theme/template — some inject hidden H1s',
+                    'Verify final heading structure with a browser extension (HeadingsMap)'
+                ]
+            },
+            'Add Subheadings': {
+                issue: 'Page has no H2 subheadings — content lacks structure',
+                steps: [
+                    'Break long content blocks into logical sections',
+                    'Add <h2> tags for each major section (every 200-300 words)',
+                    'Include secondary keywords in H2s where natural',
+                    'Use H3s for sub-sections within each H2 block',
+                    'Ensure proper hierarchy: H1 → H2 → H3 (never skip levels)'
+                ]
+            },
+            'Expand Thin Content': {
+                issue: 'Page has fewer than 300 words — considered thin content by Google',
+                steps: [
+                    'Assess if the page serves a valuable purpose',
+                    'If yes: expand content to 500+ words with useful information',
+                    'Add FAQs, how-tos, comparisons, or case studies',
+                    'If the page has no unique value: consider redirecting (301) to a stronger page',
+                    'Alternatively, consolidate multiple thin pages into one comprehensive page',
+                    'After expanding, add internal links to/from relevant pages'
+                ]
+            },
+            'Fix Grammar & Spelling Errors': {
+                issue: 'Spelling or grammar mistakes detected on this page',
+                steps: [
+                    'Copy the page content into Grammarly or Hemingway Editor',
+                    'Fix all flagged spelling mistakes',
+                    'Correct grammar and punctuation errors',
+                    'Read through for flow and clarity',
+                    'Pay special attention to product names and industry terms',
+                    'Update the page and clear any CDN cache'
+                ]
+            },
+            'Fix Broken Links': {
+                issue: 'Page contains links pointing to URLs that return 4xx/5xx errors',
+                steps: [
+                    'Click each affected URL below to verify it\'s truly broken',
+                    'For internal broken links: fix the destination URL or create a redirect',
+                    'For external broken links: find an updated URL or remove the link',
+                    'Replace with a relevant alternative resource if the content is gone',
+                    'Use Screaming Frog or Ahrefs to find all broken links in bulk',
+                    'Set up automated broken link monitoring going forward'
+                ]
+            },
+            'Audit Internal Redirects': {
+                issue: 'Internal links point to URLs that 301/302 redirect',
+                steps: [
+                    'Update all internal links to point to the final destination URL',
+                    'This eliminates redirect chains and improves page load speed',
+                    'Search your CMS for the old URL and replace with the new one',
+                    'Use a bulk search-and-replace plugin if available',
+                    'Verify no redirect chains remain after updating'
+                ]
+            },
+            'Link Orphan Pages': {
+                issue: 'This page has zero internal links pointing to it',
+                steps: [
+                    'Identify 3-5 related pages on your site',
+                    'Add contextual internal links from those pages to this orphan page',
+                    'Use descriptive anchor text containing the target keyword',
+                    'Consider adding the page to your site navigation or footer if important',
+                    'Ensure the page is included in your sitemap.xml'
+                ]
+            },
+            'Fix Mobile Friendliness Issues': {
+                issue: 'Page failed mobile-friendly test',
+                steps: [
+                    'Test the page at search.google.com/test/mobile-friendly',
+                    'Ensure viewport meta tag exists: <meta name="viewport" content="width=device-width, initial-scale=1">',
+                    'Fix any text that is too small to read (min 16px base font)',
+                    'Ensure tap targets (buttons/links) are at least 48x48px with spacing',
+                    'Fix content wider than the screen (horizontal scroll)',
+                    'Test on actual mobile devices, not just browser DevTools'
+                ]
+            },
+            'Add Alt Text to Images': {
+                issue: 'Images on this page are missing alt text attributes',
+                steps: [
+                    'Find all <img> tags without alt attributes on the page',
+                    'Write descriptive alt text that explains what the image shows',
+                    'Include relevant keywords naturally (don\'t keyword-stuff)',
+                    'For decorative images, use alt="" (empty alt, not missing)',
+                    'Keep alt text under 125 characters',
+                    'Alt text is critical for accessibility and Image SEO'
+                ]
+            },
+            'Compress Large Images': {
+                issue: 'Images on this page exceed 100KB — slowing load times',
+                steps: [
+                    'Use TinyPNG, ShortPixel, or Squoosh to compress images',
+                    'Convert to WebP or AVIF format for better compression',
+                    'Resize images to the maximum display dimensions needed',
+                    'Implement lazy loading: add loading="lazy" to img tags',
+                    'Use responsive images with srcset for different screen sizes',
+                    'Target under 100KB per image, ideally under 50KB'
+                ]
+            },
+            'Optimize Core Web Vitals': {
+                issue: 'Page failed LCP (>2.5s) or CLS (>0.1) thresholds',
+                steps: [
+                    'Run PageSpeed Insights for the specific URL',
+                    'LCP Fix: Optimize the largest image/text block above the fold',
+                    'LCP Fix: Preload critical resources with <link rel="preload">',
+                    'CLS Fix: Set explicit width/height on all images and videos',
+                    'CLS Fix: Don\'t inject content above existing content dynamically',
+                    'Reduce JavaScript that blocks rendering (defer/async)',
+                    'Enable server-side caching and use a CDN',
+                    'Re-test with Lighthouse after each change'
+                ]
+            },
+            'Implement Structured Data': {
+                issue: 'Page has no schema.org structured data markup',
+                steps: [
+                    'Determine the appropriate schema type for the page (Article, Product, LocalBusiness, FAQ, etc.)',
+                    'Generate JSON-LD markup using schema.org or a schema generator tool',
+                    'Add the <script type="application/ld+json"> block to the page <head>',
+                    'Include all required properties for the chosen schema type',
+                    'Test with Google Rich Results Test (search.google.com/test/rich-results)',
+                    'Deploy and monitor in Google Search Console → Enhancements'
+                ]
+            },
+            'Fix Sitemap Issues': {
+                issue: 'sitemap.xml is missing or contains errors',
+                steps: [
+                    'Check if /sitemap.xml exists and is accessible',
+                    'Generate a sitemap using your CMS (Yoast, RankMath) or a tool like XML-Sitemaps.com',
+                    'Ensure all important pages are included',
+                    'Remove noindex pages, redirects, and 404s from the sitemap',
+                    'Submit the sitemap in Google Search Console',
+                    'Reference it in robots.txt: Sitemap: https://yourdomain.com/sitemap.xml'
+                ]
+            },
+            'Optimize URL Structure': {
+                issue: 'URL contains special characters, IDs, or non-SEO-friendly patterns',
+                steps: [
+                    'URLs should be lowercase, hyphenated, and descriptive',
+                    'Remove query parameters, session IDs, and random numbers',
+                    'Keep URLs short: 3-5 words after the domain',
+                    'Include the primary keyword in the URL slug',
+                    'Set up 301 redirects from old URLs to new clean URLs',
+                    'Update all internal links to use the new URLs'
+                ]
+            },
+            'Add Canonical Tags': {
+                issue: 'Page is missing a canonical tag — risks duplicate content issues',
+                steps: [
+                    'Add <link rel="canonical" href="https://yourdomain.com/page-url"> to the <head>',
+                    'Self-referencing canonicals should point to the page\'s own URL',
+                    'For duplicate/similar pages, all should canonical to the preferred version',
+                    'Ensure canonical URLs use HTTPS and the correct www/non-www variant',
+                    'Verify in View Source or Google Search Console'
+                ]
+            },
+            'Resolve Duplicate Content': {
+                issue: 'This page is very similar to other pages on the site',
+                steps: [
+                    'Compare content between the duplicate pages',
+                    'Option 1: Rewrite to make each page unique',
+                    'Option 2: 301 redirect the weaker page to the stronger one',
+                    'Option 3: Use rel="canonical" to signal the preferred page',
+                    'Option 4: Set noindex on the less important version',
+                    'Consolidate link equity by redirecting where possible'
+                ]
+            },
+            'Review No-Index Tags': {
+                issue: 'Page is marked as noindex — it will not appear in search results',
+                steps: [
+                    'Confirm this is intentional — is this page meant to be hidden from search?',
+                    'If unintentional: remove the <meta name="robots" content="noindex"> tag',
+                    'Also check for X-Robots-Tag: noindex in HTTP headers',
+                    'Check robots.txt for Disallow rules blocking this page',
+                    'After removing noindex, request indexing in Google Search Console',
+                    'Common accidental causes: staging site settings carried to production'
+                ]
+            },
+            'Review Robots.txt': {
+                issue: 'robots.txt may be blocking important pages from crawlers',
+                steps: [
+                    'Visit /robots.txt on your site',
+                    'Ensure important directories are NOT disallowed',
+                    'Common mistake: Disallow: / blocks the entire site',
+                    'Allow CSS/JS files for proper rendering by Googlebot',
+                    'Test in Google Search Console → robots.txt Tester',
+                    'Add your sitemap URL at the bottom: Sitemap: https://...'
+                ]
+            },
+            'Fix Server Errors': {
+                issue: 'Page returned a 500-level server error',
+                steps: [
+                    'Check server error logs immediately (500, 502, 503)',
+                    'Common causes: PHP errors, database connection failures, memory limits',
+                    'Test the URL directly in a browser to reproduce',
+                    'Check if the issue is intermittent (server overload) or persistent (code bug)',
+                    'Contact your hosting provider if it\'s infrastructure-related',
+                    'Fix ASAP — 5xx errors hurt crawl budget and user experience'
+                ]
+            },
+            'Fix Broken Pages': {
+                issue: 'Page returns a 404 or other 4xx client error',
+                steps: [
+                    'Verify the URL is truly broken (not just a crawler artifact)',
+                    'If content existed: restore the page or set up a 301 redirect',
+                    'If content never existed: return a proper 404 or 410 (Gone)',
+                    'Check for incoming backlinks to 404 pages using Ahrefs/Moz',
+                    'Redirect any pages with backlinks to a relevant alternative page',
+                    'Create a custom 404 page with navigation to help users'
+                ]
+            }
+        };
+
+        function getSOPForTask(taskTitle) {
+            // Match SOP by checking if the task title starts with any SOP key
+            for (const [key, sop] of Object.entries(TASK_SOP_MAP)) {
+                if (taskTitle.startsWith(key)) return sop;
+            }
+            return null;
+        }
+
+        function openTaskDetail(taskId) {
+            const task = currentLoadedTasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            const checklist = task.checklist || [];
+            const sop = getSOPForTask(task.title);
+
+            // Priority badge
+            const priorityColors = { 3: 'text-red-500 bg-red-500/10 border-red-500/20', 2: 'text-red-400 bg-red-500/10 border-red-500/20', 1: 'text-orange-400 bg-orange-500/10 border-orange-500/20', 0: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
+            const priorityLabels = { 3: 'Critical', 2: 'High', 1: 'Medium', 0: 'Low' };
+            const pClass = priorityColors[task.priority] || priorityColors[0];
+            const pLabel = priorityLabels[task.priority] || 'Low';
+
+            // Extract issue context from URL items (some have metadata in parentheses)
+            const renderPageItem = (item, idx) => {
+                let url = '';
+                let detail = '';
+                if (typeof item === 'object' && item.item) {
+                    const raw = item.item;
+                    const parenMatch = raw.match(/^(.*?)\s*\((.+)\)\s*$/);
+                    if (parenMatch) {
+                        url = parenMatch[1].trim();
+                        detail = parenMatch[2].trim();
+                    } else {
+                        url = raw;
+                    }
+                } else {
+                    url = String(item);
+                }
+
+                const completed = (typeof item === 'object') ? item.completed : false;
+                const displayUrl = url.replace(/^https?:\/\/(www\.)?/, '').substring(0, 60);
+
+                return `
+                    <div class="group flex items-start gap-3 py-3 px-4 ${idx > 0 ? 'border-t border-gray-800' : ''} hover:bg-gray-800/30 transition-colors rounded-lg">
+                        <div class="mt-0.5 flex-shrink-0">
+                            ${completed
+                                ? '<div class="w-5 h-5 rounded bg-green-500/20 border border-green-500/30 flex items-center justify-center"><i data-lucide="check" class="w-3 h-3 text-green-400"></i></div>'
+                                : '<div class="w-5 h-5 rounded bg-gray-800 border border-gray-700 flex items-center justify-center"><span class="text-[9px] text-gray-500 font-mono">' + (idx + 1) + '</span></div>'
+                            }
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <a href="${url.startsWith('http') ? url : 'https://' + url}" target="_blank" class="text-sm text-cyan-400 hover:text-cyan-300 hover:underline truncate block" title="${url}">
+                                ${displayUrl}${url.length > 60 ? '...' : ''}
+                            </a>
+                            ${detail ? `<p class="text-xs text-amber-400/80 mt-0.5 flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3 h-3"></i> ${detail}</p>` : (sop ? `<p class="text-xs text-gray-500 mt-0.5">${sop.issue}</p>` : '')}
+                        </div>
+                        <a href="${url.startsWith('http') ? url : 'https://' + url}" target="_blank" class="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
+                            <i data-lucide="external-link" class="w-3.5 h-3.5 text-gray-500 hover:text-white"></i>
+                        </a>
+                    </div>
+                `;
+            };
+
+            const modal = document.createElement('div');
+            modal.id = 'taskDetailModal';
+            modal.className = 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+            modal.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl max-w-5xl w-full mx-4 max-h-[85vh] flex flex-col" onclick="event.stopPropagation()">
+                    <!-- Header -->
+                    <div class="px-6 py-5 border-b border-gray-800 flex items-start justify-between flex-shrink-0">
+                        <div class="flex-1 min-w-0 pr-4">
+                            <div class="flex items-center gap-3 mb-2 flex-wrap">
+                                <span class="px-2.5 py-1 rounded text-xs border ${pClass} font-medium">${pLabel}</span>
+                                <span class="px-2.5 py-1 rounded text-xs bg-gray-800 text-gray-300 border border-gray-700">${task.type}</span>
+                                <span class="px-2.5 py-1 rounded text-xs bg-gray-800 text-gray-400 border border-gray-700 flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>${task.assigned_role || 'Unassigned'}</span>
+                            </div>
+                            <h2 class="text-lg font-bold text-white">${task.title}</h2>
+                            <p class="text-sm text-gray-400 mt-1">${task.description}</p>
+                        </div>
+                        <button onclick="document.getElementById('taskDetailModal').remove()" class="text-gray-500 hover:text-white transition-colors flex-shrink-0 p-1 hover:bg-gray-800 rounded-lg">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+
+                    <!-- Body: Two-panel layout -->
+                    <div class="flex flex-1 overflow-hidden ${sop ? '' : ''}">
+                        <!-- Left Panel: Affected Pages -->
+                        <div class="${sop ? 'w-3/5 border-r border-gray-800' : 'w-full'} overflow-y-auto">
+                            <div class="px-5 py-3 border-b border-gray-800 bg-gray-900/80 sticky top-0 z-10">
+                                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                                    Affected Pages
+                                    <span class="bg-gray-800 text-gray-300 px-2 py-0.5 rounded-full text-[10px] ml-1">${checklist.length}</span>
+                                </h3>
+                            </div>
+                            <div class="p-3">
+                                ${checklist.length > 0
+                                    ? checklist.map((item, idx) => renderPageItem(item, idx)).join('')
+                                    : '<div class="text-center text-gray-500 py-8 text-sm"><i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 text-gray-600"></i><p>No specific pages recorded for this task.</p><p class="text-xs text-gray-600 mt-1">Run a fresh audit to populate page-level data.</p></div>'
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: SOP Guide -->
+                        ${sop ? `
+                        <div class="w-2/5 overflow-y-auto bg-gray-950/50">
+                            <div class="px-5 py-3 border-b border-gray-800 bg-gray-900/80 sticky top-0 z-10">
+                                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                    <i data-lucide="book-open" class="w-3.5 h-3.5 text-violet-400"></i>
+                                    How to Fix (SOP)
+                                </h3>
+                            </div>
+                            <div class="p-5 space-y-1">
+                                <div class="bg-violet-500/5 border border-violet-500/10 rounded-lg px-4 py-3 mb-4">
+                                    <p class="text-xs text-violet-300 font-medium flex items-center gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5"></i> Issue Detected</p>
+                                    <p class="text-sm text-gray-300 mt-1">${sop.issue}</p>
+                                </div>
+                                <ol class="space-y-3">
+                                    ${sop.steps.map((step, i) => `
+                                        <li class="flex gap-3 items-start group">
+                                            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-bold flex items-center justify-center mt-0.5">${i + 1}</span>
+                                            <p class="text-sm text-gray-300 leading-relaxed">${step.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+                                        </li>
+                                    `).join('')}
+                                </ol>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="px-6 py-4 border-t border-gray-800 flex items-center justify-between flex-shrink-0">
+                        <div class="flex items-center gap-2 text-xs text-gray-500">
+                            <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                            Created ${new Date(task.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </div>
+                        <button onclick="document.getElementById('taskDetailModal').remove()" class="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2 rounded-lg text-sm font-medium border border-gray-700 transition-colors">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
             lucide.createIcons();
         }
 

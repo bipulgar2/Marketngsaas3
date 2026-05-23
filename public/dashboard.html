@@ -318,10 +318,7 @@
             'content': [
                 { id: 'all-links', label: 'All Links' },
                 { id: 'content-library', label: 'Content Library' },
-                { id: 'ai-writer', label: 'AI Writer' },
-                { id: 'bofu', label: 'BoFu (Products)' },
-                { id: 'mofu', label: 'MoFu (Silo Topics)' },
-                { id: 'tofu', label: 'ToFu (Sub-Silo)' }
+                { id: 'ai-writer', label: 'AI Writer' }
             ],
             'strategy': [
                 { id: 'brand-config', label: 'Brand Config' },
@@ -10050,11 +10047,26 @@
             const flow = ['brief','draft','review','revision','approved','published'];
             const idx = flow.indexOf(current);
             const next = idx < flow.length-1 ? flow[idx+1] : current;
-            if (next === current) return;
+            if (next === current) {
+                alert('Already at final stage (published)');
+                return;
+            }
             try {
-                await fetch(`/api/content-pieces/${pieceId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ status: next }) });
+                const res = await fetch(`/api/content-pieces/${pieceId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: next })
+                });
+                if (!res.ok) {
+                    let errMsg = `Server error (${res.status})`;
+                    try { const errData = await res.json(); errMsg = errData.error || errMsg; } catch(_) {}
+                    throw new Error(errMsg);
+                }
                 renderContentLibrary();
-            } catch(e) { alert('Error: '+e.message); }
+            } catch(e) {
+                console.error('Advance error:', e);
+                alert('Error advancing status: ' + e.message);
+            }
         }
         async function deleteContentPiece(pieceId) {
             if (!confirm('Delete this content piece?')) return;

@@ -9270,61 +9270,161 @@
                 lucide.createIcons();
             }
 
-            // Use a hidden iframe to render audit-dashboard.html, capture screenshots, and generate slides
-            const iframe = document.createElement('iframe');
-            iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1400px;height:900px;border:none;opacity:0;pointer-events:none;';
-            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}&role=${currentUser?.role || ''}`;
-            document.body.appendChild(iframe);
+            // Show loading modal (same UI as tech audit tab)
+            const modal = document.createElement('div');
+            modal.id = 'siteAuditSlideModal';
+            modal.className = 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm';
+            modal.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                    <div class="mb-6">
+                        <div class="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Generating Presentation</h3>
+                    <p id="siteSlideGenStatus" class="text-gray-400 text-sm mb-4">Loading audit data & running analysis...</p>
+                    <div class="w-full bg-gray-800 rounded-full h-2 mb-4">
+                        <div id="siteSlideGenProgress" class="bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full transition-all duration-500" style="width: 10%"></div>
+                    </div>
+                    <p class="text-gray-500 text-xs">This may take 1–2 minutes. Do not close this window.</p>
+                </div>
+            `;
+            document.body.appendChild(modal);
 
-            const timeout = setTimeout(() => {
-                try { document.body.removeChild(iframe); } catch(e) {}
+            // Progress updates
+            const updateProgress = (pct, text) => {
+                const bar = document.getElementById('siteSlideGenProgress');
+                const status = document.getElementById('siteSlideGenStatus');
+                if (bar) bar.style.width = pct + '%';
+                if (status) status.textContent = text;
+            };
+
+            // Simulate progress stages
+            const t1 = setTimeout(() => updateProgress(20, 'Running PageSpeed & readability analysis...'), 2000);
+            const t2 = setTimeout(() => updateProgress(40, 'Rendering audit dashboard...'), 5000);
+            const t3 = setTimeout(() => updateProgress(60, 'Capturing screenshots...'), 10000);
+            const t4 = setTimeout(() => updateProgress(75, 'Building Google Slides presentation...'), 20000);
+
+            // Helper to clean up timers
+            const clearProgressTimers = () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+
+            // Helper to reset the button
+            const resetBtn = () => {
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = '<i data-lucide="presentation" class="w-3.5 h-3.5"></i> Create Slides';
                     lucide.createIcons();
                 }
-                alert('Slide generation timed out. Please try again.');
-            }, 300000);
+            };
+
+            // Use a hidden iframe to render audit-dashboard.html, capture screenshots, and generate slides
+            const iframe = document.createElement('iframe');
+            iframe.id = 'siteAuditSlideIframe';
+            iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1400px;height:900px;border:none;opacity:0;pointer-events:none;';
+            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}&role=${currentUser?.role || ''}`;
+            document.body.appendChild(iframe);
+
+            // Timeout after 3 minutes
+            const timeout = setTimeout(() => {
+                clearProgressTimers();
+                window.removeEventListener('message', handleMessage);
+                try { document.body.removeChild(iframe); } catch(e) {}
+
+                const modalEl = document.getElementById('siteAuditSlideModal');
+                if (modalEl) {
+                    modalEl.innerHTML = `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                            <div class="text-5xl mb-4">⏰</div>
+                            <h3 class="text-xl font-bold text-white mb-2">Generation Timed Out</h3>
+                            <p class="text-gray-400 text-sm mb-6">The process took too long. Please try again.</p>
+                            <button onclick="document.getElementById('siteAuditSlideModal').remove()" class="bg-gray-800 hover:bg-gray-700 text-white px-6 py-2.5 rounded-lg font-medium border border-gray-700">
+                                Close
+                            </button>
+                        </div>
+                    `;
+                }
+                resetBtn();
+            }, 180000);
 
             function handleMessage(event) {
                 if (event.data?.type === 'slides-ready') {
                     clearTimeout(timeout);
+                    clearProgressTimers();
                     window.removeEventListener('message', handleMessage);
                     try { document.body.removeChild(iframe); } catch(e) {}
 
-                    if (event.data.presentation_url) {
-                        window.open(event.data.presentation_url, '_blank');
-                        loadAudit2List();
-                    }
+                    updateProgress(100, 'Presentation ready!');
+                    loadAudit2List();
 
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Done!';
-                        lucide.createIcons();
-                        setTimeout(() => {
-                            btn.innerHTML = '<i data-lucide="presentation" class="w-3.5 h-3.5"></i> Create Slides';
+                    setTimeout(() => {
+                        // Replace modal content with success
+                        const modalEl = document.getElementById('siteAuditSlideModal');
+                        if (modalEl) {
+                            modalEl.innerHTML = `
+                                <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                                    <div class="text-5xl mb-4">✅</div>
+                                    <h3 class="text-xl font-bold text-white mb-2">Presentation Ready!</h3>
+                                    <p class="text-gray-400 text-sm mb-6">Your Google Slides presentation has been created.</p>
+                                    <div class="flex gap-3 justify-center">
+                                        <a href="${event.data.presentation_url}" target="_blank" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-cyan-500/10">
+                                            <i data-lucide="external-link" class="w-4 h-4"></i> Open Presentation
+                                        </a>
+                                        <button onclick="document.getElementById('siteAuditSlideModal').remove()" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg font-medium border border-gray-700">
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
                             lucide.createIcons();
-                        }, 3000);
-                    }
+                        }
+                    }, 1000);
+
+                    resetBtn();
+
                 } else if (event.data?.type === 'slides-error') {
                     clearTimeout(timeout);
+                    clearProgressTimers();
                     window.removeEventListener('message', handleMessage);
                     try { document.body.removeChild(iframe); } catch(e) {}
 
                     const errMsg = event.data.error || 'Unknown error';
+
+                    // Google auth redirect handling
                     if (errMsg.includes('needs_auth') || errMsg.includes('Google')) {
-                        if (confirm('Google sign-in required to create slides. Redirect now?')) {
-                            window.location.href = '/oauth/start?return_path=/dashboard.html';
+                        const modalEl = document.getElementById('siteAuditSlideModal');
+                        if (modalEl) {
+                            modalEl.innerHTML = `
+                                <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                                    <div class="text-5xl mb-4">🔐</div>
+                                    <h3 class="text-xl font-bold text-white mb-2">Google Sign-In Required</h3>
+                                    <p class="text-gray-400 text-sm mb-6">You need to connect your Google account to create slides.</p>
+                                    <div class="flex gap-3 justify-center">
+                                        <a href="/oauth/start?return_path=/dashboard.html" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2">
+                                            <i data-lucide="log-in" class="w-4 h-4"></i> Sign In with Google
+                                        </a>
+                                        <button onclick="document.getElementById('siteAuditSlideModal').remove()" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg font-medium border border-gray-700">
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                            lucide.createIcons();
                         }
                     } else {
-                        alert('Slide generation failed: ' + errMsg);
+                        const modalEl = document.getElementById('siteAuditSlideModal');
+                        if (modalEl) {
+                            modalEl.innerHTML = `
+                                <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl text-center">
+                                    <div class="text-5xl mb-4">❌</div>
+                                    <h3 class="text-xl font-bold text-white mb-2">Generation Failed</h3>
+                                    <p class="text-red-400 text-sm mb-6">${errMsg}</p>
+                                    <button onclick="document.getElementById('siteAuditSlideModal').remove()" class="bg-gray-800 hover:bg-gray-700 text-white px-6 py-2.5 rounded-lg font-medium border border-gray-700">
+                                        Close
+                                    </button>
+                                </div>
+                            `;
+                        }
                     }
 
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<i data-lucide="presentation" class="w-3.5 h-3.5"></i> Create Slides';
-                        lucide.createIcons();
-                    }
+                    resetBtn();
                 }
             }
 

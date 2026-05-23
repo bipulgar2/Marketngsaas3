@@ -179,7 +179,7 @@ ROLES = {
         'permissions': ['view_all_campaigns', 'create_reports', 'export_data']
     },
     'viewer': {
-        'name': 'Client Viewer',
+        'name': 'Client',
         'permissions': ['view_own_campaign']
     }
 }
@@ -644,7 +644,7 @@ def get_current_user():
         'optimization_specialist': ['dashboard', 'audit-2', 'tech-audit', 'tasks'],
         'link_builder': ['dashboard', 'links', 'tasks'],
         'reporting_manager': ['dashboard', 'reports'],
-        'viewer': ['dashboard', 'tasks', 'reports']
+        'viewer': ['reports']
     }
     
     return jsonify({

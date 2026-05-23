@@ -593,7 +593,7 @@
                             'admin': 'Admin', 'campaign_manager': 'Campaign Mgr',
                             'content_strategist': 'Content Strategist', 'content_creator': 'Content Creator',
                             'optimization_specialist': 'Optimization', 'link_builder': 'Link Builder',
-                            'reporting_manager': 'Reporting Mgr', 'viewer': 'Viewer'
+                            'reporting_manager': 'Reporting Mgr', 'viewer': 'Client'
                         };
 
                         const workloadRows = (data.team_workload || []).map(w => {
@@ -2685,7 +2685,7 @@
                     'optimization_specialist': 'Optimization Specialist',
                     'link_builder': 'Link Builder',
                     'reporting_manager': 'Reporting Manager',
-                    'viewer': 'Viewer'
+                    'viewer': 'Client'
                 };
 
                 const pendingInvites = invitations.filter(i => !i.used);
@@ -2863,7 +2863,7 @@
                                     <option value="optimization_specialist" ${currentRole === 'optimization_specialist' ? 'selected' : ''}>Optimization Specialist</option>
                                     <option value="link_builder" ${currentRole === 'link_builder' ? 'selected' : ''}>Link Builder</option>
                                     <option value="reporting_manager" ${currentRole === 'reporting_manager' ? 'selected' : ''}>Reporting Manager</option>
-                                    <option value="viewer" ${currentRole === 'viewer' ? 'selected' : ''}>Viewer (Read Only)</option>
+                                    <option value="viewer" ${currentRole === 'viewer' ? 'selected' : ''}>Client (Read Only)</option>
                                 </select>
                             </div>
                             
@@ -2944,7 +2944,7 @@
                             <option value="optimization_specialist">Optimization Specialist</option>
                             <option value="link_builder">Link Builder</option>
                             <option value="reporting_manager">Reporting Manager</option>
-                            <option value="viewer">Viewer (Read-only)</option>
+                            <option value="viewer">Client (Read-only)</option>
                         </select>
                     </div>
                     <div>

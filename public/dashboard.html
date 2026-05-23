@@ -2501,6 +2501,26 @@
         }
 
         function showUserSettingsModal() {
+            let googleIntegrationsHtml = '';
+            if (currentUser && currentUser.role !== 'viewer') {
+                googleIntegrationsHtml = `
+                    <div class="p-6 border-t border-gray-800">
+                        <h4 class="text-sm font-medium text-gray-300 mb-4">Google Integrations</h4>
+                        <p class="text-xs text-gray-400 mb-4">Connect your agency Google account to pull GSC and GA4 data for all clients.</p>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <button onclick="connectGoogleAccount()" class="bg-white text-black hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 flex-1">
+                                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" class="w-4 h-4">
+                                Connect Google Account
+                            </button>
+                            <button onclick="syncGoogleProperties()" id="syncPropsBtn" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 flex-1 border border-gray-700">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync Properties
+                            </button>
+                        </div>
+                        <div id="googleSyncResult" class="text-xs mt-3 hidden"></div>
+                    </div>
+                `;
+            }
+
             showModal(`
                     <div class="p-4 border-b border-gray-800 flex items-center justify-between">
                         <h3 class="text-lg font-semibold text-white">User Settings</h3>
@@ -2531,20 +2551,7 @@
                             </div>
                         </form>
                     </div>
-                    <div class="p-6 border-t border-gray-800">
-                        <h4 class="text-sm font-medium text-gray-300 mb-4">Google Integrations</h4>
-                        <p class="text-xs text-gray-400 mb-4">Connect your agency Google account to pull GSC and GA4 data for all clients.</p>
-                        <div class="flex flex-col sm:flex-row gap-3">
-                            <button onclick="connectGoogleAccount()" class="bg-white text-black hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 flex-1">
-                                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" class="w-4 h-4">
-                                Connect Google Account
-                            </button>
-                            <button onclick="syncGoogleProperties()" id="syncPropsBtn" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 flex-1 border border-gray-700">
-                                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync Properties
-                            </button>
-                        </div>
-                        <div id="googleSyncResult" class="text-xs mt-3 hidden"></div>
-                    </div>
+                    ${googleIntegrationsHtml}
                 `);
         }
 

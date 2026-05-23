@@ -7143,6 +7143,7 @@ def publish_wordpress():
     
     data = request.json
     page_id = data.get('page_id')
+    source_type = data.get('source_type', 'page')
     wp_url = data.get('wp_url')
     wp_username = data.get('wp_username')
     wp_app_password = data.get('wp_app_password')
@@ -7151,33 +7152,46 @@ def publish_wordpress():
         return jsonify({"error": "Missing required fields"}), 400
         
     try:
-        # Fetch page for content
-        page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
-        if not page_res.data:
-            return jsonify({"error": "Page not found"}), 404
-        page = page_res.data
+        html_content = ""
+        title = ""
         
-        # Get raw markdown content
-        content_md = page.get('content', '')
-        if not content_md:
-            return jsonify({"error": "No content generated yet for this page"}), 400
-            
-        # Optional: Append main image if it exists
-        main_image = page.get('main_image_url')
-        if main_image:
-            image_tag = f"![Main Image]({main_image})\n\n"
-            content_md = image_tag + content_md
-            
-        # Convert Markdown to HTML (with fallback)
-        if has_markdown:
-            html_content = markdown.markdown(content_md, extensions=['tables', 'fenced_code'])
+        if source_type == 'piece':
+            piece_res = (supabase_admin or supabase).table('content_pieces').select('*').eq('id', page_id).single().execute()
+            if not piece_res.data:
+                return jsonify({"error": "Piece not found"}), 404
+            piece = piece_res.data
+            html_content = piece.get('draft_html', '')
+            if not html_content:
+                return jsonify({"error": "No draft HTML generated yet for this piece"}), 400
+            title = piece.get('title') or 'Untitled Piece'
         else:
-            # Simple fallback: wrap in paragraphs
-            html_content = ''.join(f'<p>{line}</p>' for line in content_md.split('\n') if line.strip())
-        
-        # Determine Title
-        tech_data = page.get('tech_audit_data') or {}
-        title = tech_data.get('title') or page.get('url') or 'Untitled generated post'
+            # Fetch page for content
+            page_res = (supabase_admin or supabase).table('pages').select('*').eq('id', page_id).single().execute()
+            if not page_res.data:
+                return jsonify({"error": "Page not found"}), 404
+            page = page_res.data
+            
+            # Get raw markdown content
+            content_md = page.get('content', '')
+            if not content_md:
+                return jsonify({"error": "No content generated yet for this page"}), 400
+                
+            # Optional: Append main image if it exists
+            main_image = page.get('main_image_url')
+            if main_image:
+                image_tag = f"![Main Image]({main_image})\n\n"
+                content_md = image_tag + content_md
+                
+            # Convert Markdown to HTML (with fallback)
+            if has_markdown:
+                html_content = markdown.markdown(content_md, extensions=['tables', 'fenced_code'])
+            else:
+                # Simple fallback: wrap in paragraphs
+                html_content = ''.join(f'<p>{line}</p>' for line in content_md.split('\n') if line.strip())
+            
+            # Determine Title
+            tech_data = page.get('tech_audit_data') or {}
+            title = tech_data.get('title') or page.get('url') or 'Untitled generated post'
         
         # 1. Structure WordPress API endpoint
         wp_api_base = wp_url.rstrip('/ ')

@@ -1618,7 +1618,7 @@
                                 <span class="text-sm text-white font-medium">${r.keyword}</span>
                             </td>
                             <td class="py-3 px-4 text-center">
-                                <span class="text-sm font-bold ${posColor}">${medal} #${r.current_position}</span>
+                                <span class="text-sm font-bold ${posColor}">${medal} ${r.current_position === 999 ? '—' : '#' + r.current_position}</span>
                             </td>
                             <td class="py-3 px-4 text-center">
                                 <span class="text-sm text-gray-400">${r.previous_position !== null ? '#' + r.previous_position : '—'}</span>

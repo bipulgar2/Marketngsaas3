@@ -7797,27 +7797,34 @@ def get_wins():
                         for kw in tracked_keywords:
                             curr = current_map.get(kw)
                             prev = prev_map.get(kw)
-                            if curr:
-                                curr_pos = round(curr['position'], 1)
+                                curr_pos = round(curr['position'], 1) if curr else None
                                 prev_pos = round(prev['position'], 1) if prev else None
-                                improvement = round(prev_pos - curr_pos, 1) if prev_pos else 0
+                                
+                                if curr_pos and prev_pos:
+                                    improvement = round(prev_pos - curr_pos, 1)
+                                elif curr_pos and not prev_pos:
+                                    improvement = 0 # New ranking
+                                else:
+                                    improvement = 0 # Dropped out or no data
 
                                 item = {
                                     'keyword': kw,
-                                    'current_position': curr_pos,
+                                    'current_position': curr_pos or 999, # Sort to bottom if no data
                                     'previous_position': prev_pos,
                                     'improvement': improvement,
-                                    'clicks': curr['clicks'],
-                                    'impressions': curr['impressions']
+                                    'clicks': curr['clicks'] if curr else 0,
+                                    'impressions': curr['impressions'] if curr else 0,
+                                    'has_data': bool(curr)
                                 }
                                 ranking_items.append(item)
 
-                                if curr_pos <= 3:
-                                    wins['rankings']['top3'] += 1
-                                if curr_pos <= 10:
-                                    wins['rankings']['top10'] += 1
-                                if improvement > 0:
-                                    wins['rankings']['improved'] += 1
+                                if curr_pos:
+                                    if curr_pos <= 3:
+                                        wins['rankings']['top3'] += 1
+                                    if curr_pos <= 10:
+                                        wins['rankings']['top10'] += 1
+                                    if improvement > 0:
+                                        wins['rankings']['improved'] += 1
 
                         # Sort by improvement descending
                         ranking_items.sort(key=lambda x: x['improvement'], reverse=True)

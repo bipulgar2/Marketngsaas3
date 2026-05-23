@@ -4333,7 +4333,7 @@
                         </span>
                     </td>
                     <td class="px-6 py-4" onclick="event.stopPropagation()">
-                        <select ${currentUser.role === 'viewer' ? 'disabled' : ''} onchange="updateTaskRole('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <select ${['admin', 'campaign_manager'].includes(currentUser.role) ? '' : 'disabled'} onchange="updateTaskRole('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 disabled:opacity-50 disabled:cursor-not-allowed">
                             <option value="">Unassigned</option>
                             <option value="Campaign Manager" ${t.assigned_role === 'Campaign Manager' ? 'selected' : ''}>Campaign Manager</option>
                             <option value="Content Strategist" ${t.assigned_role === 'Content Strategist' ? 'selected' : ''}>Content Strategist</option>
@@ -4344,7 +4344,7 @@
                         </select>
                     </td>
                     <td class="px-6 py-4" onclick="event.stopPropagation()">
-                        <select ${currentUser.role === 'viewer' ? 'disabled' : ''} onchange="updateTaskAssignee('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 max-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed">
+                        <select ${['admin', 'campaign_manager'].includes(currentUser.role) ? '' : 'disabled'} onchange="updateTaskAssignee('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 max-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed">
                             <option value="">Any</option>
                             ${(window.teamMembers || []).map(m => `
                                 <option value="${m.id}" ${t.assigned_to === m.id ? 'selected' : ''}>

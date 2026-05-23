@@ -350,8 +350,7 @@
                 { id: 'prospects', label: 'Prospects' }
             ],
             'tasks': [
-                { id: 'all-tasks', label: 'All Tasks' },
-                { id: 'sop-library', label: 'SOPs' }
+                { id: 'all-tasks', label: 'All Tasks' }
             ],
             'reports': [
                 { id: 'analytics', label: 'Analytics' },
@@ -4769,59 +4768,60 @@
             return null;
         }
 
-        function openTaskDetail(taskId) {
+        const _sopCache = {};
+
+        async function fetchSOPForTask(issueKey) {
+            if (_sopCache[issueKey]) return _sopCache[issueKey];
+            try {
+                const res = await fetch(`/api/sops?issue_key=${encodeURIComponent(issueKey)}`);
+                const data = await res.json();
+                if (data.sop) {
+                    _sopCache[issueKey] = data.sop;
+                    return data.sop;
+                }
+            } catch(e) { console.warn('SOP fetch failed, using fallback', e); }
+            const fallback = getSOPForTask(issueKey);
+            if (fallback) return { issue_key: issueKey, issue_description: fallback.issue, steps: fallback.steps.map((s,i) => ({order:i+1, text:s})), notes: [], source: 'local' };
+            return null;
+        }
+
+        async function openTaskDetail(taskId) {
             const task = currentLoadedTasks.find(t => t.id === taskId);
             if (!task) return;
 
             const checklist = task.checklist || [];
-            const sop = getSOPForTask(task.title);
-
-            // Priority badge
             const priorityColors = { 3: 'text-red-500 bg-red-500/10 border-red-500/20', 2: 'text-red-400 bg-red-500/10 border-red-500/20', 1: 'text-orange-400 bg-orange-500/10 border-orange-500/20', 0: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
             const priorityLabels = { 3: 'Critical', 2: 'High', 1: 'Medium', 0: 'Low' };
             const pClass = priorityColors[task.priority] || priorityColors[0];
             const pLabel = priorityLabels[task.priority] || 'Low';
 
-            // Extract issue context from URL items (some have metadata in parentheses)
+            // Fetch SOP from DB (async) with fallback
+            const sop = await fetchSOPForTask(task.title);
+            const issueDesc = sop?.issue_description || sop?.issue || '';
+            const steps = sop?.steps || [];
+            const notes = sop?.notes || [];
+
             const renderPageItem = (item, idx) => {
-                let url = '';
-                let detail = '';
+                let url = '', detail = '';
                 if (typeof item === 'object' && item.item) {
                     const raw = item.item;
-                    const parenMatch = raw.match(/^(.*?)\s*\((.+)\)\s*$/);
-                    if (parenMatch) {
-                        url = parenMatch[1].trim();
-                        detail = parenMatch[2].trim();
-                    } else {
-                        url = raw;
-                    }
-                } else {
-                    url = String(item);
-                }
-
+                    const m = raw.match(/^(.*?)\s*\((.+)\)\s*$/);
+                    if (m) { url = m[1].trim(); detail = m[2].trim(); } else { url = raw; }
+                } else { url = String(item); }
                 const completed = (typeof item === 'object') ? item.completed : false;
-                const displayUrl = url.replace(/^https?:\/\/(www\.)?/, '').substring(0, 60);
-
-                return `
-                    <div class="group flex items-start gap-3 py-3 px-4 ${idx > 0 ? 'border-t border-gray-800' : ''} hover:bg-gray-800/30 transition-colors rounded-lg">
-                        <div class="mt-0.5 flex-shrink-0">
-                            ${completed
-                                ? '<div class="w-5 h-5 rounded bg-green-500/20 border border-green-500/30 flex items-center justify-center"><i data-lucide="check" class="w-3 h-3 text-green-400"></i></div>'
-                                : '<div class="w-5 h-5 rounded bg-gray-800 border border-gray-700 flex items-center justify-center"><span class="text-[9px] text-gray-500 font-mono">' + (idx + 1) + '</span></div>'
-                            }
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <a href="${url.startsWith('http') ? url : 'https://' + url}" target="_blank" class="text-sm text-cyan-400 hover:text-cyan-300 hover:underline truncate block" title="${url}">
-                                ${displayUrl}${url.length > 60 ? '...' : ''}
-                            </a>
-                            ${detail ? `<p class="text-xs text-amber-400/80 mt-0.5 flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3 h-3"></i> ${detail}</p>` : (sop ? `<p class="text-xs text-gray-500 mt-0.5">${sop.issue}</p>` : '')}
-                        </div>
-                        <a href="${url.startsWith('http') ? url : 'https://' + url}" target="_blank" class="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
-                            <i data-lucide="external-link" class="w-3.5 h-3.5 text-gray-500 hover:text-white"></i>
-                        </a>
+                const dUrl = url.replace(/^https?:\/\/(www\.)?/, '').substring(0, 60);
+                return `<div class="group flex items-start gap-3 py-3 px-4 ${idx > 0 ? 'border-t border-gray-800' : ''} hover:bg-gray-800/30 transition-colors rounded-lg">
+                    <div class="mt-0.5 flex-shrink-0">${completed ? '<div class="w-5 h-5 rounded bg-green-500/20 border border-green-500/30 flex items-center justify-center"><i data-lucide="check" class="w-3 h-3 text-green-400"></i></div>' : '<div class="w-5 h-5 rounded bg-gray-800 border border-gray-700 flex items-center justify-center"><span class="text-[9px] text-gray-500 font-mono">' + (idx+1) + '</span></div>'}</div>
+                    <div class="flex-1 min-w-0">
+                        <a href="${url.startsWith('http') ? url : 'https://' + url}" target="_blank" class="text-sm text-cyan-400 hover:text-cyan-300 hover:underline truncate block" title="${url}">${dUrl}${url.length > 60 ? '...' : ''}</a>
+                        ${detail ? `<p class="text-xs text-amber-400/80 mt-0.5 flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3 h-3"></i> ${detail}</p>` : (issueDesc ? `<p class="text-xs text-gray-500 mt-0.5">${issueDesc}</p>` : '')}
                     </div>
-                `;
+                    <a href="${url.startsWith('http') ? url : 'https://' + url}" target="_blank" class="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5"><i data-lucide="external-link" class="w-3.5 h-3.5 text-gray-500 hover:text-white"></i></a>
+                </div>`;
             };
+
+            const noteTypeIcons = { tip: 'lightbulb', warning: 'alert-triangle', workaround: 'wrench', experience: 'message-circle' };
+            const noteTypeColors = { tip: 'text-emerald-400', warning: 'text-amber-400', workaround: 'text-cyan-400', experience: 'text-violet-400' };
 
             const modal = document.createElement('div');
             modal.id = 'taskDetailModal';
@@ -4830,84 +4830,113 @@
 
             modal.innerHTML = `
                 <div class="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl max-w-5xl w-full mx-4 max-h-[85vh] flex flex-col" onclick="event.stopPropagation()">
-                    <!-- Header -->
                     <div class="px-6 py-5 border-b border-gray-800 flex items-start justify-between flex-shrink-0">
                         <div class="flex-1 min-w-0 pr-4">
                             <div class="flex items-center gap-3 mb-2 flex-wrap">
                                 <span class="px-2.5 py-1 rounded text-xs border ${pClass} font-medium">${pLabel}</span>
                                 <span class="px-2.5 py-1 rounded text-xs bg-gray-800 text-gray-300 border border-gray-700">${task.type}</span>
                                 <span class="px-2.5 py-1 rounded text-xs bg-gray-800 text-gray-400 border border-gray-700 flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>${task.assigned_role || 'Unassigned'}</span>
+                                ${sop?.difficulty ? `<span class="px-2.5 py-1 rounded text-xs bg-gray-800 text-gray-400 border border-gray-700">${sop.difficulty}</span>` : ''}
+                                ${sop?.estimated_minutes ? `<span class="px-2.5 py-1 rounded text-xs bg-gray-800 text-gray-400 border border-gray-700 flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i>~${sop.estimated_minutes}min</span>` : ''}
                             </div>
                             <h2 class="text-lg font-bold text-white">${task.title}</h2>
                             <p class="text-sm text-gray-400 mt-1">${task.description}</p>
                         </div>
-                        <button onclick="document.getElementById('taskDetailModal').remove()" class="text-gray-500 hover:text-white transition-colors flex-shrink-0 p-1 hover:bg-gray-800 rounded-lg">
-                            <i data-lucide="x" class="w-5 h-5"></i>
-                        </button>
+                        <button onclick="document.getElementById('taskDetailModal').remove()" class="text-gray-500 hover:text-white transition-colors flex-shrink-0 p-1 hover:bg-gray-800 rounded-lg"><i data-lucide="x" class="w-5 h-5"></i></button>
                     </div>
-
-                    <!-- Body: Two-panel layout -->
-                    <div class="flex flex-1 overflow-hidden ${sop ? '' : ''}">
-                        <!-- Left Panel: Affected Pages -->
-                        <div class="${sop ? 'w-3/5 border-r border-gray-800' : 'w-full'} overflow-y-auto">
+                    <div class="flex flex-1 overflow-hidden">
+                        <div class="${steps.length > 0 ? 'w-3/5 border-r border-gray-800' : 'w-full'} overflow-y-auto">
                             <div class="px-5 py-3 border-b border-gray-800 bg-gray-900/80 sticky top-0 z-10">
-                                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
-                                    Affected Pages
-                                    <span class="bg-gray-800 text-gray-300 px-2 py-0.5 rounded-full text-[10px] ml-1">${checklist.length}</span>
-                                </h3>
+                                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2"><i data-lucide="file-text" class="w-3.5 h-3.5"></i>Affected Pages <span class="bg-gray-800 text-gray-300 px-2 py-0.5 rounded-full text-[10px] ml-1">${checklist.length}</span></h3>
                             </div>
                             <div class="p-3">
-                                ${checklist.length > 0
-                                    ? checklist.map((item, idx) => renderPageItem(item, idx)).join('')
-                                    : '<div class="text-center text-gray-500 py-8 text-sm"><i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 text-gray-600"></i><p>No specific pages recorded for this task.</p><p class="text-xs text-gray-600 mt-1">Run a fresh audit to populate page-level data.</p></div>'
-                                }
+                                ${checklist.length > 0 ? checklist.map((item, idx) => renderPageItem(item, idx)).join('') : '<div class="text-center text-gray-500 py-8 text-sm"><i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 text-gray-600"></i><p>No specific pages recorded.</p><p class="text-xs text-gray-600 mt-1">Run a fresh audit to populate page-level data.</p></div>'}
                             </div>
                         </div>
-
-                        <!-- Right Panel: SOP Guide -->
-                        ${sop ? `
+                        ${steps.length > 0 ? `
                         <div class="w-2/5 overflow-y-auto bg-gray-950/50">
                             <div class="px-5 py-3 border-b border-gray-800 bg-gray-900/80 sticky top-0 z-10">
-                                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                                    <i data-lucide="book-open" class="w-3.5 h-3.5 text-violet-400"></i>
-                                    How to Fix (SOP)
-                                </h3>
+                                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2"><i data-lucide="book-open" class="w-3.5 h-3.5 text-violet-400"></i>How to Fix (SOP)</h3>
                             </div>
                             <div class="p-5 space-y-1">
                                 <div class="bg-violet-500/5 border border-violet-500/10 rounded-lg px-4 py-3 mb-4">
                                     <p class="text-xs text-violet-300 font-medium flex items-center gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5"></i> Issue Detected</p>
-                                    <p class="text-sm text-gray-300 mt-1">${sop.issue}</p>
+                                    <p class="text-sm text-gray-300 mt-1">${issueDesc}</p>
                                 </div>
                                 <ol class="space-y-3">
-                                    ${sop.steps.map((step, i) => `
-                                        <li class="flex gap-3 items-start group">
+                                    ${steps.map((step, i) => {
+                                        const txt = (typeof step === 'object' ? step.text : step) || '';
+                                        const why = step.why || '';
+                                        const tip = step.pro_tip || '';
+                                        return `<li class="flex gap-3 items-start">
                                             <span class="flex-shrink-0 w-6 h-6 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-bold flex items-center justify-center mt-0.5">${i + 1}</span>
-                                            <p class="text-sm text-gray-300 leading-relaxed">${step.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
-                                        </li>
-                                    `).join('')}
+                                            <div>
+                                                <p class="text-sm text-gray-300 leading-relaxed">${txt.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+                                                ${why ? `<p class="text-xs text-gray-500 mt-1 italic">${why}</p>` : ''}
+                                                ${tip ? `<p class="text-xs text-emerald-400/70 mt-1 flex items-center gap-1"><i data-lucide="lightbulb" class="w-3 h-3"></i>${tip}</p>` : ''}
+                                            </div>
+                                        </li>`;
+                                    }).join('')}
                                 </ol>
+                                ${notes.length > 0 ? `
+                                <div class="mt-6 pt-4 border-t border-gray-800">
+                                    <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2"><i data-lucide="message-circle" class="w-3.5 h-3.5 text-violet-400"></i>Team Notes (${notes.length})</h4>
+                                    ${notes.map(n => `<div class="bg-gray-800/40 rounded-lg px-4 py-3 mb-2 border border-gray-800">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <i data-lucide="${noteTypeIcons[n.note_type] || 'message-circle'}" class="w-3.5 h-3.5 ${noteTypeColors[n.note_type] || 'text-gray-400'}"></i>
+                                            <span class="text-xs font-medium text-gray-300">${n.author_name || 'Team member'}</span>
+                                            <span class="text-[10px] text-gray-600">${new Date(n.created_at).toLocaleDateString()}</span>
+                                        </div>
+                                        <p class="text-sm text-gray-400">${n.content}</p>
+                                    </div>`).join('')}
+                                </div>` : ''}
+                                ${sop?.id ? `
+                                <div class="mt-4 pt-4 border-t border-gray-800">
+                                    <div class="flex gap-2">
+                                        <input id="sopNoteInput" type="text" placeholder="Share a tip or experience..." class="flex-1 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-violet-500 placeholder-gray-600">
+                                        <select id="sopNoteType" class="bg-gray-800 border border-gray-700 text-gray-400 text-xs rounded-lg px-2 focus:outline-none focus:border-violet-500">
+                                            <option value="tip">Tip</option><option value="experience">Experience</option><option value="warning">Warning</option><option value="workaround">Workaround</option>
+                                        </select>
+                                        <button onclick="submitSOPNote('${sop.id}')" class="bg-violet-600 hover:bg-violet-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"><i data-lucide="send" class="w-3.5 h-3.5"></i></button>
+                                    </div>
+                                </div>` : ''}
                             </div>
-                        </div>
-                        ` : ''}
+                        </div>` : ''}
                     </div>
-
-                    <!-- Footer -->
                     <div class="px-6 py-4 border-t border-gray-800 flex items-center justify-between flex-shrink-0">
-                        <div class="flex items-center gap-2 text-xs text-gray-500">
-                            <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
-                            Created ${new Date(task.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </div>
-                        <button onclick="document.getElementById('taskDetailModal').remove()" class="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2 rounded-lg text-sm font-medium border border-gray-700 transition-colors">
-                            Close
-                        </button>
+                        <div class="flex items-center gap-2 text-xs text-gray-500"><i data-lucide="calendar" class="w-3.5 h-3.5"></i>Created ${new Date(task.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                        <button onclick="document.getElementById('taskDetailModal').remove()" class="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2 rounded-lg text-sm font-medium border border-gray-700 transition-colors">Close</button>
                     </div>
-                </div>
-            `;
+                </div>`;
 
             document.body.appendChild(modal);
             lucide.createIcons();
         }
+
+        async function submitSOPNote(sopId) {
+            const input = document.getElementById('sopNoteInput');
+            const typeSelect = document.getElementById('sopNoteType');
+            const content = input?.value?.trim();
+            if (!content) return;
+            try {
+                const res = await fetch(`/api/sops/${sopId}/notes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content, note_type: typeSelect?.value || 'tip' })
+                });
+                if (res.ok) {
+                    input.value = '';
+                    // Invalidate cache and re-open
+                    const modal = document.getElementById('taskDetailModal');
+                    const taskId = modal?.dataset?.taskId;
+                    delete _sopCache[Object.keys(_sopCache).find(k => _sopCache[k]?.id === sopId)];
+                    showNotification('Note added!', 'success');
+                }
+            } catch(e) { console.error('Failed to submit note', e); }
+        }
+
+
+
 
         // =====================================================================
         // SCHEMA MARKUP RECOMMENDATIONS

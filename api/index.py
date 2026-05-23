@@ -8838,30 +8838,292 @@ SOP_LIBRARY = {
 @app.route('/api/sops', methods=['GET'])
 @login_required
 def get_sops():
-    """Get SOPs filtered by role or task type.
-    
-    Params:
-        role: filter by role name (e.g. 'Content Creator')
-        task_type: filter by task type (e.g. 'content', 'technical')
-    """
-    role = request.args.get('role', '').strip()
-    task_type = request.args.get('task_type', '').strip()
-    
-    results = []
-    
-    for sop_type, sop in SOP_LIBRARY.items():
-        # Filter by task type
-        if task_type and sop_type != task_type:
-            continue
-        # Filter by role
-        if role and role.lower() not in sop['role'].lower():
-            continue
-        results.append({
-            'type': sop_type,
-            **sop
-        })
-    
-    return jsonify({'success': True, 'sops': results})
+    """Get SOPs from DB. Supports ?issue_key= for single lookup or lists all org SOPs."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    if not org_id:
+        return jsonify({'sops': []})
+
+    client = supabase_admin or supabase
+    issue_key = request.args.get('issue_key', '').strip()
+
+    try:
+        query = client.table('sops').select('*').eq('organization_id', org_id).eq('is_archived', False)
+        if issue_key:
+            query = query.eq('issue_key', issue_key)
+        res = query.order('created_at', desc=True).execute()
+        sops = res.data or []
+
+        # If looking up by issue_key and not found, fallback to SOP_LIBRARY defaults
+        if issue_key and not sops:
+            fallback = SOP_LIBRARY.get(issue_key)
+            if fallback:
+                return jsonify({'sop': {'issue_key': issue_key, 'is_default': True, **fallback}, 'source': 'fallback'})
+            # Also try matching from TASK_SOP_DEFAULTS
+            for key, val in TASK_SOP_DEFAULTS.items():
+                if issue_key.startswith(key):
+                    return jsonify({'sop': {'issue_key': issue_key, 'is_default': True, **val}, 'source': 'fallback'})
+            return jsonify({'sop': None, 'source': 'none'})
+
+        if issue_key and sops:
+            # Also fetch notes for this SOP
+            sop = sops[0]
+            notes_res = client.table('sop_notes').select('*').eq('sop_id', sop['id']).order('created_at', desc=True).execute()
+            sop['notes'] = notes_res.data or []
+            return jsonify({'sop': sop, 'source': 'db'})
+
+        return jsonify({'sops': sops, 'success': True})
+    except Exception as e:
+        logger.error(f"Error fetching SOPs: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sops', methods=['POST'])
+@login_required
+def create_sop():
+    """Create a new SOP entry."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    if not org_id:
+        return jsonify({'error': 'No organization'}), 400
+    if user.get('role') not in ['admin', 'campaign_manager']:
+        return jsonify({'error': 'Insufficient permissions'}), 403
+
+    data = request.get_json()
+    client = supabase_admin or supabase
+
+    try:
+        sop_data = {
+            'organization_id': org_id,
+            'issue_key': data.get('issue_key', ''),
+            'title': data.get('title', ''),
+            'issue_description': data.get('issue_description', ''),
+            'steps': data.get('steps', []),
+            'quality_checks': data.get('quality_checks', []),
+            'category': data.get('category', 'onpage'),
+            'difficulty': data.get('difficulty', 'easy'),
+            'estimated_minutes': data.get('estimated_minutes', 5),
+            'tools_recommended': data.get('tools_recommended', []),
+            'video_url': data.get('video_url'),
+            'assigned_role': data.get('assigned_role'),
+            'created_by': user.get('id'),
+            'updated_by': user.get('id'),
+            'is_default': data.get('is_default', False)
+        }
+        res = client.table('sops').upsert(sop_data, on_conflict='organization_id,issue_key').execute()
+        return jsonify({'success': True, 'sop': (res.data or [None])[0]})
+    except Exception as e:
+        logger.error(f"Error creating SOP: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sops/<sop_id>', methods=['PUT'])
+@login_required
+def update_sop(sop_id):
+    """Update an existing SOP."""
+    user = session['user']
+    if user.get('role') not in ['admin', 'campaign_manager']:
+        return jsonify({'error': 'Insufficient permissions'}), 403
+
+    data = request.get_json()
+    client = supabase_admin or supabase
+
+    try:
+        update_fields = {k: v for k, v in data.items() if k in [
+            'title', 'issue_description', 'steps', 'quality_checks', 'category',
+            'difficulty', 'estimated_minutes', 'tools_recommended', 'video_url', 'assigned_role'
+        ]}
+        update_fields['updated_by'] = user.get('id')
+        update_fields['updated_at'] = 'now()'
+
+        res = client.table('sops').update(update_fields).eq('id', sop_id).execute()
+        return jsonify({'success': True, 'sop': (res.data or [None])[0]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sops/<sop_id>/notes', methods=['POST'])
+@login_required
+def add_sop_note(sop_id):
+    """Add a community note to an SOP."""
+    user = session['user']
+    data = request.get_json()
+    client = supabase_admin or supabase
+
+    try:
+        note = {
+            'sop_id': sop_id,
+            'author_id': user.get('id'),
+            'author_name': user.get('full_name') or user.get('email', '').split('@')[0],
+            'content': data.get('content', ''),
+            'note_type': data.get('note_type', 'tip')
+        }
+        res = client.table('sop_notes').insert(note).execute()
+        return jsonify({'success': True, 'note': (res.data or [None])[0]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sops/seed', methods=['POST'])
+@login_required
+def seed_sops():
+    """Seed default SOPs for the org from the built-in library."""
+    user = session['user']
+    org_id = user.get('organization_id')
+    if not org_id:
+        return jsonify({'error': 'No organization'}), 400
+    if user.get('role') not in ['admin', 'campaign_manager']:
+        return jsonify({'error': 'Insufficient permissions'}), 403
+
+    client = supabase_admin or supabase
+    seeded = 0
+
+    try:
+        # Seed from TASK_SOP_DEFAULTS (the detailed issue-level SOPs)
+        for issue_key, sop in TASK_SOP_DEFAULTS.items():
+            steps = [{'order': i+1, 'text': s} for i, s in enumerate(sop.get('steps', []))]
+            sop_data = {
+                'organization_id': org_id,
+                'issue_key': issue_key,
+                'title': issue_key,
+                'issue_description': sop.get('issue', ''),
+                'steps': steps,
+                'quality_checks': [],
+                'category': 'onpage',
+                'assigned_role': None,
+                'is_default': True,
+                'created_by': user.get('id'),
+                'updated_by': user.get('id')
+            }
+            try:
+                client.table('sops').upsert(sop_data, on_conflict='organization_id,issue_key').execute()
+                seeded += 1
+            except Exception:
+                pass
+
+        # Seed from SOP_LIBRARY (the role-level SOPs)
+        for sop_type, sop in SOP_LIBRARY.items():
+            steps = [{'order': i+1, 'text': s} for i, s in enumerate(sop.get('steps', []))]
+            qc = sop.get('quality_checks', [])
+            sop_data = {
+                'organization_id': org_id,
+                'issue_key': sop_type,
+                'title': sop.get('title', sop_type),
+                'issue_description': f"Standard operating procedure for {sop_type}",
+                'steps': steps,
+                'quality_checks': qc,
+                'category': sop_type,
+                'assigned_role': sop.get('role'),
+                'is_default': True,
+                'created_by': user.get('id'),
+                'updated_by': user.get('id')
+            }
+            try:
+                client.table('sops').upsert(sop_data, on_conflict='organization_id,issue_key').execute()
+                seeded += 1
+            except Exception:
+                pass
+
+        return jsonify({'success': True, 'seeded': seeded})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# Hardcoded defaults used as fallback and for seeding
+TASK_SOP_DEFAULTS = {
+    'Fix Missing Page Titles': {
+        'issue': 'Page has no <title> tag defined',
+        'steps': [
+            'Open the page in your CMS or HTML editor',
+            'Locate the <head> section of the page',
+            'Add a <title> tag: <title>Primary Keyword - Brand Name</title>',
+            'Keep it under 60 characters for full SERP visibility',
+            'Include primary keyword near the beginning',
+            'Make it unique - no other page should share this title',
+            'Save and re-crawl the page to verify'
+        ]
+    },
+    'Rewrite Duplicate Page Titles': {
+        'issue': 'Title tag is identical to another page on this site',
+        'steps': [
+            'Identify which pages share the same title (listed in affected pages)',
+            'Determine the unique focus keyword for each page',
+            'Rewrite each title to be unique: include the page-specific keyword',
+            'Format: Primary Keyword - Secondary Modifier | Brand',
+            'Ensure no two pages share the same title after edits',
+            'Publish changes and re-crawl to confirm'
+        ]
+    },
+    'Add Meta Descriptions': {
+        'issue': 'Page has no meta description - Google will auto-generate one',
+        'steps': [
+            'Open the page in your CMS or code editor',
+            'Add: <meta name="description" content="...">',
+            'Write a compelling 120-155 character summary',
+            'Include the primary keyword naturally',
+            'Add a call-to-action (Learn more, Get started, Shop now)',
+            'Make it unique per page - never copy/paste across pages',
+            'Publish and verify in Google Search Console'
+        ]
+    },
+    'Add H1 Tags': {
+        'issue': 'Page is missing an H1 heading entirely',
+        'steps': [
+            'Every page must have exactly one <h1> tag',
+            'The H1 should contain the primary keyword for that page',
+            'Place it as the first visible heading on the page',
+            'Make it descriptive - it tells users and Google what the page is about',
+            'Do not use the same H1 text as the title tag (use a variation)',
+            'Verify with Chrome DevTools: Ctrl+F then search for <h1>'
+        ]
+    },
+    'Fix Broken Links': {
+        'issue': 'Page contains links pointing to URLs that return 4xx/5xx errors',
+        'steps': [
+            'Click each affected URL to verify it is truly broken',
+            'For internal broken links: fix the destination URL or create a redirect',
+            'For external broken links: find an updated URL or remove the link',
+            'Replace with a relevant alternative resource if the content is gone',
+            'Use Screaming Frog or Ahrefs to find all broken links in bulk',
+            'Set up automated broken link monitoring going forward'
+        ]
+    },
+    'Expand Thin Content': {
+        'issue': 'Page has fewer than 300 words - considered thin content by Google',
+        'steps': [
+            'Assess if the page serves a valuable purpose',
+            'If yes: expand content to 500+ words with useful information',
+            'Add FAQs, how-tos, comparisons, or case studies',
+            'If the page has no unique value: consider redirecting (301) to a stronger page',
+            'Alternatively, consolidate multiple thin pages into one comprehensive page',
+            'After expanding, add internal links to/from relevant pages'
+        ]
+    },
+    'Add Alt Text to Images': {
+        'issue': 'Images on this page are missing alt text attributes',
+        'steps': [
+            'Find all <img> tags without alt attributes on the page',
+            'Write descriptive alt text that explains what the image shows',
+            'Include relevant keywords naturally (do not keyword-stuff)',
+            'For decorative images, use alt="" (empty alt, not missing)',
+            'Keep alt text under 125 characters',
+            'Alt text is critical for accessibility and Image SEO'
+        ]
+    },
+    'Optimize Core Web Vitals': {
+        'issue': 'Page failed LCP (>2.5s) or CLS (>0.1) thresholds',
+        'steps': [
+            'Run PageSpeed Insights for the specific URL',
+            'LCP Fix: Optimize the largest image/text block above the fold',
+            'LCP Fix: Preload critical resources with <link rel="preload">',
+            'CLS Fix: Set explicit width/height on all images and videos',
+            'CLS Fix: Do not inject content above existing content dynamically',
+            'Reduce JavaScript that blocks rendering (defer/async)',
+            'Enable server-side caching and use a CDN',
+            'Re-test with Lighthouse after each change'
+        ]
+    }
+}
 
 
 if __name__ == '__main__':

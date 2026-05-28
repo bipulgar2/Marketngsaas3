@@ -5020,9 +5020,40 @@
 
 
         // =====================================================================
-        // SCHEMA MARKUP RECOMMENDATIONS
+        // SCHEMA MARKUP — Full Wizard System
         // =====================================================================
-        let _schemaData = null;
+        let _schemaPages = [];      // Pages with assigned types
+        let _schemaConfig = {};     // Business questionnaire data
+        let _schemaGenerated = [];  // Generated schema results
+        let _schemaSiteWide = null; // Site-wide schema
+        let _schemaStep = 1;        // Current wizard step (1-4)
+        let _schemaDomain = '';
+
+        const SCHEMA_TYPES = [
+            { value: 'Organization', label: 'Organization', icon: 'building-2', color: 'text-blue-400', desc: 'Company/brand info' },
+            { value: 'LocalBusiness', label: 'Local Business', icon: 'map-pin', color: 'text-emerald-400', desc: 'Physical location' },
+            { value: 'Service', label: 'Service', icon: 'briefcase', color: 'text-violet-400', desc: 'Service offering' },
+            { value: 'Product', label: 'Product', icon: 'package', color: 'text-amber-400', desc: 'Product page' },
+            { value: 'Article', label: 'Article / Blog', icon: 'file-text', color: 'text-cyan-400', desc: 'Blog post or article' },
+            { value: 'FAQPage', label: 'FAQ', icon: 'help-circle', color: 'text-pink-400', desc: 'FAQ section' },
+            { value: 'AggregateRating', label: 'Reviews', icon: 'star', color: 'text-yellow-400', desc: 'Reviews & ratings' },
+            { value: 'BreadcrumbList', label: 'Breadcrumb', icon: 'chevrons-right', color: 'text-gray-400', desc: 'Navigation breadcrumbs' }
+        ];
+
+        const PAGE_TYPE_COLORS = {
+            homepage: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+            service: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+            product: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+            blog: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+            faq: 'bg-pink-500/15 text-pink-400 border-pink-500/30',
+            review: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+            about: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
+            contact: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+            portfolio: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+            content: 'bg-gray-500/15 text-gray-400 border-gray-500/30',
+            pricing: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+            skip: 'bg-red-500/10 text-red-400/60 border-red-500/20'
+        };
 
         async function renderSchemaMarkup() {
             const contentArea = document.getElementById('contentArea');
@@ -5031,36 +5062,147 @@
                 return;
             }
 
-            if (!_schemaData && currentClient?.settings?.schema_markup) {
-                _schemaData = currentClient.settings.schema_markup;
+            // Load persisted data from campaign settings
+            if (_schemaPages.length === 0 && currentClient?.settings?.schema_pages) {
+                _schemaPages = currentClient.settings.schema_pages;
             }
+            if (Object.keys(_schemaConfig).length === 0 && currentClient?.settings?.schema_config) {
+                _schemaConfig = currentClient.settings.schema_config;
+            }
+            if (!_schemaSiteWide && currentClient?.settings?.schema_site_wide) {
+                _schemaSiteWide = currentClient.settings.schema_site_wide;
+            }
+            // Rebuild generated list from persisted pages that have json_ld
+            if (_schemaGenerated.length === 0 && _schemaPages.length > 0) {
+                _schemaGenerated = _schemaPages.filter(p => p.json_ld && p.status === 'generated');
+            }
+
+            _schemaDomain = currentClient.domain || '';
+
+            // Auto-advance step based on available data
+            if (_schemaGenerated.length > 0) _schemaStep = 4;
+            else if (Object.keys(_schemaConfig).length > 0 && _schemaPages.length > 0) _schemaStep = 3;
+            else if (_schemaPages.length > 0) _schemaStep = 2;
+            else _schemaStep = 1;
 
             contentArea.innerHTML = `
                 <div class="max-w-6xl mx-auto">
-                    <div class="flex items-center justify-between mb-5">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-6">
                         <div>
                             <h2 class="text-xl font-bold text-white flex items-center gap-2">
                                 <i data-lucide="code-2" class="w-5 h-5 text-cyan-400"></i>
-                                Schema Markup Recommendations
+                                Schema Markup Generator
                             </h2>
-                            <p class="text-sm text-gray-400 mt-1">AI-generated JSON-LD structured data for your pages to unlock rich results in search.</p>
+                            <p class="text-sm text-gray-400 mt-1">Auto-generate production-ready JSON-LD structured data for every page on your site.</p>
+                        </div>
+                        ${_schemaGenerated.length > 0 ? `
+                        <button onclick="schemaExportAll()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                            <i data-lucide="download" class="w-4 h-4"></i> Export All
+                        </button>` : ''}
+                    </div>
+
+                    <!-- Step Progress Bar -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+                        <div class="flex items-center justify-between">
+                            ${[
+                                { num: 1, label: 'Load Pages', icon: 'file-scan' },
+                                { num: 2, label: 'Assign Types', icon: 'tags' },
+                                { num: 3, label: 'Business Details', icon: 'building-2' },
+                                { num: 4, label: 'Generate & Copy', icon: 'sparkles' }
+                            ].map((s, i) => `
+                                <div class="flex items-center ${i < 3 ? 'flex-1' : ''}">
+                                    <button onclick="schemaGoToStep(${s.num})" class="flex items-center gap-2 group cursor-pointer">
+                                        <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                                            _schemaStep === s.num ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' :
+                                            _schemaStep > s.num ? 'bg-cyan-900/50 text-cyan-400 border border-cyan-500/30' :
+                                            'bg-gray-800 text-gray-500 border border-gray-700'
+                                        }">
+                                            ${_schemaStep > s.num ? '<i data-lucide="check" class="w-3.5 h-3.5"></i>' : s.num}
+                                        </div>
+                                        <div class="hidden sm:block">
+                                            <div class="text-xs font-semibold ${_schemaStep >= s.num ? 'text-white' : 'text-gray-500'}">${s.label}</div>
+                                        </div>
+                                    </button>
+                                    ${i < 3 ? `<div class="flex-1 h-px mx-3 ${_schemaStep > s.num ? 'bg-cyan-500/40' : 'bg-gray-700'}"></div>` : ''}
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
-                    
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-5">
-                        <div class="flex flex-col md:flex-row gap-4 items-end">
-                            <div class="flex-1 w-full">
-                                <label class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1 block">Generate Site-Wide Schema</label>
-                                <button onclick="generateSchemaMarkup()" id="schemaGenBtn" class="w-full px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 shadow">
-                                    <i data-lucide="sparkles" class="w-4 h-4"></i> Generate For Top Pages
-                                </button>
+
+                    <!-- Step Content -->
+                    <div id="schemaStepContent"></div>
+                </div>
+            `;
+            lucide.createIcons();
+            renderSchemaStep();
+        }
+
+        function schemaGoToStep(step) {
+            // Allow going back freely, but only forward if prerequisites met
+            if (step > _schemaStep) {
+                if (step >= 2 && _schemaPages.length === 0) {
+                    showNotification('Load pages first', 'error');
+                    return;
+                }
+                if (step >= 4 && Object.keys(_schemaConfig).length === 0) {
+                    // Auto-save empty config to allow skipping
+                }
+            }
+            _schemaStep = step;
+            renderSchemaStep();
+        }
+
+        function renderSchemaStep() {
+            const container = document.getElementById('schemaStepContent');
+            if (!container) return;
+
+            switch(_schemaStep) {
+                case 1: container.innerHTML = renderSchemaStep1(); break;
+                case 2: container.innerHTML = renderSchemaStep2(); break;
+                case 3: container.innerHTML = renderSchemaStep3(); break;
+                case 4: container.innerHTML = renderSchemaStep4(); break;
+            }
+            lucide.createIcons();
+        }
+
+        // ── STEP 1: Load Pages ──
+        function renderSchemaStep1() {
+            const hasPages = _schemaPages.length > 0;
+            return `
+                <div class="space-y-4">
+                    <!-- Auto-load from audit -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                        <div class="flex items-start gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center flex-shrink-0">
+                                <i data-lucide="file-scan" class="w-6 h-6 text-cyan-400"></i>
                             </div>
-                            <div class="hidden md:flex items-center text-gray-600 text-xs px-2">OR</div>
-                            <div class="flex-1 w-full relative">
-                                <label class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1 block">Generate For Specific URL</label>
-                                <div class="flex items-center gap-2">
-                                    <input type="url" id="schemaUrlInput" placeholder="https://example.com/page" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none w-full">
-                                    <button onclick="generateSchemaMarkup(true)" id="schemaManualBtn" class="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-cyan-400 border border-gray-700 rounded-lg text-sm font-semibold transition flex items-center gap-2 flex-shrink-0">
+                            <div class="flex-1">
+                                <h3 class="text-white font-semibold text-base">Load Pages from Site Audit</h3>
+                                <p class="text-sm text-gray-400 mt-1">Automatically fetch all pages discovered in your latest tech audit. The AI will detect page types and suggest the best schema for each.</p>
+                                <div class="flex items-center gap-3 mt-4">
+                                    <button onclick="schemaLoadFromAudit()" id="schemaLoadBtn" class="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-cyan-900/30">
+                                        <i data-lucide="scan" class="w-4 h-4"></i> ${hasPages ? 'Reload Pages' : 'Load Pages from Audit'}
+                                    </button>
+                                    ${hasPages ? `<span class="text-xs text-emerald-400 flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> ${_schemaPages.length} pages loaded</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manual URL add -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                        <div class="flex items-start gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
+                                <i data-lucide="plus-circle" class="w-6 h-6 text-violet-400"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="text-white font-semibold text-base">Add Pages Manually</h3>
+                                <p class="text-sm text-gray-400 mt-1">Add specific URLs that weren't captured by the audit, or generate schema for individual pages.</p>
+                                <div class="flex items-center gap-2 mt-4">
+                                    <input type="url" id="schemaManualUrlInput" placeholder="https://yoursite.com/page" 
+                                        class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                                    <button onclick="schemaAddManualUrl()" class="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2">
                                         <i data-lucide="plus" class="w-4 h-4"></i> Add
                                     </button>
                                 </div>
@@ -5068,170 +5210,670 @@
                         </div>
                     </div>
 
-                    <div id="schemaResults">
-                        ${_schemaData ? renderSchemaCards(_schemaData) : `
-                            <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-                                <i data-lucide="code-2" class="w-10 h-10 text-gray-600 mx-auto mb-3"></i>
-                                <p class="text-gray-400">Click Generate to get AI-powered schema markup for your pages.</p>
-                                <p class="text-xs text-gray-500 mt-2">Uses your latest audit data and brand config for context.</p>
-                            </div>
-                        `}
-                    </div>
+                    ${hasPages ? `
+                    <div class="flex justify-end">
+                        <button onclick="schemaGoToStep(2)" class="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2">
+                            Next: Assign Types <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>` : ''}
                 </div>
             `;
-            lucide.createIcons();
         }
 
-        async function generateSchemaMarkup(isManual = false) {
-            const btn = document.getElementById('schemaGenBtn');
-            const manualBtn = document.getElementById('schemaManualBtn');
-            const urlInput = document.getElementById('schemaUrlInput');
-            const results = document.getElementById('schemaResults');
-
-            if (isManual && urlInput && !urlInput.value.trim()) {
-                showNotification('Please enter a valid URL', 'error');
-                return;
-            }
-
-            const activeBtn = isManual ? manualBtn : btn;
-            const originalText = activeBtn.innerHTML;
-            if(activeBtn) {
-                activeBtn.disabled = true;
-                activeBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
-            }
-            if(!isManual) {
-                results.innerHTML = '<div class="flex items-center justify-center h-24 text-gray-500"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>AI is analyzing pages and generating schema...</div>';
-            }
+        async function schemaLoadFromAudit() {
+            const btn = document.getElementById('schemaLoadBtn');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Loading pages...';
             lucide.createIcons();
 
-            // Get brand config
-            let brandConfig = {};
             try {
-                const bcRes = await fetch(`/api/campaigns/${currentClient.id}/brand-config`);
-                const bcData = await bcRes.json();
-                brandConfig = bcData.brand_config || {};
-            } catch(e) {}
-
-            let pages = [];
-            if (isManual) {
-                pages = [{ url: urlInput.value.trim(), title: 'Manual Page' }];
-            } else {
-                // Get pages from latest audit
-                try {
-                    const audRes = await fetch(`/api/audits?campaign_id=${currentClient.id}`);
-                    const audData = await audRes.json();
-                    const audits = audData.audits || [];
-                    if (audits.length > 0) {
-                        const latest = audits[0];
-                        const detRes = await fetch(`/api/audits/${latest.id}`);
-                        const detData = await detRes.json();
-                        const auditPages = detData.audit?.pages || [];
-                        pages = auditPages.slice(0, 20).map(p => ({
-                            url: p.url || '',
-                            title: (p.meta?.title) || ''
-                        }));
-                    }
-                } catch(e) {}
-
-                if (pages.length === 0) {
-                    // Fallback: use domain homepage
-                    pages = [{ url: 'https://' + (currentClient.domain || ''), title: 'Homepage' }];
-                }
-            }
-
-            try {
-                const res = await fetch('/api/generate-schema-markup', {
+                const res = await fetch('/api/schema/auto-assign', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        campaign_id: currentClient.id,
-                        pages,
-                        brand_config: brandConfig,
-                        domain: currentClient.domain || '',
-                        is_manual: isManual
-                    })
+                    body: JSON.stringify({ campaign_id: currentClient.id })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                if (isManual && _schemaData && _schemaData.pages) {
-                    _schemaData.pages.push(...(data.schema.pages || []));
-                    if (currentClient && currentClient.settings) currentClient.settings.schema_markup = _schemaData;
-                } else {
-                    _schemaData = data.schema;
-                    if (currentClient && currentClient.settings) currentClient.settings.schema_markup = _schemaData;
-                }
-
-                results.innerHTML = renderSchemaCards(_schemaData);
-                if (urlInput) urlInput.value = '';
-                lucide.createIcons();
-            } catch(error) {
-                if(!isManual) {
-                    results.innerHTML = '<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400">Error:</span> <span class="text-gray-400">' + error.message + '</span></div>';
-                } else {
-                    showNotification(error.message, 'error');
-                }
-            } finally {
-                if(activeBtn) {
-                    activeBtn.disabled = false;
-                    activeBtn.innerHTML = originalText;
-                }
+                _schemaPages = data.pages || [];
+                _schemaDomain = data.domain || currentClient.domain || '';
+                showNotification(`${_schemaPages.length} pages loaded! ${data.selected_count} pre-selected for schema.`, 'success');
+                _schemaStep = 2;
+                renderSchemaStep();
+            } catch(err) {
+                showNotification(err.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = orig;
                 lucide.createIcons();
             }
         }
 
-        function renderSchemaCards(schema) {
-            if (!schema) return '';
-            let html = '';
+        function schemaAddManualUrl() {
+            const input = document.getElementById('schemaManualUrlInput');
+            const url = input?.value?.trim();
+            if (!url) { showNotification('Enter a URL', 'error'); return; }
+            if (!url.startsWith('http')) { showNotification('URL must start with http:// or https://', 'error'); return; }
+
+            // Detect page type
+            const existing = _schemaPages.find(p => p.url.replace(/\/$/, '') === url.replace(/\/$/, ''));
+            if (existing) { showNotification('URL already in list', 'error'); return; }
+
+            // Simple client-side page type detection
+            const path = new URL(url).pathname.toLowerCase().replace(/\/$/, '');
+            let pageType = 'service', schemaTypes = ['Service'];
+            if (!path || path === '/' || path === '/index.html') { pageType = 'homepage'; schemaTypes = ['Organization']; }
+            else if (/blog|post|news|article|guide/.test(path)) { pageType = 'blog'; schemaTypes = ['Article']; }
+            else if (/faq|question/.test(path)) { pageType = 'faq'; schemaTypes = ['FAQPage']; }
+            else if (/product|shop|store/.test(path)) { pageType = 'product'; schemaTypes = ['Product']; }
+            else if (/about|team/.test(path)) { pageType = 'about'; schemaTypes = ['Organization']; }
+            else if (/contact|location/.test(path)) { pageType = 'contact'; schemaTypes = ['LocalBusiness']; }
+            else if (/review|testimonial/.test(path)) { pageType = 'review'; schemaTypes = ['AggregateRating']; }
+
+            _schemaPages.push({ url, title: '', page_type: pageType, schema_types: schemaTypes, selected: true, status: 'pending' });
+            input.value = '';
+            showNotification('Page added!', 'success');
+            renderSchemaStep();
+        }
+
+        // ── STEP 2: Assign Schema Types ──
+        function renderSchemaStep2() {
+            const selectedCount = _schemaPages.filter(p => p.selected).length;
+            const skippedCount = _schemaPages.filter(p => !p.selected).length;
+
+            // Filter controls
+            let filterHtml = `
+                <div class="flex items-center gap-3 flex-wrap">
+                    <button onclick="schemaFilterPages('all')" class="schema-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium transition bg-gray-800 text-white border border-gray-700 hover:border-cyan-500/50" data-filter="all">
+                        All (${_schemaPages.length})
+                    </button>
+                    <button onclick="schemaFilterPages('selected')" class="schema-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium transition bg-gray-800 text-gray-400 border border-gray-700 hover:border-cyan-500/50" data-filter="selected">
+                        Selected (${selectedCount})
+                    </button>
+                    <button onclick="schemaFilterPages('skipped')" class="schema-filter-btn px-3 py-1.5 rounded-lg text-xs font-medium transition bg-gray-800 text-gray-400 border border-gray-700 hover:border-cyan-500/50" data-filter="skipped">
+                        Skipped (${skippedCount})
+                    </button>
+                </div>
+            `;
+
+            // Page rows
+            let rowsHtml = '';
+            _schemaPages.forEach((page, idx) => {
+                const typeColor = PAGE_TYPE_COLORS[page.page_type] || PAGE_TYPE_COLORS.content;
+                const shortUrl = page.url.replace(/^https?:\/\/(www\.)?/, '').substring(0, 55);
+                const currentTypes = page.schema_types || ['Article'];
+
+                // Schema type selector chips
+                const typeChips = currentTypes.map(t => {
+                    const st = SCHEMA_TYPES.find(s => s.value === t) || { label: t, color: 'text-gray-400' };
+                    return `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-800 ${st.color} border border-gray-700">${st.label}</span>`;
+                }).join('');
+
+                rowsHtml += `
+                    <div class="schema-page-row flex items-center gap-3 py-3 px-4 ${idx > 0 ? 'border-t border-gray-800/60' : ''} hover:bg-gray-800/30 transition rounded-lg ${!page.selected ? 'opacity-40' : ''}" data-selected="${page.selected}" data-page-type="${page.page_type}">
+                        <!-- Checkbox -->
+                        <label class="flex-shrink-0 cursor-pointer">
+                            <input type="checkbox" ${page.selected ? 'checked' : ''} onchange="schemaTogglePage(${idx}, this.checked)" 
+                                class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0 cursor-pointer">
+                        </label>
+                        <!-- Page info -->
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <span class="text-sm text-white truncate font-medium" title="${page.url}">${shortUrl}${page.url.length > 55 ? '...' : ''}</span>
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${typeColor}">${page.page_type}</span>
+                            </div>
+                            ${page.title ? `<div class="text-xs text-gray-500 truncate">${page.title}</div>` : ''}
+                        </div>
+                        <!-- Current schema assignment -->
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            ${typeChips}
+                        </div>
+                        <!-- Change button -->
+                        <button onclick="schemaChangeType(${idx})" class="flex-shrink-0 p-1.5 rounded-lg hover:bg-gray-800 text-gray-500 hover:text-cyan-400 transition" title="Change schema type">
+                            <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+            });
+
+            return `
+                <div class="space-y-4">
+                    <!-- Controls bar -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                        <div class="flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                                <h3 class="text-white font-semibold flex items-center gap-2">
+                                    <i data-lucide="tags" class="w-4 h-4 text-cyan-400"></i>
+                                    Assign Schema Types
+                                </h3>
+                                <p class="text-xs text-gray-400 mt-0.5">${selectedCount} of ${_schemaPages.length} pages selected for schema generation</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="schemaSelectAll(true)" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-medium transition">
+                                    Select All
+                                </button>
+                                <button onclick="schemaSelectAll(false)" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-medium transition">
+                                    Deselect All
+                                </button>
+                                <button onclick="schemaReAutoAssign()" class="px-3 py-1.5 bg-cyan-900/40 hover:bg-cyan-900/60 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                                    <i data-lucide="wand-2" class="w-3 h-3"></i> Re-Auto Assign All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filter bar -->
+                    <div class="flex items-center justify-between">
+                        ${filterHtml}
+                        <div class="text-xs text-gray-500 flex items-center gap-1">
+                            <i data-lucide="info" class="w-3 h-3"></i> Click the ⚙ icon to change schema types per page
+                        </div>
+                    </div>
+
+                    <!-- Pages list -->
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden max-h-[50vh] overflow-y-auto" id="schemaPagesContainer">
+                        ${rowsHtml || '<div class="p-8 text-center text-gray-500">No pages loaded. Go back to Step 1.</div>'}
+                    </div>
+
+                    <!-- Navigation -->
+                    <div class="flex items-center justify-between">
+                        <button onclick="schemaGoToStep(1)" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
+                        </button>
+                        <button onclick="schemaGoToStep(3)" class="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2">
+                            Next: Business Details <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function schemaTogglePage(idx, checked) {
+            if (_schemaPages[idx]) _schemaPages[idx].selected = checked;
+        }
+
+        function schemaSelectAll(selected) {
+            _schemaPages.forEach(p => { if (p.page_type !== 'skip') p.selected = selected; });
+            renderSchemaStep();
+        }
+
+        function schemaReAutoAssign() {
+            // Re-trigger auto assign from backend
+            schemaLoadFromAudit();
+        }
+
+        function schemaFilterPages(filter) {
+            const container = document.getElementById('schemaPagesContainer');
+            if (!container) return;
+            const rows = container.querySelectorAll('.schema-page-row');
+            rows.forEach(row => {
+                const isSelected = row.dataset.selected === 'true';
+                if (filter === 'all') row.style.display = '';
+                else if (filter === 'selected') row.style.display = isSelected ? '' : 'none';
+                else if (filter === 'skipped') row.style.display = !isSelected ? '' : 'none';
+            });
+            // Update button styles
+            document.querySelectorAll('.schema-filter-btn').forEach(btn => {
+                btn.classList.remove('text-white', 'border-cyan-500/50');
+                btn.classList.add('text-gray-400');
+                if (btn.dataset.filter === filter) {
+                    btn.classList.add('text-white', 'border-cyan-500/50');
+                    btn.classList.remove('text-gray-400');
+                }
+            });
+        }
+
+        function schemaChangeType(idx) {
+            const page = _schemaPages[idx];
+            if (!page) return;
+
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+            const currentTypes = page.schema_types || [];
+            const typeOptions = SCHEMA_TYPES.map(st => {
+                const isActive = currentTypes.includes(st.value);
+                return `
+                    <label class="flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer transition group ${isActive ? 'bg-cyan-900/20 border border-cyan-500/30' : 'hover:bg-gray-800 border border-transparent'}">
+                        <input type="checkbox" value="${st.value}" ${isActive ? 'checked' : ''} 
+                            class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0 cursor-pointer schema-type-check">
+                        <div class="flex items-center gap-2 flex-1">
+                            <i data-lucide="${st.icon}" class="w-4 h-4 ${st.color}"></i>
+                            <div>
+                                <div class="text-sm text-white font-medium">${st.label}</div>
+                                <div class="text-xs text-gray-500">${st.desc}</div>
+                            </div>
+                        </div>
+                    </label>
+                `;
+            }).join('');
+
+            modal.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl max-w-md w-full mx-4" onclick="event.stopPropagation()">
+                    <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-white font-semibold">Select Schema Types</h3>
+                            <p class="text-xs text-gray-500 mt-0.5 truncate max-w-[300px]">${page.url}</p>
+                        </div>
+                        <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-white p-1 hover:bg-gray-800 rounded-lg transition">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div class="px-6 py-4 space-y-1 max-h-[50vh] overflow-y-auto">
+                        ${typeOptions}
+                    </div>
+                    <div class="px-6 py-4 border-t border-gray-800 flex justify-end gap-3">
+                        <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition">Cancel</button>
+                        <button onclick="schemaApplyTypes(${idx}, this.closest('.fixed'))" class="px-5 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-sm font-semibold transition">Apply</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            lucide.createIcons();
+        }
+
+        function schemaApplyTypes(idx, modal) {
+            const checks = modal.querySelectorAll('.schema-type-check:checked');
+            const types = Array.from(checks).map(c => c.value);
+            if (types.length === 0) {
+                showNotification('Select at least one schema type', 'error');
+                return;
+            }
+            _schemaPages[idx].schema_types = types;
+            modal.remove();
+            renderSchemaStep();
+        }
+
+        // ── STEP 3: Business Questionnaire ──
+        function renderSchemaStep3() {
+            const c = _schemaConfig;
+            return `
+                <div class="space-y-4">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                        <div class="flex items-center gap-3 mb-5">
+                            <div class="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+                                <i data-lucide="building-2" class="w-5 h-5 text-violet-400"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-white font-semibold">Business Details</h3>
+                                <p class="text-xs text-gray-400">Fill in your real business info so schemas don't have any placeholder text. All fields are used directly in the JSON-LD output.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Business Name -->
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Business Name <span class="text-red-400">*</span></label>
+                                <input type="text" id="sc_business_name" value="${c.business_name || ''}" placeholder="Acme Corp"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- Business Type -->
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Business Type</label>
+                                <select id="sc_business_type" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 outline-none">
+                                    <option value="service" ${c.business_type === 'service' ? 'selected' : ''}>Service Business</option>
+                                    <option value="local" ${c.business_type === 'local' ? 'selected' : ''}>Local Business</option>
+                                    <option value="ecommerce" ${c.business_type === 'ecommerce' ? 'selected' : ''}>E-Commerce / Product</option>
+                                    <option value="saas" ${c.business_type === 'saas' ? 'selected' : ''}>SaaS / Software</option>
+                                    <option value="agency" ${c.business_type === 'agency' ? 'selected' : ''}>Agency / Consulting</option>
+                                    <option value="media" ${c.business_type === 'media' ? 'selected' : ''}>Media / Publishing</option>
+                                </select>
+                            </div>
+                            <!-- Phone -->
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Phone Number</label>
+                                <input type="tel" id="sc_phone" value="${c.phone || ''}" placeholder="+1 (555) 123-4567"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- Email -->
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Contact Email</label>
+                                <input type="email" id="sc_email" value="${c.email || ''}" placeholder="hello@acme.com"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- Address -->
+                            <div class="md:col-span-2">
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Street Address</label>
+                                <input type="text" id="sc_address" value="${c.address || ''}" placeholder="123 Main Street, Suite 100"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- City -->
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">City</label>
+                                <input type="text" id="sc_city" value="${c.city || ''}" placeholder="New York"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- State -->
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">State / Region</label>
+                                <input type="text" id="sc_state" value="${c.state || ''}" placeholder="NY"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- Zip -->
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Zip / Postal Code</label>
+                                <input type="text" id="sc_zip" value="${c.zip || ''}" placeholder="10001"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- Country -->
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Country</label>
+                                <input type="text" id="sc_country" value="${c.country || ''}" placeholder="US"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- Founded Year -->
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Year Founded</label>
+                                <input type="text" id="sc_founded" value="${c.founded || ''}" placeholder="2015"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- Price Range -->
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Price Range</label>
+                                <select id="sc_price_range" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 outline-none">
+                                    <option value="" ${!c.price_range ? 'selected' : ''}>Not applicable</option>
+                                    <option value="$" ${c.price_range === '$' ? 'selected' : ''}>$ (Budget)</option>
+                                    <option value="$$" ${c.price_range === '$$' ? 'selected' : ''}>$$ (Mid-range)</option>
+                                    <option value="$$$" ${c.price_range === '$$$' ? 'selected' : ''}>$$$ (Premium)</option>
+                                    <option value="$$$$" ${c.price_range === '$$$$' ? 'selected' : ''}>$$$$ (Luxury)</option>
+                                </select>
+                            </div>
+                            <!-- Logo URL -->
+                            <div class="md:col-span-2">
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Logo URL</label>
+                                <input type="url" id="sc_logo_url" value="${c.logo_url || ''}" placeholder="https://yoursite.com/logo.png"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- Social Links -->
+                            <div class="md:col-span-2">
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Social Media URLs (comma-separated)</label>
+                                <input type="text" id="sc_social_links" value="${Array.isArray(c.social_links) ? c.social_links.join(', ') : (c.social_links || '')}" 
+                                    placeholder="https://facebook.com/acme, https://twitter.com/acme, https://linkedin.com/company/acme"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- Opening Hours -->
+                            <div class="md:col-span-2">
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Opening Hours</label>
+                                <input type="text" id="sc_opening_hours" value="${c.opening_hours || ''}" placeholder="Mon-Fri 9AM-6PM, Sat 10AM-4PM"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                            </div>
+                            <!-- Description -->
+                            <div class="md:col-span-2">
+                                <label class="block text-xs text-gray-400 font-medium mb-1.5">Business Description (1-2 sentences)</label>
+                                <textarea id="sc_description" rows="2" placeholder="We are a full-service digital marketing agency helping businesses grow online..."
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none resize-none">${c.description || ''}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- Auto-fill from Brand Config -->
+                        <div class="mt-5 pt-4 border-t border-gray-800 flex items-center justify-between">
+                            <button onclick="schemaAutoFillFromBrand()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-medium transition flex items-center gap-2">
+                                <i data-lucide="download" class="w-3 h-3"></i> Auto-Fill from Brand Config
+                            </button>
+                            <div class="flex items-center gap-2">
+                                <button onclick="schemaSaveConfig()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-emerald-400 border border-gray-700 rounded-lg text-xs font-medium transition flex items-center gap-2">
+                                    <i data-lucide="save" class="w-3 h-3"></i> Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Navigation -->
+                    <div class="flex items-center justify-between">
+                        <button onclick="schemaGoToStep(2)" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
+                        </button>
+                        <button onclick="schemaSaveAndGenerate()" id="schemaGenerateAllBtn" class="px-6 py-2.5 bg-gradient-to-r from-cyan-600 to-violet-600 hover:from-cyan-500 hover:to-violet-500 text-white rounded-lg text-sm font-bold transition flex items-center gap-2 shadow-lg shadow-cyan-900/40">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i> Generate All Schemas
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function schemaCollectConfig() {
+            const val = id => document.getElementById(id)?.value?.trim() || '';
+            const config = {
+                business_name: val('sc_business_name'),
+                business_type: val('sc_business_type'),
+                phone: val('sc_phone'),
+                email: val('sc_email'),
+                address: val('sc_address'),
+                city: val('sc_city'),
+                state: val('sc_state'),
+                zip: val('sc_zip'),
+                country: val('sc_country'),
+                founded: val('sc_founded'),
+                price_range: val('sc_price_range'),
+                logo_url: val('sc_logo_url'),
+                social_links: val('sc_social_links').split(',').map(s => s.trim()).filter(Boolean),
+                opening_hours: val('sc_opening_hours'),
+                description: val('sc_description')
+            };
+            _schemaConfig = config;
+            return config;
+        }
+
+        async function schemaSaveConfig() {
+            const config = schemaCollectConfig();
+            try {
+                await fetch('/api/schema/save-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campaign_id: currentClient.id, schema_config: config })
+                });
+                if (currentClient.settings) currentClient.settings.schema_config = config;
+                showNotification('Business details saved!', 'success');
+            } catch(e) {
+                showNotification('Failed to save', 'error');
+            }
+        }
+
+        async function schemaAutoFillFromBrand() {
+            try {
+                const res = await fetch(`/api/campaigns/${currentClient.id}/brand-config`);
+                const data = await res.json();
+                const bc = data.brand_config || {};
+
+                if (bc.business_name) document.getElementById('sc_business_name').value = bc.business_name;
+                if (bc.phone) document.getElementById('sc_phone').value = bc.phone;
+                if (bc.email) document.getElementById('sc_email').value = bc.email;
+                if (bc.address) document.getElementById('sc_address').value = bc.address;
+                if (bc.city) document.getElementById('sc_city').value = bc.city;
+                if (bc.state) document.getElementById('sc_state').value = bc.state;
+                if (bc.zip) document.getElementById('sc_zip').value = bc.zip;
+                if (bc.country) document.getElementById('sc_country').value = bc.country;
+                if (bc.logo_url) document.getElementById('sc_logo_url').value = bc.logo_url;
+                if (bc.description) document.getElementById('sc_description').value = bc.description;
+
+                showNotification('Auto-filled from Brand Config!', 'success');
+            } catch(e) {
+                showNotification('Could not load Brand Config', 'error');
+            }
+        }
+
+        async function schemaSaveAndGenerate() {
+            const config = schemaCollectConfig();
+            if (!config.business_name) {
+                showNotification('Business Name is required for schema generation', 'error');
+                return;
+            }
+
+            const selectedPages = _schemaPages.filter(p => p.selected && p.page_type !== 'skip');
+            if (selectedPages.length === 0) {
+                showNotification('No pages selected. Go back to Step 2.', 'error');
+                return;
+            }
+
+            // Save config first
+            await schemaSaveConfig();
+
+            const btn = document.getElementById('schemaGenerateAllBtn');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating schemas...';
+            lucide.createIcons();
+
+            // Generate in batches of 10 to avoid timeout
+            const batchSize = 10;
+            const allGenerated = [];
+            let siteWide = null;
+
+            try {
+                for (let i = 0; i < selectedPages.length; i += batchSize) {
+                    const batch = selectedPages.slice(i, i + batchSize);
+                    btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating ${i + 1}-${Math.min(i + batchSize, selectedPages.length)} of ${selectedPages.length}...`;
+                    lucide.createIcons();
+
+                    const res = await fetch('/api/generate-schema-markup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            campaign_id: currentClient.id,
+                            pages: batch,
+                            schema_config: config,
+                            domain: _schemaDomain
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.error) throw new Error(data.error);
+
+                    if (data.schema?.pages) allGenerated.push(...data.schema.pages);
+                    if (data.schema?.site_wide && !siteWide) siteWide = data.schema.site_wide;
+                }
+
+                _schemaGenerated = allGenerated;
+                _schemaSiteWide = siteWide;
+
+                // Update persisted pages with generated data
+                const genMap = {};
+                allGenerated.forEach(g => { genMap[g.url?.replace(/\/$/, '')] = g; });
+                _schemaPages.forEach(p => {
+                    const match = genMap[p.url?.replace(/\/$/, '')];
+                    if (match) {
+                        p.json_ld = match.json_ld;
+                        p.status = 'generated';
+                        p.generated_at = new Date().toISOString();
+                        p.serp_benefit = match.serp_benefit;
+                    }
+                });
+
+                // Persist to settings
+                if (currentClient.settings) {
+                    currentClient.settings.schema_pages = _schemaPages;
+                    currentClient.settings.schema_site_wide = _schemaSiteWide;
+                }
+
+                showNotification(`${allGenerated.length} schemas generated successfully!`, 'success');
+                _schemaStep = 4;
+                renderSchemaStep();
+
+            } catch(err) {
+                showNotification(err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                lucide.createIcons();
+            }
+        }
+
+        // ── STEP 4: Results ──
+        function renderSchemaStep4() {
+            let html = '<div class="space-y-4">';
+
+            // Stats bar
+            const genCount = _schemaGenerated.length;
+            const totalPages = _schemaPages.length;
+            html += `
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+                        <div class="text-2xl font-bold text-white">${totalPages}</div>
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Total Pages</div>
+                    </div>
+                    <div class="bg-gray-900 border border-emerald-900/40 rounded-xl p-4 text-center">
+                        <div class="text-2xl font-bold text-emerald-400">${genCount}</div>
+                        <div class="text-[10px] text-emerald-400/70 uppercase tracking-wider mt-1">Schemas Generated</div>
+                    </div>
+                    <div class="bg-gray-900 border border-cyan-900/40 rounded-xl p-4 text-center">
+                        <div class="text-2xl font-bold text-cyan-400">${_schemaSiteWide ? '✓' : '—'}</div>
+                        <div class="text-[10px] text-cyan-400/70 uppercase tracking-wider mt-1">Site-Wide Schema</div>
+                    </div>
+                </div>
+            `;
 
             // Site-wide schema
-            if (schema.site_wide) {
-                const sw = schema.site_wide;
+            if (_schemaSiteWide) {
+                const sw = _schemaSiteWide;
                 const jsonLd = typeof sw.json_ld === 'string' ? sw.json_ld : JSON.stringify(sw.json_ld, null, 2);
+                const scriptTag = `<script type="application/ld+json">\n${jsonLd}\n</script>`;
                 html += `
-                    <div class="bg-gray-900 border border-cyan-900/50 rounded-xl p-5 mb-4">
-                        <div class="flex items-center gap-2 mb-2">
-                            <i data-lucide="globe" class="w-5 h-5 text-cyan-400"></i>
-                            <h3 class="text-white font-semibold">Site-Wide Schema: ${sw.type || 'Organization'}</h3>
-                            <span class="px-2 py-0.5 bg-cyan-900/30 text-cyan-400 rounded text-[10px] font-bold">GLOBAL</span>
-                        </div>
-                        <p class="text-xs text-gray-400 mb-3">${sw.description || ''}</p>
-                        <div class="relative">
-                            <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto max-h-[200px] overflow-y-auto"><code>${escapeHtml(jsonLd)}</code></pre>
-                            <button onclick="copySchemaCode(this)" class="absolute top-2 right-2 px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded text-[10px] transition">
-                                <i data-lucide="copy" class="w-3 h-3 inline"></i> Copy
+                    <div class="bg-gray-900 border border-cyan-500/30 rounded-xl p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="globe" class="w-5 h-5 text-cyan-400"></i>
+                                <h3 class="text-white font-semibold">Site-Wide Schema: ${sw.type || 'Organization'}</h3>
+                                <span class="px-2 py-0.5 bg-cyan-900/30 text-cyan-400 rounded text-[10px] font-bold">GLOBAL — Add to every page</span>
+                            </div>
+                            <button onclick="copySchemaCode(this)" class="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+                                <i data-lucide="copy" class="w-3 h-3"></i> Copy Script Tag
                             </button>
+                        </div>
+                        ${sw.description ? `<p class="text-xs text-gray-400 mb-3">${sw.description}</p>` : ''}
+                        <div class="relative">
+                            <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto max-h-[220px] overflow-y-auto"><code>${escapeHtml(scriptTag)}</code></pre>
                         </div>
                     </div>
                 `;
             }
 
             // Per-page schemas
-            const pages = schema.pages || [];
-            if (pages.length > 0) {
-                html += '<h3 class="text-white font-semibold mb-3 flex items-center gap-2"><i data-lucide="file-code" class="w-4 h-4 text-gray-400"></i>Page-Specific Schema</h3>';
+            if (_schemaGenerated.length > 0) {
+                html += `
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-white font-semibold flex items-center gap-2">
+                            <i data-lucide="file-code" class="w-4 h-4 text-gray-400"></i> 
+                            Page-Specific Schemas (${_schemaGenerated.length})
+                        </h3>
+                        <button onclick="schemaCopyAll()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-medium transition flex items-center gap-1.5">
+                            <i data-lucide="copy" class="w-3 h-3"></i> Copy All
+                        </button>
+                    </div>
+                `;
+
                 html += '<div class="space-y-3">';
-                pages.forEach(p => {
-                    const jsonLd = typeof p.json_ld === 'string' ? p.json_ld : JSON.stringify(p.json_ld, null, 2);
+                _schemaGenerated.forEach((p, idx) => {
+                    const jsonLdRaw = Array.isArray(p.json_ld) ? p.json_ld : [p.json_ld];
+                    const jsonLdStr = jsonLdRaw.map(j => typeof j === 'string' ? j : JSON.stringify(j, null, 2)).join('\n\n');
+                    const scriptTag = `<script type="application/ld+json">\n${jsonLdStr}\n</script>`;
+                    const schemaTypes = (p.schema_types || []).join(', ');
+                    const shortUrl = (p.url || '').replace(/^https?:\/\/(www\.)?/, '').substring(0, 60);
+
                     html += `
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-cyan-900/40 transition">
-                            <div class="flex items-start justify-between mb-2">
-                                <div class="flex-1">
-                                    <div class="text-xs text-gray-500 truncate mb-0.5">${p.url || ''}</div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-sm text-white font-medium">${p.recommended_schema || ''}</span>
-                                        <span class="px-2 py-0.5 bg-emerald-900/30 text-emerald-400 rounded text-[10px]">${p.serp_benefit || 'Rich Result'}</span>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition group">
+                            <div class="flex items-center justify-between px-5 py-3">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-0.5">
+                                        <span class="text-sm text-white font-medium truncate">${shortUrl}</span>
+                                        ${schemaTypes ? `<span class="px-2 py-0.5 bg-violet-900/30 text-violet-400 rounded text-[10px] font-semibold flex-shrink-0">${schemaTypes}</span>` : ''}
                                     </div>
-                                    <p class="text-xs text-gray-400 mt-1">${p.reason || ''}</p>
+                                    ${p.serp_benefit ? `<div class="text-xs text-emerald-400/80 flex items-center gap-1"><i data-lucide="trending-up" class="w-3 h-3"></i> ${p.serp_benefit}</div>` : ''}
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0 ml-3">
+                                    <button onclick="copySchemaCode(this)" class="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+                                        <i data-lucide="copy" class="w-3 h-3"></i> Copy
+                                    </button>
+                                    <button onclick="this.closest('.rounded-xl').querySelector('details').open = !this.closest('.rounded-xl').querySelector('details').open" 
+                                        class="p-1.5 rounded-lg hover:bg-gray-800 text-gray-500 hover:text-white transition">
+                                        <i data-lucide="code" class="w-3.5 h-3.5"></i>
+                                    </button>
                                 </div>
                             </div>
-                            <details class="mt-2">
-                                <summary class="text-xs text-cyan-400 cursor-pointer hover:text-cyan-300">View JSON-LD Code</summary>
-                                <div class="relative mt-2">
-                                    <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto max-h-[200px] overflow-y-auto"><code>${escapeHtml(jsonLd)}</code></pre>
-                                    <button onclick="copySchemaCode(this)" class="absolute top-2 right-2 px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded text-[10px] transition">
-                                        <i data-lucide="copy" class="w-3 h-3 inline"></i> Copy
-                                    </button>
+                            <details class="border-t border-gray-800/50">
+                                <summary class="hidden"></summary>
+                                <div class="relative px-5 py-3">
+                                    <pre class="bg-gray-950 border border-gray-800 rounded-lg p-3 text-xs text-gray-300 overflow-x-auto max-h-[250px] overflow-y-auto"><code>${escapeHtml(scriptTag)}</code></pre>
                                 </div>
                             </details>
                         </div>
@@ -5240,7 +5882,106 @@
                 html += '</div>';
             }
 
+            // Manual URL addition (also available in step 4)
+            html += `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                    <h4 class="text-white font-medium text-sm mb-3 flex items-center gap-2">
+                        <i data-lucide="plus-circle" class="w-4 h-4 text-violet-400"></i>
+                        Generate Schema for Additional URL
+                    </h4>
+                    <div class="flex items-center gap-2">
+                        <input type="url" id="schemaStep4UrlInput" placeholder="https://yoursite.com/new-page" 
+                            class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none">
+                        <button onclick="schemaGenerateSingle()" id="schemaStep4GenBtn" class="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i> Generate
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            // Navigation
+            html += `
+                <div class="flex items-center justify-between">
+                    <button onclick="schemaGoToStep(2)" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i> Edit Pages / Types
+                    </button>
+                    <button onclick="schemaGoToStep(3)" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                        <i data-lucide="building-2" class="w-4 h-4"></i> Edit Business Details
+                    </button>
+                </div>
+            `;
+
+            html += '</div>';
             return html;
+        }
+
+        async function schemaGenerateSingle() {
+            const input = document.getElementById('schemaStep4UrlInput');
+            const url = input?.value?.trim();
+            if (!url) { showNotification('Enter a URL', 'error'); return; }
+
+            const btn = document.getElementById('schemaStep4GenBtn');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
+            lucide.createIcons();
+
+            try {
+                const config = _schemaConfig;
+                const page = { url, title: 'Manual Page', schema_types: ['Article'], page_type: 'content', selected: true };
+
+                const res = await fetch('/api/generate-schema-markup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaign_id: currentClient.id,
+                        pages: [page],
+                        schema_config: config,
+                        domain: _schemaDomain
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                if (data.schema?.pages) {
+                    _schemaGenerated.push(...data.schema.pages);
+                    // Also add to pages list
+                    data.schema.pages.forEach(gp => {
+                        const exists = _schemaPages.find(p => p.url.replace(/\/$/, '') === gp.url?.replace(/\/$/, ''));
+                        if (!exists) {
+                            _schemaPages.push({ ...gp, selected: true, status: 'generated', generated_at: new Date().toISOString() });
+                        }
+                    });
+                }
+
+                input.value = '';
+                showNotification('Schema generated!', 'success');
+                renderSchemaStep();
+            } catch(err) {
+                showNotification(err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                lucide.createIcons();
+            }
+        }
+
+        function schemaCopyAll() {
+            let allCode = '';
+            if (_schemaSiteWide) {
+                const swJson = typeof _schemaSiteWide.json_ld === 'string' ? _schemaSiteWide.json_ld : JSON.stringify(_schemaSiteWide.json_ld, null, 2);
+                allCode += `<!-- Site-Wide Schema: ${_schemaSiteWide.type || 'Organization'} -->\n<script type="application/ld+json">\n${swJson}\n</script>\n\n`;
+            }
+            _schemaGenerated.forEach(p => {
+                const jsonLdRaw = Array.isArray(p.json_ld) ? p.json_ld : [p.json_ld];
+                const jsonLdStr = jsonLdRaw.map(j => typeof j === 'string' ? j : JSON.stringify(j, null, 2)).join('\n\n');
+                allCode += `<!-- Schema for: ${p.url} -->\n<script type="application/ld+json">\n${jsonLdStr}\n</script>\n\n`;
+            });
+            navigator.clipboard.writeText(allCode).then(() => showNotification('All schemas copied to clipboard!', 'success'));
+        }
+
+        function schemaExportAll() {
+            schemaCopyAll();
         }
 
         function escapeHtml(text) {
@@ -5250,12 +5991,24 @@
         }
 
         function copySchemaCode(btn) {
-            const pre = btn.parentElement.querySelector('pre code');
-            navigator.clipboard.writeText(pre.textContent).then(() => {
+            const pre = btn.closest('.bg-gray-900, .relative, div')?.querySelector('pre code') || btn.parentElement?.querySelector('pre code');
+            // Walk up to find the code block
+            let el = btn;
+            while (el && !el.querySelector('pre code')) el = el.parentElement;
+            const code = el?.querySelector('pre code');
+            if (!code) return;
+            
+            navigator.clipboard.writeText(code.textContent).then(() => {
+                const origText = btn.innerHTML;
                 btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 inline"></i> Copied!';
+                btn.classList.add('bg-emerald-600');
+                btn.classList.remove('bg-cyan-600', 'bg-gray-800');
                 lucide.createIcons();
                 setTimeout(() => {
-                    btn.innerHTML = '<i data-lucide="copy" class="w-3 h-3 inline"></i> Copy';
+                    btn.innerHTML = origText;
+                    btn.classList.remove('bg-emerald-600');
+                    if (origText.includes('Script')) btn.classList.add('bg-cyan-600');
+                    else btn.classList.add('bg-cyan-600');
                     lucide.createIcons();
                 }, 2000);
             });

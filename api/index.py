@@ -1854,75 +1854,308 @@ def get_link_placements():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 # =============================================================================
-# SCHEMA MARKUP RECOMMENDATIONS
+# SCHEMA MARKUP SYSTEM — Auto-Assign, Questionnaire, Bulk Generation
 # =============================================================================
+
+def _detect_page_type(url):
+    """Detect page type from URL patterns. Returns (page_type, schema_types)."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    path = parsed.path.lower().strip('/')
+    
+    # Skip pages (no schema needed)
+    skip_patterns = ['privacy', 'terms', 'legal', 'policy', 'cookie', 'disclaimer',
+                     'cart', 'checkout', 'account', 'login', 'signup', 'register',
+                     'search', 'sitemap', 'wp-admin', 'feed', 'wp-json', 'xmlrpc',
+                     'cdn-cgi', '.xml', '.json', '.txt', '.css', '.js', '.pdf']
+    if any(pat in path for pat in skip_patterns):
+        return ('skip', [])
+    
+    # Homepage
+    if path == '' or path in ['index.html', 'index.php', 'home']:
+        return ('homepage', ['Organization'])
+    
+    # Blog / Article
+    blog_patterns = ['blog', 'post', 'news', 'article', 'insight', 'guide',
+                     'journal', 'story', 'update', 'announcement', 'resource']
+    if any(pat in path for pat in blog_patterns):
+        return ('blog', ['Article'])
+    
+    # FAQ
+    if 'faq' in path or 'frequently-asked' in path or 'questions' in path:
+        return ('faq', ['FAQPage'])
+    
+    # Reviews / Testimonials
+    if 'review' in path or 'testimonial' in path or 'feedback' in path:
+        return ('review', ['AggregateRating'])
+    
+    # Product / Shop / E-commerce
+    product_patterns = ['product', 'shop', 'store', 'collection', 'item', 'buy']
+    if any(pat in path for pat in product_patterns):
+        return ('product', ['Product'])
+    
+    # Pricing
+    if 'pricing' in path or 'plans' in path or 'packages' in path:
+        return ('pricing', ['Product'])
+    
+    # Service pages
+    service_patterns = ['service', 'solution', 'offering', 'what-we-do', 'expertise']
+    if any(pat in path for pat in service_patterns):
+        return ('service', ['Service'])
+    
+    # About / Contact
+    if 'about' in path or 'team' in path or 'our-story' in path:
+        return ('about', ['Organization'])
+    if 'contact' in path or 'location' in path or 'find-us' in path:
+        return ('contact', ['LocalBusiness'])
+    
+    # Portfolio / Case study / Work
+    if 'portfolio' in path or 'case-stud' in path or 'project' in path or 'work' in path:
+        return ('portfolio', ['Article'])
+    
+    # Default: treat as a content/service page
+    # Pages with multiple path segments are likely service or content pages
+    segments = [s for s in path.split('/') if s]
+    if len(segments) >= 2:
+        return ('content', ['Article'])
+    
+    # Single-segment pages are likely service pages
+    return ('service', ['Service'])
+
+
+@app.route('/api/schema/auto-assign', methods=['POST'])
+@login_required
+def schema_auto_assign():
+    """Auto-detect page types and assign best schema types from audit data."""
+    try:
+        data = request.json or {}
+        campaign_id = data.get('campaign_id')
+        audit_id = data.get('audit_id')
+        
+        if not campaign_id:
+            return jsonify({'error': 'campaign_id is required'}), 400
+        
+        db = supabase_admin or supabase
+        pages = []
+        domain = ''
+        
+        # Strategy 1: Get pages from site_audits table (global audit)
+        if audit_id:
+            try:
+                sa_res = db.table('site_audits').select('audit_data, domain').eq('id', audit_id).execute()
+                if sa_res.data:
+                    audit_data = sa_res.data[0].get('audit_data', {}) or {}
+                    domain = sa_res.data[0].get('domain', '')
+                    raw_pages = audit_data.get('pages', [])
+                    for p in raw_pages:
+                        url = p.get('url', '')
+                        title = p.get('title', '') or (p.get('meta', {}) or {}).get('title', '')
+                        if url:
+                            pages.append({'url': url, 'title': title})
+            except Exception as e:
+                logger.warning(f"Schema auto-assign: site_audits lookup failed: {e}")
+        
+        # Strategy 2: Get pages from campaign's latest audit
+        if not pages:
+            try:
+                # Check audits table
+                audit_res = db.table('audits').select('id, results').eq('campaign_id', campaign_id).order('created_at', desc=True).limit(1).execute()
+                if audit_res.data:
+                    results = audit_res.data[0].get('results', {}) or {}
+                    raw_pages = results.get('pages', [])
+                    domain = results.get('competitor_domain', '') or results.get('domain', '')
+                    for p in raw_pages:
+                        url = p.get('url', '')
+                        title = p.get('title', '') or (p.get('meta', {}) or {}).get('title', '')
+                        if url:
+                            pages.append({'url': url, 'title': title})
+            except Exception as e:
+                logger.warning(f"Schema auto-assign: audits lookup failed: {e}")
+        
+        # Strategy 3: Get from site_audits by domain
+        if not pages:
+            try:
+                camp_res = db.table('campaigns').select('domain').eq('id', campaign_id).single().execute()
+                if camp_res.data:
+                    domain = camp_res.data.get('domain', '')
+                    if domain:
+                        sa_res = db.table('site_audits').select('audit_data').ilike('domain', f"%{domain}%").order('created_at', desc=True).limit(1).execute()
+                        if sa_res.data:
+                            audit_data = sa_res.data[0].get('audit_data', {}) or {}
+                            raw_pages = audit_data.get('pages', [])
+                            for p in raw_pages:
+                                url = p.get('url', '')
+                                title = p.get('title', '') or (p.get('meta', {}) or {}).get('title', '')
+                                if url:
+                                    pages.append({'url': url, 'title': title})
+            except Exception as e:
+                logger.warning(f"Schema auto-assign: domain lookup failed: {e}")
+        
+        if not pages:
+            return jsonify({'error': 'No audit data found. Run a site audit first to populate pages.'}), 404
+        
+        # Deduplicate pages by URL
+        seen_urls = set()
+        unique_pages = []
+        for p in pages:
+            url = p.get('url', '').rstrip('/')
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                unique_pages.append(p)
+        
+        # Auto-detect page types and assign schemas
+        assigned_pages = []
+        for p in unique_pages:
+            url = p.get('url', '')
+            title = p.get('title', '')
+            page_type, schema_types = _detect_page_type(url)
+            
+            assigned_pages.append({
+                'url': url,
+                'title': title,
+                'page_type': page_type,
+                'schema_types': schema_types,
+                'selected': page_type != 'skip',  # Pre-select non-skip pages
+                'status': 'pending'
+            })
+        
+        # Sort: homepage first, then services, then blogs, then others, skip at end
+        type_order = {'homepage': 0, 'service': 1, 'product': 2, 'faq': 3, 'review': 4,
+                      'blog': 5, 'content': 6, 'about': 7, 'contact': 8, 'portfolio': 9, 'pricing': 10, 'skip': 99}
+        assigned_pages.sort(key=lambda x: type_order.get(x['page_type'], 50))
+        
+        return jsonify({
+            'success': True,
+            'domain': domain,
+            'total_pages': len(assigned_pages),
+            'selected_count': sum(1 for p in assigned_pages if p['selected']),
+            'pages': assigned_pages
+        })
+        
+    except Exception as e:
+        logger.error(f"Schema auto-assign error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/schema/save-config', methods=['POST'])
+@login_required
+def schema_save_config():
+    """Save business questionnaire data for schema generation."""
+    try:
+        data = request.json or {}
+        campaign_id = data.get('campaign_id')
+        config = data.get('schema_config', {})
+        
+        if not campaign_id:
+            return jsonify({'error': 'campaign_id is required'}), 400
+        
+        db = supabase_admin or supabase
+        camp_res = db.table('campaigns').select('settings').eq('id', campaign_id).single().execute()
+        settings = camp_res.data.get('settings', {}) if camp_res.data else {}
+        
+        settings['schema_config'] = config
+        db.table('campaigns').update({'settings': settings}).eq('id', campaign_id).execute()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Schema save config error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/generate-schema-markup', methods=['POST'])
 @login_required
 def generate_schema_markup():
-    """Generate schema markup recommendations using Gemini."""
+    """Generate schema markup for pages using AI with real business data from questionnaire."""
     try:
         data = request.json or {}
         pages = data.get('pages', [])
-        brand_config = data.get('brand_config', {})
+        schema_config = data.get('schema_config', {})
         domain = data.get('domain', '')
+        campaign_id = data.get('campaign_id')
         
         if not pages:
             return jsonify({'error': 'No pages provided'}), 400
         
-        # Build brand context
-        brand_ctx = ""
-        if brand_config:
-            parts = []
-            if brand_config.get('business_name'): parts.append(f"Business: {brand_config['business_name']}")
-            if brand_config.get('industry'): parts.append(f"Industry: {brand_config['industry']}")
-            if brand_config.get('primary_audience'): parts.append(f"Audience: {brand_config['primary_audience']}")
-            brand_ctx = "\n".join(parts)
+        # Build business context from questionnaire
+        biz_ctx_parts = []
+        if schema_config.get('business_name'): biz_ctx_parts.append(f"Business Name: {schema_config['business_name']}")
+        if schema_config.get('business_type'): biz_ctx_parts.append(f"Business Type: {schema_config['business_type']}")
+        if schema_config.get('phone'): biz_ctx_parts.append(f"Phone: {schema_config['phone']}")
+        if schema_config.get('email'): biz_ctx_parts.append(f"Email: {schema_config['email']}")
+        if schema_config.get('address'): biz_ctx_parts.append(f"Address: {schema_config['address']}")
+        city_state = []
+        if schema_config.get('city'): city_state.append(schema_config['city'])
+        if schema_config.get('state'): city_state.append(schema_config['state'])
+        if schema_config.get('zip'): city_state.append(schema_config['zip'])
+        if city_state: biz_ctx_parts.append(f"Location: {', '.join(city_state)}")
+        if schema_config.get('country'): biz_ctx_parts.append(f"Country: {schema_config['country']}")
+        if schema_config.get('founded'): biz_ctx_parts.append(f"Founded: {schema_config['founded']}")
+        if schema_config.get('price_range'): biz_ctx_parts.append(f"Price Range: {schema_config['price_range']}")
+        if schema_config.get('logo_url'): biz_ctx_parts.append(f"Logo URL: {schema_config['logo_url']}")
+        if schema_config.get('social_links'): biz_ctx_parts.append(f"Social Profiles: {', '.join(schema_config['social_links']) if isinstance(schema_config['social_links'], list) else schema_config['social_links']}")
+        if schema_config.get('opening_hours'): biz_ctx_parts.append(f"Opening Hours: {schema_config['opening_hours']}")
+        if schema_config.get('description'): biz_ctx_parts.append(f"Business Description: {schema_config['description']}")
+        biz_context = "\n".join(biz_ctx_parts) if biz_ctx_parts else "No business details provided."
         
-        # Format pages for prompt (max 20)
-        page_list = []
-        for p in pages[:20]:
-            url = p if isinstance(p, str) else p.get('url', '')
-            title = '' if isinstance(p, str) else p.get('title', '')
-            page_list.append(f"- {url}" + (f" | Title: {title}" if title else ""))
-        pages_str = "\n".join(page_list)
+        # Format pages with their assigned schema types
+        page_entries = []
+        for p in pages:
+            url = p.get('url', '')
+            title = p.get('title', '')
+            schema_types = p.get('schema_types', ['Article'])
+            types_str = ', '.join(schema_types) if isinstance(schema_types, list) else str(schema_types)
+            page_entries.append(f"- URL: {url} | Title: {title} | Schema Types: {types_str}")
+        pages_str = "\n".join(page_entries)
         
-        prompt = f"""You are an SEO schema markup expert. Analyze these pages and recommend the most impactful schema markup for each.
+        # Determine if we need an Organization/LocalBusiness site-wide schema
+        has_homepage = any(p.get('page_type') == 'homepage' for p in pages)
+        biz_type = schema_config.get('business_type', 'service')
+        site_wide_type = 'LocalBusiness' if biz_type == 'local' else 'Organization'
+        
+        prompt = f"""You are an expert SEO schema markup generator. Generate production-ready JSON-LD structured data for the following pages.
 
 DOMAIN: {domain}
-{f"BRAND:{chr(10)}{brand_ctx}" if brand_ctx else ""}
 
-PAGES:
+REAL BUSINESS DATA (use these EXACT values, do NOT use placeholders):
+{biz_context}
+
+PAGES TO GENERATE SCHEMA FOR:
 {pages_str}
 
-For each page, recommend the best schema type and provide ready-to-use JSON-LD code.
-Consider: Organization, LocalBusiness, Article, BlogPosting, Product, Service, FAQ, HowTo, BreadcrumbList, WebSite (with SearchAction), etc.
+CRITICAL RULES:
+1. Use the EXACT business data provided above (name, phone, address, etc.) — NEVER use placeholder text like "INSERT HERE" or "YOUR PHONE".
+2. For each page, generate the schema type(s) specified. If multiple types are listed for a page, generate a combined array.
+3. For Article/BlogPosting: use the page title as headline, domain as publisher.
+4. For Service: describe the service based on the URL slug and title.
+5. For FAQPage: generate 3-5 realistic FAQ questions relevant to the page topic.
+6. For Product: include price range if provided.
+7. For AggregateRating: use realistic rating values (4.2-4.9 range).
+8. Always include @context, @type, and all REQUIRED properties for each schema type.
+9. Make the JSON-LD immediately usable — user should just copy-paste into their page <head>.
+{"10. Generate ONE site-wide " + site_wide_type + " schema as well." if has_homepage else ""}
 
-Also recommend ONE site-wide Organization/LocalBusiness schema.
-
-Respond ONLY with valid JSON, no markdown:
+Respond ONLY with valid JSON (no markdown, no explanation):
 {{
-  "site_wide": {{
-    "type": "Organization or LocalBusiness",
-    "description": "Why this schema is recommended site-wide",
-    "json_ld": "{{ complete JSON-LD object as a string }}"
-  }},
+  {'"site_wide": {{ "type": "' + site_wide_type + '", "description": "Site-wide schema for homepage", "json_ld": {{ ... complete JSON-LD object ... }} }},' if has_homepage else ''}
   "pages": [
     {{
-      "url": "page url",
-      "recommended_schema": "Schema type name",
-      "reason": "Why this schema fits (1 sentence)",
-      "serp_benefit": "What rich result this enables",
-      "json_ld": "{{ complete JSON-LD object as a string }}"
+      "url": "the page URL",
+      "schema_types": ["Type1", "Type2"],
+      "page_type": "detected page type",
+      "json_ld": [{{ ... complete JSON-LD object(s) ... }}],
+      "serp_benefit": "What rich result this enables"
     }}
   ]
-}}"""
+}}
+
+IMPORTANT: json_ld must be actual JSON objects, NOT strings. Each item in the json_ld array is a complete schema object."""
 
         result = gemini_client.generate_content(
             prompt=prompt,
             model_name="gemini-2.5-flash",
-            use_grounding=True
+            use_grounding=False
         )
         
         if not result:
@@ -1937,25 +2170,55 @@ Respond ONLY with valid JSON, no markdown:
         import json
         parsed = json.loads(text)
         
-        # Persist schema to campaign settings
-        campaign_id = data.get('campaign_id')
-        # If this is a manual addition (only 1 page) and there's existing schema, the frontend will handle appending.
-        # However, we will also just return the raw parsed here, frontend merges it.
+        # Normalize: ensure json_ld is always an array
+        for page in parsed.get('pages', []):
+            jld = page.get('json_ld')
+            if isinstance(jld, dict):
+                page['json_ld'] = [jld]
+            elif isinstance(jld, str):
+                try:
+                    obj = json.loads(jld)
+                    page['json_ld'] = [obj] if isinstance(obj, dict) else obj
+                except:
+                    page['json_ld'] = []
+        
+        # Normalize site_wide json_ld too
+        if parsed.get('site_wide'):
+            sw_jld = parsed['site_wide'].get('json_ld')
+            if isinstance(sw_jld, str):
+                try:
+                    parsed['site_wide']['json_ld'] = json.loads(sw_jld)
+                except:
+                    pass
+        
+        # Persist to campaign settings
         if campaign_id:
             try:
                 db = supabase_admin or supabase
                 camp_res = db.table('campaigns').select('settings').eq('id', campaign_id).single().execute()
                 settings = camp_res.data.get('settings', {}) if camp_res.data else {}
                 
-                # If there's an existing schema and this was just a 1-page generation, we don't want to wipe the old pages out completely here if it was a manual addition, but frontend handles that. 
-                # Actually, to be safe, we will let frontend manage the state and not strictly overwrite if len(pages) == 1? No, we just write what's given. Wait, if we overwrite with just 1 page, we lose previous.
-                # Let's read `is_manual_append` flag from request.
-                is_manual = data.get('is_manual', False)
-                if is_manual and 'schema_markup' in settings:
-                    settings['schema_markup']['pages'].extend(parsed.get('pages', []))
-                else:
-                    settings['schema_markup'] = parsed
-                    
+                # Merge with existing schema_pages
+                existing_pages = settings.get('schema_pages', [])
+                new_pages = parsed.get('pages', [])
+                
+                # Build a URL→entry map from existing
+                url_map = {p.get('url', '').rstrip('/'): p for p in existing_pages}
+                
+                # Update/add new pages
+                for np in new_pages:
+                    url_key = np.get('url', '').rstrip('/')
+                    np['status'] = 'generated'
+                    np['generated_at'] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    url_map[url_key] = np
+                
+                settings['schema_pages'] = list(url_map.values())
+                
+                # Save site_wide if present
+                if parsed.get('site_wide'):
+                    settings['schema_site_wide'] = parsed['site_wide']
+                    settings['schema_site_wide']['generated_at'] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                
                 db.table('campaigns').update({'settings': settings}).eq('id', campaign_id).execute()
             except Exception as e:
                 logger.error(f"Error saving schema markup: {e}")
@@ -1972,7 +2235,6 @@ Respond ONLY with valid JSON, no markdown:
 
 # =============================================================================
 # ANCHOR TEXT PLANNER
-# =============================================================================
 
 @app.route('/api/anchor-text-analysis', methods=['POST'])
 @login_required

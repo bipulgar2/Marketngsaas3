@@ -5807,7 +5807,7 @@
             if (_schemaSiteWide) {
                 const sw = _schemaSiteWide;
                 const jsonLd = typeof sw.json_ld === 'string' ? sw.json_ld : JSON.stringify(sw.json_ld, null, 2);
-                const scriptTag = `<script type="application/ld+json">\n${jsonLd}\n</script>`;
+                const scriptTag = `<script type="application/ld+json">\n${jsonLd}\n<\\/script>`;
                 html += `
                     <div class="bg-gray-900 border border-cyan-500/30 rounded-xl p-5">
                         <div class="flex items-center justify-between mb-3">
@@ -5846,7 +5846,7 @@
                 _schemaGenerated.forEach((p, idx) => {
                     const jsonLdRaw = Array.isArray(p.json_ld) ? p.json_ld : [p.json_ld];
                     const jsonLdStr = jsonLdRaw.map(j => typeof j === 'string' ? j : JSON.stringify(j, null, 2)).join('\n\n');
-                    const scriptTag = `<script type="application/ld+json">\n${jsonLdStr}\n</script>`;
+                    const scriptTag = `<script type="application/ld+json">\n${jsonLdStr}\n<\\/script>`;
                     const schemaTypes = (p.schema_types || []).join(', ');
                     const shortUrl = (p.url || '').replace(/^https?:\/\/(www\.)?/, '').substring(0, 60);
 
@@ -5970,12 +5970,12 @@
             let allCode = '';
             if (_schemaSiteWide) {
                 const swJson = typeof _schemaSiteWide.json_ld === 'string' ? _schemaSiteWide.json_ld : JSON.stringify(_schemaSiteWide.json_ld, null, 2);
-                allCode += `<!-- Site-Wide Schema: ${_schemaSiteWide.type || 'Organization'} -->\n<script type="application/ld+json">\n${swJson}\n</script>\n\n`;
+                allCode += `<!-- Site-Wide Schema: ${_schemaSiteWide.type || 'Organization'} -->\n<script type="application/ld+json">\n${swJson}\n<\\/script>\n\n`;
             }
             _schemaGenerated.forEach(p => {
                 const jsonLdRaw = Array.isArray(p.json_ld) ? p.json_ld : [p.json_ld];
                 const jsonLdStr = jsonLdRaw.map(j => typeof j === 'string' ? j : JSON.stringify(j, null, 2)).join('\n\n');
-                allCode += `<!-- Schema for: ${p.url} -->\n<script type="application/ld+json">\n${jsonLdStr}\n</script>\n\n`;
+                allCode += `<!-- Schema for: ${p.url} -->\n<script type="application/ld+json">\n${jsonLdStr}\n<\\/script>\n\n`;
             });
             navigator.clipboard.writeText(allCode).then(() => showNotification('All schemas copied to clipboard!', 'success'));
         }

@@ -1957,20 +1957,23 @@ def schema_auto_assign():
             except Exception as e:
                 logger.warning(f"Schema auto-assign: site_audits lookup failed: {e}")
         
-        # Strategy 2: Get pages from campaign's latest audit
+        # Strategy 2: Get pages from campaign's latest successful technical audit
         if not pages:
             try:
-                # Check audits table
-                audit_res = db.table('audits').select('id, results').eq('campaign_id', campaign_id).order('created_at', desc=True).limit(1).execute()
+                # Check audits table for recent technical audits
+                audit_res = db.table('audits').select('id, results').eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(5).execute()
                 if audit_res.data:
-                    results = audit_res.data[0].get('results', {}) or {}
-                    raw_pages = results.get('pages', [])
-                    domain = results.get('competitor_domain', '') or results.get('domain', '')
-                    for p in raw_pages:
-                        url = p.get('url', '')
-                        title = p.get('title', '') or (p.get('meta', {}) or {}).get('title', '')
-                        if url:
-                            pages.append({'url': url, 'title': title})
+                    for audit_record in audit_res.data:
+                        results = audit_record.get('results', {}) or {}
+                        raw_pages = results.get('pages', [])
+                        if raw_pages:
+                            domain = results.get('competitor_domain', '') or results.get('domain', '')
+                            for p in raw_pages:
+                                url = p.get('url', '')
+                                title = p.get('title', '') or (p.get('meta', {}) or {}).get('title', '')
+                                if url:
+                                    pages.append({'url': url, 'title': title})
+                            break  # Found an audit with pages, stop searching older ones
             except Exception as e:
                 logger.warning(f"Schema auto-assign: audits lookup failed: {e}")
         

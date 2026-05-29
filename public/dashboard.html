@@ -5961,6 +5961,11 @@
                         }
                     });
                 }
+                
+                // Update frontend state
+                if (currentClient && currentClient.settings) {
+                    currentClient.settings.schema_pages = _schemaPages;
+                }
 
                 input.value = '';
                 showNotification('Schema generated!', 'success');

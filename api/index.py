@@ -1960,15 +1960,16 @@ def schema_auto_assign():
         # Strategy 2: Get pages from campaign's latest successful technical audit
         if not pages:
             try:
-                # Check audits table for recent technical audits
-                audit_res = db.table('audits').select('id, results').eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(5).execute()
+                # Check audits table for recent technical audits. Only fetch the pages array to avoid OOM on massive results JSON.
+                audit_res = db.table('audits').select('id, pages:results->pages, domain:results->>domain, comp_domain:results->>competitor_domain').eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(5).execute()
                 if audit_res.data:
                     for audit_record in audit_res.data:
-                        results = audit_record.get('results', {}) or {}
-                        raw_pages = results.get('pages', [])
+                        raw_pages = audit_record.get('pages', [])
                         if raw_pages:
-                            domain = results.get('competitor_domain', '') or results.get('domain', '')
+                            domain = audit_record.get('comp_domain') or audit_record.get('domain', '')
                             for p in raw_pages:
+                                if not isinstance(p, dict):
+                                    continue
                                 url = p.get('url', '')
                                 title = p.get('title', '') or (p.get('meta', {}) or {}).get('title', '')
                                 if url:
@@ -1984,11 +1985,12 @@ def schema_auto_assign():
                 if camp_res.data:
                     domain = camp_res.data.get('domain', '')
                     if domain:
-                        sa_res = db.table('site_audits').select('audit_data').ilike('domain', f"%{domain}%").order('created_at', desc=True).limit(1).execute()
+                        sa_res = db.table('site_audits').select('pages:audit_data->pages').ilike('domain', f"%{domain}%").order('created_at', desc=True).limit(1).execute()
                         if sa_res.data:
-                            audit_data = sa_res.data[0].get('audit_data', {}) or {}
-                            raw_pages = audit_data.get('pages', [])
+                            raw_pages = sa_res.data[0].get('pages', []) or []
                             for p in raw_pages:
+                                if not isinstance(p, dict):
+                                    continue
                                 url = p.get('url', '')
                                 title = p.get('title', '') or (p.get('meta', {}) or {}).get('title', '')
                                 if url:

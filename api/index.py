@@ -2031,6 +2031,16 @@ def schema_auto_assign():
                       'blog': 5, 'content': 6, 'about': 7, 'contact': 8, 'portfolio': 9, 'pricing': 10, 'skip': 99}
         assigned_pages.sort(key=lambda x: type_order.get(x['page_type'], 50))
         
+        # Save to database immediately for cross-session persistence
+        try:
+            camp_res = db.table('campaigns').select('settings').eq('id', campaign_id).single().execute()
+            if camp_res.data:
+                settings = camp_res.data.get('settings', {}) or {}
+                settings['schema_pages'] = assigned_pages
+                db.table('campaigns').update({'settings': settings}).eq('id', campaign_id).execute()
+        except Exception as e:
+            logger.error(f"Error saving auto-assigned pages to DB: {e}")
+            
         return jsonify({
             'success': True,
             'domain': domain,
@@ -2047,11 +2057,12 @@ def schema_auto_assign():
 @app.route('/api/schema/save-config', methods=['POST'])
 @login_required
 def schema_save_config():
-    """Save business questionnaire data for schema generation."""
+    """Save business questionnaire data and/or schema pages for persistence."""
     try:
         data = request.json or {}
         campaign_id = data.get('campaign_id')
-        config = data.get('schema_config', {})
+        config = data.get('schema_config')
+        pages = data.get('schema_pages')
         
         if not campaign_id:
             return jsonify({'error': 'campaign_id is required'}), 400
@@ -2060,7 +2071,11 @@ def schema_save_config():
         camp_res = db.table('campaigns').select('settings').eq('id', campaign_id).single().execute()
         settings = camp_res.data.get('settings', {}) if camp_res.data else {}
         
-        settings['schema_config'] = config
+        if config is not None:
+            settings['schema_config'] = config
+        if pages is not None:
+            settings['schema_pages'] = pages
+            
         db.table('campaigns').update({'settings': settings}).eq('id', campaign_id).execute()
         
         return jsonify({'success': True})

@@ -5082,6 +5082,24 @@
             skip: 'bg-red-500/10 text-red-400/60 border-red-500/20'
         };
 
+        
+        // Helpers
+        async function schemaPersistPagesToDB() {
+            if (!currentClient) return;
+            try {
+                await fetch('/api/schema/save-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        campaign_id: currentClient.id,
+                        schema_pages: _schemaPages 
+                    })
+                });
+            } catch(e) {
+                console.error('Failed to persist schema pages', e);
+            }
+        }
+
         async function renderSchemaMarkup() {
             const contentArea = document.getElementById('contentArea');
             if (!currentClient) {
@@ -5689,7 +5707,7 @@
                 await fetch('/api/schema/save-config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ campaign_id: currentClient.id, schema_config: config })
+                    body: JSON.stringify({ campaign_id: currentClient.id, schema_config: config, schema_pages: _schemaPages })
                 });
                 if (currentClient.settings) currentClient.settings.schema_config = config;
                 showNotification('Business details saved!', 'success');
@@ -5993,6 +6011,9 @@
                 if (currentClient && currentClient.settings) {
                     currentClient.settings.schema_pages = _schemaPages;
                 }
+                
+                // Persist to DB immediately
+                schemaPersistPagesToDB();
 
                 input.value = '';
                 showNotification('Schema generated!', 'success');

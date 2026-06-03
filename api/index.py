@@ -1948,7 +1948,19 @@ def schema_auto_assign():
                 if sa_res.data:
                     audit_data = sa_res.data[0].get('audit_data', {}) or {}
                     domain = sa_res.data[0].get('domain', '')
-                    raw_pages = audit_data.get('pages', [])
+                    raw_pages = []
+                    task_id = audit_data.get('dataforseo_task_id') or audit_data.get('task_id')
+                    if task_id:
+                        try:
+                            from api.dataforseo_client import get_page_issues
+                            issues_data = get_page_issues(task_id, limit=10000)
+                            raw_pages = issues_data.get('pages', [])
+                        except Exception as e:
+                            logger.warning(f"Schema auto-assign: Strategy 1 dataforseo fetch failed: {e}")
+                            
+                    if not raw_pages:
+                        raw_pages = audit_data.get('pages', [])
+                        
                     for p in raw_pages:
                         url = p.get('url', '')
                         title = p.get('title', '') or (p.get('meta', {}) or {}).get('title', '')
@@ -1961,12 +1973,25 @@ def schema_auto_assign():
         if not pages:
             try:
                 # Check audits table for recent technical audits. Only fetch the pages array to avoid OOM on massive results JSON.
-                audit_res = db.table('audits').select('id, pages:results->pages, domain:results->>domain, comp_domain:results->>competitor_domain').eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(5).execute()
+                audit_res = db.table('audits').select('id, dataforseo_task_id, pages:results->pages, domain:results->>domain, comp_domain:results->>competitor_domain').eq('campaign_id', campaign_id).eq('type', 'technical').order('created_at', desc=True).limit(5).execute()
                 if audit_res.data:
                     for audit_record in audit_res.data:
-                        raw_pages = audit_record.get('pages', [])
+                        domain = audit_record.get('comp_domain') or audit_record.get('domain', '')
+                        task_id = audit_record.get('dataforseo_task_id')
+                        
+                        raw_pages = []
+                        if task_id:
+                            try:
+                                from api.dataforseo_client import get_page_issues
+                                issues_data = get_page_issues(task_id, limit=10000)
+                                raw_pages = issues_data.get('pages', [])
+                            except Exception as e:
+                                logger.warning(f"Schema auto-assign: Strategy 2 dataforseo fetch failed: {e}")
+                        
+                        if not raw_pages:
+                            raw_pages = audit_record.get('pages', [])
+                            
                         if raw_pages:
-                            domain = audit_record.get('comp_domain') or audit_record.get('domain', '')
                             for p in raw_pages:
                                 if not isinstance(p, dict):
                                     continue
@@ -1985,9 +2010,22 @@ def schema_auto_assign():
                 if camp_res.data:
                     domain = camp_res.data.get('domain', '')
                     if domain:
-                        sa_res = db.table('site_audits').select('pages:audit_data->pages').ilike('domain', f"%{domain}%").order('created_at', desc=True).limit(1).execute()
+                        sa_res = db.table('site_audits').select('audit_data, pages:audit_data->pages').ilike('domain', f"%{domain}%").order('created_at', desc=True).limit(1).execute()
                         if sa_res.data:
-                            raw_pages = sa_res.data[0].get('pages', []) or []
+                            audit_data = sa_res.data[0].get('audit_data', {}) or {}
+                            raw_pages = []
+                            task_id = audit_data.get('dataforseo_task_id') or audit_data.get('task_id')
+                            if task_id:
+                                try:
+                                    from api.dataforseo_client import get_page_issues
+                                    issues_data = get_page_issues(task_id, limit=10000)
+                                    raw_pages = issues_data.get('pages', [])
+                                except Exception as e:
+                                    logger.warning(f"Schema auto-assign: Strategy 3 dataforseo fetch failed: {e}")
+                                    
+                            if not raw_pages:
+                                raw_pages = sa_res.data[0].get('pages', []) or []
+                                
                             for p in raw_pages:
                                 if not isinstance(p, dict):
                                     continue
@@ -2754,7 +2792,7 @@ def get_audit(audit_id):
                     summary = summary_check
                     
                     # 2. Get Page Issues
-                    pages_result = get_page_issues(task_id, limit=100)
+                    pages_result = get_page_issues(task_id, limit=1000)
                     pages = pages_result.get('pages', [])
                     
                     # 3. Categorize Results for UI (First, so we can use for tasks)
@@ -4071,7 +4109,7 @@ def save_audit_results():
         summary_result = _retry_fetch(get_audit_summary, task_id)
         summary = summary_result.get('summary', {}) if summary_result.get('success') else {}
         
-        pages_data = _retry_fetch(get_page_issues, task_id, limit=200)  # Get up to 200 pages
+        pages_data = _retry_fetch(get_page_issues, task_id, limit=1000)  # Get up to 1000 pages
         pages = pages_data.get('pages', []) if pages_data.get('success') else []
         
         # Log data quality for debugging
@@ -4720,7 +4758,7 @@ def site_audit_save_results():
 
     try:
         summary = get_audit_summary(task_id)
-        pages_result = get_page_issues(task_id, limit=200)
+        pages_result = get_page_issues(task_id, limit=1000)
         pages = pages_result.get('pages', [])
 
         existing = client.table('site_audits').select('audit_data, domain').eq('id', audit_id).execute()
@@ -8008,7 +8046,7 @@ def debug_sync_supergoop():
         audit = audits.data[-1] if audits.data else None
         if not audit: return jsonify({"error": "No audit"}), 404
         
-        issues = get_page_issues(audit.get('dataforseo_task_id'), limit=100)
+        issues = get_page_issues(audit.get('dataforseo_task_id'), limit=1000)
         items = issues.get('items', [])
         
         count = 0

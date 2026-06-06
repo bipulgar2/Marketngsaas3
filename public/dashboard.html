@@ -1529,22 +1529,23 @@
                                     const h = serpHistoryMap[q.query];
                                     let serpCellHtml = '<div class="live-serp-cell text-gray-500 text-xs font-mono" data-keyword="'+q.query+'">-</div>';
                                     if (h) {
+                                        serpCellHtml = `<div class="live-serp-cell" data-keyword="${q.query}">`;
                                         if (h.rank_absolute) {
-                                            serpCellHtml = `<div class="live-serp-cell" data-keyword="${q.query}">`;
                                             serpCellHtml += `<span class="text-white font-medium">#${h.rank_absolute}</span>`;
                                             if (h.prev_rank) {
                                                 const diff = h.prev_rank - h.rank_absolute; // positive if rank improved
                                                 if (diff > 0) serpCellHtml += `<span class="text-emerald-400 text-[10px] ml-1">▲ ${diff}</span>`;
                                                 else if (diff < 0) serpCellHtml += `<span class="text-red-400 text-[10px] ml-1">▼ ${Math.abs(diff)}</span>`;
                                             }
-                                            if (h.fetched_at) {
-                                                const d = new Date(h.fetched_at);
-                                                serpCellHtml += `<div class="text-[9px] text-gray-500 mt-0.5" title="${d.toLocaleString()}">Fetched: ${d.toLocaleDateString(undefined, {month:'short', day:'numeric'})}</div>`;
-                                            }
-                                            serpCellHtml += `</div>`;
                                         } else {
-                                            serpCellHtml = `<div class="live-serp-cell" data-keyword="${q.query}"><span class="text-gray-600 text-xs">>100</span></div>`;
+                                            serpCellHtml += `<span class="text-gray-600 text-xs">>100</span>`;
                                         }
+                                        
+                                        if (h.fetched_at) {
+                                            const d = new Date(h.fetched_at);
+                                            serpCellHtml += `<div class="text-[9px] text-gray-500 mt-0.5" title="${d.toLocaleString()}">Fetched: ${d.toLocaleDateString(undefined, {month:'short', day:'numeric'})}</div>`;
+                                        }
+                                        serpCellHtml += `</div>`;
                                     }
                                     
                                     return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02] group">
@@ -1849,21 +1850,23 @@
                     const kw = cell.getAttribute('data-keyword');
                     const h = serpHistoryMap[kw];
                     if (h) {
+                        let serpCellHtml = '';
                         if (h.rank_absolute) {
-                            let serpCellHtml = `<span class="text-white font-medium">#${h.rank_absolute}</span>`;
+                            serpCellHtml += `<span class="text-white font-medium">#${h.rank_absolute}</span>`;
                             if (h.prev_rank) {
                                 const diff = h.prev_rank - h.rank_absolute;
                                 if (diff > 0) serpCellHtml += `<span class="text-emerald-400 text-[10px] ml-1">▲ ${diff}</span>`;
                                 else if (diff < 0) serpCellHtml += `<span class="text-red-400 text-[10px] ml-1">▼ ${Math.abs(diff)}</span>`;
                             }
-                            if (h.fetched_at) {
-                                const d = new Date(h.fetched_at);
-                                serpCellHtml += `<div class="text-[9px] text-gray-500 mt-0.5" title="${d.toLocaleString()}">Fetched: ${d.toLocaleDateString(undefined, {month:'short', day:'numeric'})}</div>`;
-                            }
-                            cell.innerHTML = serpCellHtml;
                         } else {
-                            cell.innerHTML = '<span class="text-gray-600 text-xs">>100</span>';
+                            serpCellHtml += '<span class="text-gray-600 text-xs">>100</span>';
                         }
+                        
+                        if (h.fetched_at) {
+                            const d = new Date(h.fetched_at);
+                            serpCellHtml += `<div class="text-[9px] text-gray-500 mt-0.5" title="${d.toLocaleString()}">Fetched: ${d.toLocaleDateString(undefined, {month:'short', day:'numeric'})}</div>`;
+                        }
+                        cell.innerHTML = serpCellHtml;
                     } else {
                         cell.innerHTML = '<span class="text-gray-600 text-xs">>100</span>';
                     }

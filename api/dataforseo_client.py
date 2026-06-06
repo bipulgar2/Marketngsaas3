@@ -1438,24 +1438,19 @@ def get_live_serp_organic(domain: str, keywords: List[str], location_code: int =
     try:
         endpoint = f"{DATAFORSEO_API_URL}/serp/google/organic/live/regular"
         
-        # Max 100 keywords per POST request, chunk them
+        # DataForSEO Live endpoints only support 1 task per request!
         results = {}
-        chunk_size = 100
         
-        for i in range(0, len(keywords), chunk_size):
-            chunk = keywords[i:i + chunk_size]
-            payload = []
+        for kw in keywords:
+            payload = [{
+                "keyword": kw,
+                "location_code": location_code,
+                "language_code": "en",
+                "device": "desktop",
+                "os": "windows"
+            }]
             
-            for kw in chunk:
-                payload.append({
-                    "keyword": kw,
-                    "location_code": location_code,
-                    "language_code": "en",
-                    "device": "desktop",
-                    "os": "windows"
-                })
-                
-            print(f"DEBUG: Fetching live SERP for {len(chunk)} keywords (domain: {domain})", file=sys.stderr)
+            print(f"DEBUG: Fetching live SERP for keyword '{kw}' (domain: {domain})", file=sys.stderr)
             
             response = requests.post(
                 endpoint,
@@ -1469,18 +1464,17 @@ def get_live_serp_organic(domain: str, keywords: List[str], location_code: int =
                 tasks = data.get('tasks', [])
                 
                 for task in tasks:
-                    kw = task.get('data', {}).get('keyword')
-                    if not kw:
+                    returned_kw = task.get('data', {}).get('keyword')
+                    if not returned_kw:
                         continue
                         
                     result_items = (task.get('result') or [{}])[0].get('items', [])
                     
-                    # Find the first item matching the domain
                     found = False
                     for item in result_items:
                         item_url = item.get('url', '')
                         if item.get('type') == 'organic' and domain in item_url:
-                            results[kw] = {
+                            results[returned_kw] = {
                                 'rank_absolute': item.get('rank_absolute'),
                                 'url': item_url
                             }
@@ -1488,12 +1482,12 @@ def get_live_serp_organic(domain: str, keywords: List[str], location_code: int =
                             break
                     
                     if not found:
-                        results[kw] = {
+                        results[returned_kw] = {
                             'rank_absolute': None,
                             'url': None
                         }
             else:
-                print(f"DEBUG: SERP API returned status {response.status_code}", file=sys.stderr)
+                print(f"DEBUG: SERP API returned status {response.status_code} for '{kw}'", file=sys.stderr)
                 
         return results
         

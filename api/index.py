@@ -2792,7 +2792,7 @@ def get_audit(audit_id):
                     summary = summary_check
                     
                     # 2. Get Page Issues
-                    pages_result = get_page_issues(task_id, limit=1000)
+                    pages_result = get_page_issues(task_id, limit=10000)
                     pages = pages_result.get('pages', [])
                     
                     # 3. Categorize Results for UI (First, so we can use for tasks)
@@ -4144,7 +4144,7 @@ def save_audit_results():
         summary_result = _retry_fetch(get_audit_summary, task_id)
         summary = summary_result.get('summary', {}) if summary_result.get('success') else {}
         
-        pages_data = _retry_fetch(get_page_issues, task_id, limit=1000)  # Get up to 1000 pages
+        pages_data = _retry_fetch(get_page_issues, task_id, limit=10000)  # Get up to 10000 pages
         pages = pages_data.get('pages', []) if pages_data.get('success') else []
         
         # Log data quality for debugging
@@ -4793,7 +4793,7 @@ def site_audit_save_results():
 
     try:
         summary = get_audit_summary(task_id)
-        pages_result = get_page_issues(task_id, limit=1000)
+        pages_result = get_page_issues(task_id, limit=10000)
         pages = pages_result.get('pages', [])
 
         existing = client.table('site_audits').select('audit_data, domain').eq('id', audit_id).execute()
@@ -8081,7 +8081,7 @@ def debug_sync_supergoop():
         audit = audits.data[-1] if audits.data else None
         if not audit: return jsonify({"error": "No audit"}), 404
         
-        issues = get_page_issues(audit.get('dataforseo_task_id'), limit=1000)
+        issues = get_page_issues(audit.get('dataforseo_task_id'), limit=10000)
         items = issues.get('items', [])
         
         count = 0

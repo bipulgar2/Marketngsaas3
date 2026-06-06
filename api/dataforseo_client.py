@@ -563,271 +563,301 @@ def get_audit_summary(task_id: str) -> Dict[str, Any]:
 def get_page_issues(task_id: str, issue_type: str = "all", limit: int = 100) -> Dict[str, Any]:
     """
     Get detailed page-level issues from the audit.
+    Auto-paginates when limit > 1000 (DataForSEO on_page/pages max per request).
     
     Args:
         task_id: The task ID
         issue_type: Type of issues to fetch (all, critical, warning, info)
-        limit: Number of results
+        limit: Total number of results to fetch. Auto-paginates if > 1000.
     
     Returns:
         Dict with list of pages and their issues
     """
-    endpoint = f"{DATAFORSEO_API_URL}/on_page/pages"
-    
-    payload = [{
-        "id": task_id,
-        "limit": limit,
-        "order_by": ["onpage_score,asc"]  # Worst pages first
-    }]
-    
-    try:
-        response = requests.post(
-            endpoint,
-            headers={**get_auth_header(), "Content-Type": "application/json"},
-            json=payload,
-            timeout=60
-        )
-        response.raise_for_status()
-        data = response.json()
-        
-        if data.get('status_code') == 20000 and data.get('tasks'):
-            result = data['tasks'][0].get('result', [{}])[0] or {}
-            pages = result.get('items') or []
-            
-            formatted_pages = []
-            for page in pages:
-                # Safely extract nested objects with full null protection
-                meta = page.get('meta') or {}
-                htags = meta.get('htags') or {}
-                h1_list = htags.get('h1') or []
-                h2_list = htags.get('h2') or []
-                h3_list = htags.get('h3') or []
-                title = meta.get('title') or ''
-                description = meta.get('description') or ''
-                
-                # Page timing metrics (Core Web Vitals and more)
-                page_timing = page.get('page_timing') or {}
-                
-                # Content metrics - nested under meta.content
-                content_info = meta.get('content') or {}
-                
-                # All checks from DataForSEO
-                checks = page.get('checks') or {}
-                
-                # Cache info
-                cache_control = page.get('cache_control') or {}
-                
-                # Debug: Log raw data for first page
-                if len(formatted_pages) == 0:
-                    print(f"DEBUG get_page_issues: First page ALL raw data:", file=sys.stderr)
-                    print(f"  page keys: {list(page.keys())}", file=sys.stderr)
-                    print(f"  meta keys: {list(meta.keys())}", file=sys.stderr)
-                    print(f"  meta.content: {content_info}", file=sys.stderr)
-                    print(f"  page_timing: {page_timing}", file=sys.stderr)
-                    print(f"  checks: {checks}", file=sys.stderr)
-                
-                # Extract timing metrics
-                time_to_interactive = page_timing.get('time_to_interactive') or 0
-                dom_complete = page_timing.get('dom_complete') or 0
-                lcp = page_timing.get('largest_contentful_paint') or 0
-                fid = page_timing.get('first_input_delay') or 0
-                connection_time = page_timing.get('connection_time') or 0
-                ttfb = page_timing.get('waiting_time') or 0  # Time to First Byte
-                download_time = page_timing.get('download_time') or 0
-                duration_time = page_timing.get('duration_time') or 0
-                
-                # Use TTI as primary load time, fallback to others
-                load_time_ms = time_to_interactive or dom_complete or download_time or 0
-                
-                # Content metrics
-                word_count = content_info.get('plain_text_word_count', 0) or 0
-                plain_text_size = content_info.get('plain_text_size', 0) or 0
-                plain_text_rate = content_info.get('plain_text_rate', 0) or 0
-                
-                # Readability indices
-                automated_readability = content_info.get('automated_readability_index') or 0
-                coleman_liau = content_info.get('coleman_liau_readability_index') or 0
-                flesch_kincaid = content_info.get('flesch_kincaid_readability_index') or 0
-                smog = content_info.get('smog_readability_index') or 0
-                
-                # Extract all meta counts
-                internal_links = meta.get('internal_links_count', 0) or 0
-                external_links = meta.get('external_links_count', 0) or 0
-                inbound_links = meta.get('inbound_links_count', 0) or 0
-                images_count = meta.get('images_count', 0) or 0
-                images_size = meta.get('images_size', 0) or 0
-                scripts_count = meta.get('scripts_count', 0) or 0
-                scripts_size = meta.get('scripts_size', 0) or 0
-                stylesheets_count = meta.get('stylesheets_count', 0) or 0
-                stylesheets_size = meta.get('stylesheets_size', 0) or 0
-                
-                # Additional meta fields
-                canonical = meta.get('canonical') or ''
-                meta_keywords = meta.get('meta_keywords') or ''
-                favicon = meta.get('favicon') or ''
-                generator = meta.get('generator') or ''
-                charset = meta.get('charset') or 0
-                cumulative_layout_shift = meta.get('cumulative_layout_shift') or 0
-                render_blocking_scripts = meta.get('render_blocking_scripts_count', 0) or 0
-                render_blocking_stylesheets = meta.get('render_blocking_stylesheets_count', 0) or 0
-                
-                # Page-level fields
-                page_size = page.get('size', 0) or 0
-                encoded_size = page.get('encoded_size', 0) or 0
-                total_transfer_size = page.get('total_transfer_size', 0) or 0
-                fetch_time = page.get('fetch_time') or ''
-                click_depth = page.get('click_depth', 0) or 0
-                total_dom_size = page.get('total_dom_size', 0) or 0
-                
-                # Build comprehensive page data
-                formatted_pages.append({
-                    # Core identifiers
-                    "url": page.get('url'),
-                    "status_code": page.get('status_code'),
-                    "onpage_score": page.get('onpage_score', 0),
-                    "resource_type": page.get('resource_type', 'html'),
-                    
-                    # Meta object for frontend compatibility (frontend reads from p.meta.*)
-                    "meta": {
-                        "title": title,
-                        "description": description,
-                        "h1": h1_list,
-                        "h2": h2_list,
-                        "h3": h3_list,
-                        "canonical": canonical,
-                    },
-                    
-                    # Direct fields for backward compatibility
-                    "title": title,
-                    "title_length": len(title),
-                    "description": description,
-                    "description_length": len(description),
-                    "canonical": canonical,
-                    "meta_keywords": meta_keywords,
-                    
-                    # Headings (direct access)
-                    "h1": h1_list,
-                    "h1_count": len(h1_list),
-                    "h2": h2_list,
-                    "h2_count": len(h2_list),
-                    "h3": h3_list,
-                    "h3_count": len(h3_list),
-                    
-                    # Performance - Core Web Vitals
-                    "load_time": load_time_ms,
-                    "time_to_interactive": time_to_interactive,
-                    "dom_complete": dom_complete,
-                    "largest_contentful_paint": lcp,
-                    "first_input_delay": fid,
-                    "cumulative_layout_shift": cumulative_layout_shift,
-                    "ttfb": ttfb,
-                    "connection_time": connection_time,
-                    "download_time": download_time,
-                    "duration_time": duration_time,
-                    
-                    # Size metrics
-                    "page_size": page_size,
-                    "encoded_size": encoded_size,
-                    "total_transfer_size": total_transfer_size,
-                    "total_dom_size": total_dom_size,
-                    
-                    # Content metrics
-                    "word_count": word_count,
-                    "plain_text_size": plain_text_size,
-                    "plain_text_rate": plain_text_rate,
-                    
-                    # Readability
-                    "automated_readability_index": automated_readability,
-                    "coleman_liau_index": coleman_liau,
-                    "flesch_kincaid_index": flesch_kincaid,
-                    "smog_index": smog,
-                    
-                    # Links
-                    "internal_links_count": internal_links,
-                    "external_links_count": external_links,
-                    "inbound_links_count": inbound_links,
-                    
-                    # Resources
-                    "images_count": images_count,
-                    "images_size": images_size,
-                    "scripts_count": scripts_count,
-                    "scripts_size": scripts_size,
-                    "stylesheets_count": stylesheets_count,
-                    "stylesheets_size": stylesheets_size,
-                    "render_blocking_scripts": render_blocking_scripts,
-                    "render_blocking_stylesheets": render_blocking_stylesheets,
-                    
-                    # Technical
-                    "is_https": checks.get('is_https', False) or str(page.get('url', '')).startswith('https'),
-                    "is_http": checks.get('is_http', False),
-                    "has_schema": checks.get('has_micromarkup', False),
-                    "click_depth": click_depth,
-                    "fetch_time": fetch_time,
-                    "favicon": favicon,
-                    "generator": generator,
-                    "charset": charset,
-                    
-                    # Cache
-                    "is_cacheable": cache_control.get('cachable', False),
-                    "cache_ttl": cache_control.get('ttl', 0),
-                    
-                    # All DataForSEO checks (boolean flags)
-                    "dfs_checks": checks,
-                    
-                    # Computed issues for quick filtering
-                    "issues": {
-                        "no_title": checks.get('no_title', not title),
-                        "no_description": checks.get('no_description', not description),
-                        "no_h1": checks.get('no_h1_tag', len(h1_list) == 0),
-                        "multiple_h1": len(h1_list) > 1,
-                        "title_too_long": checks.get('title_too_long', len(title) > 60),
-                        "title_too_short": checks.get('title_too_short', 0 < len(title) < 30),
-                        "description_too_long": len(description) > 160,
-                        "no_canonical": not canonical,
-                        "is_broken": checks.get('is_broken', False),
-                        "is_redirect": checks.get('is_redirect', False),
-                        "is_4xx": checks.get('is_4xx_code', False),
-                        "is_5xx": checks.get('is_5xx_code', False),
-                        "slow_load": checks.get('high_loading_time', load_time_ms > 3000),
-                        "high_waiting_time": checks.get('high_waiting_time', False),
-                        "low_content": checks.get('low_content_rate', word_count < 300),
-                        "no_image_alt": checks.get('no_image_alt', False),
-                        "no_image_title": checks.get('no_image_title', False),
-                        "no_favicon": checks.get('no_favicon', False),
-                        "duplicate_title": checks.get('duplicate_title_tag', False),
-                        "duplicate_description": page.get('duplicate_description', False),
-                        "duplicate_content": page.get('duplicate_content', False),
-                        "has_render_blocking": checks.get('has_render_blocking_resources', False),
-                        "deprecated_html_tags": checks.get('deprecated_html_tags', False),
-                        "duplicate_meta_tags": checks.get('duplicate_meta_tags', False),
-                        "no_doctype": checks.get('no_doctype', False),
-                        "no_encoding": checks.get('no_encoding_meta_tag', False),
-                        "https_to_http_links": checks.get('https_to_http_links', False),
-                        "is_orphan_page": checks.get('is_orphan_page', False),
-                        "redirect_chain": checks.get('redirect_chain', False),
-                        "canonical_chain": checks.get('canonical_chain', False),
-                        "has_links_to_redirects": checks.get('has_links_to_redirects', False),
-                        "large_page_size": checks.get('large_page_size', False),
-                        "low_readability": checks.get('low_readability_rate', False),
-                        "has_misspelling": checks.get('has_misspelling', False),
-                        "lorem_ipsum": checks.get('lorem_ipsum', False),
-                        "seo_friendly_url": checks.get('seo_friendly_url', True),
-                    }
-                })
-            
-            return {
-                "success": True,
-                "total_count": result.get('total_count', len(pages)),
-                "pages": formatted_pages
-            }
-        else:
-            return {
-                "success": False,
-                "error": data.get('status_message', 'Unknown error')
-            }
-    except requests.exceptions.RequestException as e:
-        return {"success": False, "error": str(e)}
+    MAX_PER_REQUEST = 1000
+    all_formatted_pages = []
+    total_count_reported = 0
+    offset = 0
+    is_first_page = True
 
+    while True:
+        batch_limit = min(MAX_PER_REQUEST, limit - len(all_formatted_pages))
+        if batch_limit <= 0:
+            break
+
+        endpoint = f"{DATAFORSEO_API_URL}/on_page/pages"
+        payload = [{
+            "id": task_id,
+            "limit": batch_limit,
+            "offset": offset,
+            "order_by": ["onpage_score,asc"]
+        }]
+
+        try:
+            response = requests.post(
+                endpoint,
+                headers={**get_auth_header(), "Content-Type": "application/json"},
+                json=payload,
+                timeout=60
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get('status_code') == 20000 and data.get('tasks'):
+                result = data['tasks'][0].get('result', [{}])[0] or {}
+                pages = result.get('items') or []
+                total_count_reported = result.get('total_count', 0)
+
+                if not pages:
+                    break
+
+                for page in pages:
+                    formatted = _format_page_data(page, debug_first=is_first_page and len(all_formatted_pages) == 0)
+                    all_formatted_pages.append(formatted)
+                    is_first_page = False
+
+                offset += len(pages)
+
+                if offset >= total_count_reported or len(all_formatted_pages) >= limit:
+                    break
+
+                print(f"Paginating get_page_issues: fetched {offset}/{total_count_reported}", file=sys.stderr)
+            else:
+                if not all_formatted_pages:
+                    return {"success": False, "error": data.get('status_message', 'Unknown error')}
+                break
+
+        except requests.exceptions.RequestException as e:
+            if not all_formatted_pages:
+                return {"success": False, "error": str(e)}
+            break
+
+    return {
+        "success": True,
+        "total_count": total_count_reported or len(all_formatted_pages),
+        "pages": all_formatted_pages
+    }
+
+
+def _format_page_data(page: dict, debug_first: bool = False) -> dict:
+    """Format a single raw DataForSEO page into our standard structure."""
+    # Safely extract nested objects with full null protection
+    meta = page.get('meta') or {}
+    htags = meta.get('htags') or {}
+    h1_list = htags.get('h1') or []
+    h2_list = htags.get('h2') or []
+    h3_list = htags.get('h3') or []
+    title = meta.get('title') or ''
+    description = meta.get('description') or ''
+    
+    # Page timing metrics (Core Web Vitals and more)
+    page_timing = page.get('page_timing') or {}
+    
+    # Content metrics - nested under meta.content
+    content_info = meta.get('content') or {}
+    
+    # All checks from DataForSEO
+    checks = page.get('checks') or {}
+    
+    # Cache info
+    cache_control = page.get('cache_control') or {}
+    
+    # Debug: Log raw data for first page
+    if debug_first:
+        print(f"DEBUG get_page_issues: First page ALL raw data:", file=sys.stderr)
+        print(f"  page keys: {list(page.keys())}", file=sys.stderr)
+        print(f"  meta keys: {list(meta.keys())}", file=sys.stderr)
+        print(f"  meta.content: {content_info}", file=sys.stderr)
+        print(f"  page_timing: {page_timing}", file=sys.stderr)
+        print(f"  checks: {checks}", file=sys.stderr)
+    
+    # Extract timing metrics
+    time_to_interactive = page_timing.get('time_to_interactive') or 0
+    dom_complete = page_timing.get('dom_complete') or 0
+    lcp = page_timing.get('largest_contentful_paint') or 0
+    fid = page_timing.get('first_input_delay') or 0
+    connection_time = page_timing.get('connection_time') or 0
+    ttfb = page_timing.get('waiting_time') or 0  # Time to First Byte
+    download_time = page_timing.get('download_time') or 0
+    duration_time = page_timing.get('duration_time') or 0
+    
+    # Use TTI as primary load time, fallback to others
+    load_time_ms = time_to_interactive or dom_complete or download_time or 0
+    
+    # Content metrics
+    word_count = content_info.get('plain_text_word_count', 0) or 0
+    plain_text_size = content_info.get('plain_text_size', 0) or 0
+    plain_text_rate = content_info.get('plain_text_rate', 0) or 0
+    
+    # Readability indices
+    automated_readability = content_info.get('automated_readability_index') or 0
+    coleman_liau = content_info.get('coleman_liau_readability_index') or 0
+    flesch_kincaid = content_info.get('flesch_kincaid_readability_index') or 0
+    smog = content_info.get('smog_readability_index') or 0
+    
+    # Extract all meta counts
+    internal_links = meta.get('internal_links_count', 0) or 0
+    external_links = meta.get('external_links_count', 0) or 0
+    inbound_links = meta.get('inbound_links_count', 0) or 0
+    images_count = meta.get('images_count', 0) or 0
+    images_size = meta.get('images_size', 0) or 0
+    scripts_count = meta.get('scripts_count', 0) or 0
+    scripts_size = meta.get('scripts_size', 0) or 0
+    stylesheets_count = meta.get('stylesheets_count', 0) or 0
+    stylesheets_size = meta.get('stylesheets_size', 0) or 0
+    
+    # Additional meta fields
+    canonical = meta.get('canonical') or ''
+    meta_keywords = meta.get('meta_keywords') or ''
+    favicon = meta.get('favicon') or ''
+    generator = meta.get('generator') or ''
+    charset = meta.get('charset') or 0
+    cumulative_layout_shift = meta.get('cumulative_layout_shift') or 0
+    render_blocking_scripts = meta.get('render_blocking_scripts_count', 0) or 0
+    render_blocking_stylesheets = meta.get('render_blocking_stylesheets_count', 0) or 0
+    
+    # Page-level fields
+    page_size = page.get('size', 0) or 0
+    encoded_size = page.get('encoded_size', 0) or 0
+    total_transfer_size = page.get('total_transfer_size', 0) or 0
+    fetch_time = page.get('fetch_time') or ''
+    click_depth = page.get('click_depth', 0) or 0
+    total_dom_size = page.get('total_dom_size', 0) or 0
+    
+    # Build comprehensive page data
+    return {
+        # Core identifiers
+        "url": page.get('url'),
+        "status_code": page.get('status_code'),
+        "onpage_score": page.get('onpage_score', 0),
+        "resource_type": page.get('resource_type', 'html'),
+        
+        # Meta object for frontend compatibility (frontend reads from p.meta.*)
+        "meta": {
+            "title": title,
+            "description": description,
+            "h1": h1_list,
+            "h2": h2_list,
+            "h3": h3_list,
+            "canonical": canonical,
+        },
+        
+        # Direct fields for backward compatibility
+        "title": title,
+        "title_length": len(title),
+        "description": description,
+        "description_length": len(description),
+        "canonical": canonical,
+        "meta_keywords": meta_keywords,
+        
+        # Headings (direct access)
+        "h1": h1_list,
+        "h1_count": len(h1_list),
+        "h2": h2_list,
+        "h2_count": len(h2_list),
+        "h3": h3_list,
+        "h3_count": len(h3_list),
+        
+        # Performance - Core Web Vitals
+        "load_time": load_time_ms,
+        "time_to_interactive": time_to_interactive,
+        "dom_complete": dom_complete,
+        "largest_contentful_paint": lcp,
+        "first_input_delay": fid,
+        "cumulative_layout_shift": cumulative_layout_shift,
+        "ttfb": ttfb,
+        "connection_time": connection_time,
+        "download_time": download_time,
+        "duration_time": duration_time,
+        
+        # Size metrics
+        "page_size": page_size,
+        "encoded_size": encoded_size,
+        "total_transfer_size": total_transfer_size,
+        "total_dom_size": total_dom_size,
+        
+        # Content metrics
+        "word_count": word_count,
+        "plain_text_size": plain_text_size,
+        "plain_text_rate": plain_text_rate,
+        
+        # Readability
+        "automated_readability_index": automated_readability,
+        "coleman_liau_index": coleman_liau,
+        "flesch_kincaid_index": flesch_kincaid,
+        "smog_index": smog,
+        
+        # Links
+        "internal_links_count": internal_links,
+        "external_links_count": external_links,
+        "inbound_links_count": inbound_links,
+        
+        # Resources
+        "images_count": images_count,
+        "images_size": images_size,
+        "scripts_count": scripts_count,
+        "scripts_size": scripts_size,
+        "stylesheets_count": stylesheets_count,
+        "stylesheets_size": stylesheets_size,
+        "render_blocking_scripts": render_blocking_scripts,
+        "render_blocking_stylesheets": render_blocking_stylesheets,
+        
+        # Technical
+        "is_https": checks.get('is_https', False) or str(page.get('url', '')).startswith('https'),
+        "is_http": checks.get('is_http', False),
+        "has_schema": checks.get('has_micromarkup', False),
+        "click_depth": click_depth,
+        "fetch_time": fetch_time,
+        "favicon": favicon,
+        "generator": generator,
+        "charset": charset,
+        
+        # Cache
+        "is_cacheable": cache_control.get('cachable', False),
+        "cache_ttl": cache_control.get('ttl', 0),
+        
+        # All DataForSEO checks (boolean flags)
+        "dfs_checks": checks,
+        
+        # Computed issues for quick filtering
+        "issues": {
+            "no_title": checks.get('no_title', not title),
+            "no_description": checks.get('no_description', not description),
+            "no_h1": checks.get('no_h1_tag', len(h1_list) == 0),
+            "multiple_h1": len(h1_list) > 1,
+            "title_too_long": checks.get('title_too_long', len(title) > 60),
+            "title_too_short": checks.get('title_too_short', 0 < len(title) < 30),
+            "description_too_long": len(description) > 160,
+            "no_canonical": not canonical,
+            "is_broken": checks.get('is_broken', False),
+            "is_redirect": checks.get('is_redirect', False),
+            "is_4xx": checks.get('is_4xx_code', False),
+            "is_5xx": checks.get('is_5xx_code', False),
+            "slow_load": checks.get('high_loading_time', load_time_ms > 3000),
+            "high_waiting_time": checks.get('high_waiting_time', False),
+            "low_content": checks.get('low_content_rate', word_count < 300),
+            "no_image_alt": checks.get('no_image_alt', False),
+            "no_image_title": checks.get('no_image_title', False),
+            "no_favicon": checks.get('no_favicon', False),
+            "duplicate_title": checks.get('duplicate_title_tag', False),
+            "duplicate_description": page.get('duplicate_description', False),
+            "duplicate_content": page.get('duplicate_content', False),
+            "has_render_blocking": checks.get('has_render_blocking_resources', False),
+            "deprecated_html_tags": checks.get('deprecated_html_tags', False),
+            "duplicate_meta_tags": checks.get('duplicate_meta_tags', False),
+            "no_doctype": checks.get('no_doctype', False),
+            "no_encoding": checks.get('no_encoding_meta_tag', False),
+            "https_to_http_links": checks.get('https_to_http_links', False),
+            "is_orphan_page": checks.get('is_orphan_page', False),
+            "redirect_chain": checks.get('redirect_chain', False),
+            "canonical_chain": checks.get('canonical_chain', False),
+            "has_links_to_redirects": checks.get('has_links_to_redirects', False),
+            "large_page_size": checks.get('large_page_size', False),
+            "low_readability": checks.get('low_readability_rate', False),
+            "has_misspelling": checks.get('has_misspelling', False),
+            "lorem_ipsum": checks.get('lorem_ipsum', False),
+            "seo_friendly_url": checks.get('seo_friendly_url', True),
+        }
+    }
 
 def get_lighthouse_audit(url: str, for_mobile: bool = True) -> Dict[str, Any]:
     """

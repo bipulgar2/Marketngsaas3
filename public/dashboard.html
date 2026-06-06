@@ -7108,6 +7108,38 @@
             }
         }
 
+        async function exportToSheets(auditId) {
+            const btn = document.getElementById(`btn-sheets-${auditId}`);
+            if (btn) {
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Exporting...`;
+                btn.disabled = true;
+                lucide.createIcons();
+            }
+
+            try {
+                const response = await fetch(`/api/audits/${auditId}/export-sheets`, { method: 'POST' });
+                const data = await response.json();
+
+                if (!response.ok) throw new Error(data.error || 'Failed to export');
+
+                // Update local model
+                activeAudit.sheets_url = data.spreadsheet_url;
+
+                // Re-render header to show View Sheets button
+                renderAuditDetail();
+
+                window.open(data.spreadsheet_url, '_blank');
+
+            } catch (error) {
+                alert('Export failed: ' + error.message);
+                if (btn) {
+                    btn.innerHTML = `<i data-lucide="table" class="w-4 h-4"></i> Export to Sheets`;
+                    btn.disabled = false;
+                    lucide.createIcons();
+                }
+            }
+        }
+
         function showAuditItemDetails(category, key) {
             // Intercept Site Architecture to show the full planner
             if (category === 'architecture' && key === 'site_architecture') {
@@ -7442,6 +7474,14 @@
                         </a>` :
                     `<button id="btn-slides-${activeAudit.id}" onclick="generateSlides('${activeAudit.id}')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ml-2 border border-gray-700">
                              <i data-lucide="presentation" class="w-4 h-4"></i> Generate Slides
+                         </button>`
+                }
+                    ${activeAudit.sheets_url ?
+                    `<a href="${activeAudit.sheets_url}" target="_blank" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ml-1">
+                            <i data-lucide="table" class="w-4 h-4"></i> View Sheets
+                        </a>` :
+                    `<button id="btn-sheets-${activeAudit.id}" onclick="exportToSheets('${activeAudit.id}')" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ml-1 border border-emerald-600">
+                             <i data-lucide="table" class="w-4 h-4"></i> Export to Sheets
                          </button>`
                 }
                 </div>`;
@@ -10512,6 +10552,10 @@
         let audit2Polls = {};
 
         async function loadAudit2Content() {
+            if (activeAudit) {
+                renderAuditDetail();
+                return;
+            }
             const contentArea = document.getElementById('contentArea');
             const pageActions = document.getElementById('pageActions');
             pageActions.innerHTML = '';

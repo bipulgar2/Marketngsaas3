@@ -2933,6 +2933,41 @@ def export_audit(audit_id):
         logger.error(f"Export failed: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/audits/<audit_id>/export-sheets', methods=['POST'])
+@login_required
+def export_audit_sheets(audit_id):
+    """Export audit results to a 12-tab Google Sheet."""
+    try:
+        client = supabase_admin or supabase
+        response = client.table('audits').select('*, campaigns(name, domain)').eq('id', audit_id).single().execute()
+        audit = response.data
+
+        if not audit or not audit.get('results'):
+            return jsonify({'error': 'Audit has no results to export'}), 400
+
+        results = audit['results']
+        # Ensure categorized data exists
+        if 'categorized' not in results and 'pages' in results:
+            results['categorized'] = categorize_audit_issues(results['pages'], results.get('summary'))
+
+        domain = (audit.get('campaigns') or {}).get('domain', 'site')
+
+        from execution.export_sheets import export_audit_to_sheets
+        result = export_audit_to_sheets(audit, domain)
+
+        if result.get('success'):
+            # Save sheets URL to audit record
+            client.table('audits').update({
+                'sheets_url': result['spreadsheet_url']
+            }).eq('id', audit_id).execute()
+
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"Export to Sheets failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/audits/list', methods=['GET'])
 @login_required
 def list_audits_for_dashboard():

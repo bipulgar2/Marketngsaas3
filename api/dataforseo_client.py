@@ -1425,6 +1425,82 @@ def get_organic_keywords(domain: str, limit: int = 1000, location_code: int = 28
         print(f"Error fetching organic keywords: {e}", file=sys.stderr)
         return []
 
+def get_live_serp_organic(domain: str, keywords: List[str], location_code: int = 2840) -> Dict[str, Any]:
+    """
+    Fetch true live SERP rankings for specific keywords using Google Organic SERP API.
+    Costs $0.002 per keyword check.
+    
+    Returns a dict mapping keyword -> { 'rank_absolute': int, 'url': str }
+    """
+    if not keywords:
+        return {}
+        
+    try:
+        endpoint = f"{DATAFORSEO_API_URL}/serp/google/organic/live/regular"
+        
+        # Max 100 keywords per POST request, chunk them
+        results = {}
+        chunk_size = 100
+        
+        for i in range(0, len(keywords), chunk_size):
+            chunk = keywords[i:i + chunk_size]
+            payload = []
+            
+            for kw in chunk:
+                payload.append({
+                    "keyword": kw,
+                    "location_code": location_code,
+                    "language_code": "en",
+                    "device": "desktop",
+                    "os": "windows"
+                })
+                
+            print(f"DEBUG: Fetching live SERP for {len(chunk)} keywords (domain: {domain})", file=sys.stderr)
+            
+            response = requests.post(
+                endpoint,
+                headers={**get_auth_header(), "Content-Type": "application/json"},
+                json=payload,
+                timeout=120
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                tasks = data.get('tasks', [])
+                
+                for task in tasks:
+                    kw = task.get('data', {}).get('keyword')
+                    if not kw:
+                        continue
+                        
+                    result_items = (task.get('result') or [{}])[0].get('items', [])
+                    
+                    # Find the first item matching the domain
+                    found = False
+                    for item in result_items:
+                        item_url = item.get('url', '')
+                        if item.get('type') == 'organic' and domain in item_url:
+                            results[kw] = {
+                                'rank_absolute': item.get('rank_absolute'),
+                                'url': item_url
+                            }
+                            found = True
+                            break
+                    
+                    if not found:
+                        results[kw] = {
+                            'rank_absolute': None,
+                            'url': None
+                        }
+            else:
+                print(f"DEBUG: SERP API returned status {response.status_code}", file=sys.stderr)
+                
+        return results
+        
+    except Exception as e:
+        print(f"Error fetching live SERP: {e}", file=sys.stderr)
+        return {}
+
 
 def get_referring_domains(domain: str, limit: int = 1000, order_by: list = ["rank,desc"], filters: list = None) -> List[Dict[str, Any]]:
     """Get referring domains. Default order is high rank first."""

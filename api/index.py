@@ -1061,12 +1061,15 @@ def manage_tracked_keywords(campaign_id):
         logger.error(f"Tracked Keywords Error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/campaigns/<campaign_id>/keywords/serp', methods=['GET'])
+@app.route('/api/campaigns/<campaign_id>/keywords/serp', methods=['POST'])
 @login_required
 def get_tracked_keywords_serp(campaign_id):
-    """Fetch exact live SERP rankings for tracked keywords using DataForSEO."""
+    """Fetch exact live SERP rankings for tracked keywords using Google Organic SERP API."""
     client = supabase_admin or supabase
     try:
+        data = request.json or {}
+        requested_keywords = data.get('keywords', [])
+        
         # Get domain and tracked keywords
         response = client.table('campaigns').select('domain, tracked_keywords').eq('id', campaign_id).single().execute()
         if not response.data:
@@ -1076,42 +1079,22 @@ def get_tracked_keywords_serp(campaign_id):
         tracked_keywords = response.data.get('tracked_keywords') or []
         
         if not domain or not tracked_keywords:
-            return jsonify({'serp': []})
+            return jsonify({'serp_map': {}})
             
-        from api.dataforseo_client import get_organic_keywords
+        # Use requested keywords if provided, else all tracked
+        keywords_to_fetch = requested_keywords if requested_keywords else tracked_keywords
         
-        # Batch requests if there are too many tracked keywords? 
-        # "keyword in [...]" supports up to 50 items usually. Let's chunk if > 50.
-        all_serp_data = []
+        # Ensure we only fetch keywords that are actually tracked to prevent abuse
+        keywords_to_fetch = [kw for kw in keywords_to_fetch if kw in tracked_keywords]
         
-        chunk_size = 50
-        for i in range(0, len(tracked_keywords), chunk_size):
-            chunk = tracked_keywords[i:i + chunk_size]
-            filters = ["keyword", "in", chunk]
+        if not keywords_to_fetch:
+            return jsonify({'serp_map': {}})
             
-            chunk_results = get_organic_keywords(domain, limit=1000, filters=[filters])
-            all_serp_data.extend(chunk_results)
-            
-        # Format results map: keyword -> { rank, url }
-        results_map = {}
-        for item in all_serp_data:
-            kw = item.get('keyword_data', {}).get('keyword')
-            rank = item.get('ranked_serp_element', {}).get('serp_item', {}).get('rank_absolute')
-            url = item.get('ranked_serp_element', {}).get('serp_item', {}).get('url')
-            if kw and rank:
-                results_map[kw] = {
-                    'rank_absolute': rank,
-                    'url': url
-                }
-                
-        # Also return search volume? Yes!
-        # DataForSEO Labs returns search volume in 'keyword_info'
-        for item in all_serp_data:
-            kw = item.get('keyword_data', {}).get('keyword')
-            sv = item.get('keyword_data', {}).get('keyword_info', {}).get('search_volume')
-            if kw and kw in results_map:
-                results_map[kw]['search_volume'] = sv
-
+        from api.dataforseo_client import get_live_serp_organic
+        
+        # Fetch live SERP using real Google Search scrape
+        results_map = get_live_serp_organic(domain, keywords_to_fetch)
+        
         return jsonify({'success': True, 'serp_map': results_map})
         
     except Exception as e:

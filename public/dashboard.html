@@ -1773,19 +1773,40 @@
 
         async function fetchLiveSerp() {
             if (!currentClient || !currentClient.id) return;
-            const cells = document.querySelectorAll('.live-serp-cell');
-            cells.forEach(cell => {
+            
+            // Get selected keywords
+            const checkboxes = document.querySelectorAll('.tracked-checkbox:checked');
+            const selectedKeywords = Array.from(checkboxes).map(cb => cb.value);
+            
+            // If some are selected, only update those cells. Otherwise, update all cells.
+            let cellsToUpdate = [];
+            if (selectedKeywords.length > 0) {
+                selectedKeywords.forEach(kw => {
+                    const cell = document.querySelector(`.live-serp-cell[data-keyword="${kw}"]`);
+                    if (cell) cellsToUpdate.push(cell);
+                });
+            } else {
+                cellsToUpdate = Array.from(document.querySelectorAll('.live-serp-cell'));
+            }
+            
+            if (cellsToUpdate.length === 0) return;
+            
+            cellsToUpdate.forEach(cell => {
                 cell.innerHTML = '<i data-lucide="loader-2" class="w-3 h-3 animate-spin inline-block"></i>';
             });
             lucide.createIcons();
 
             try {
-                const response = await fetch(`/api/campaigns/${currentClient.id}/keywords/serp`);
+                const response = await fetch(`/api/campaigns/${currentClient.id}/keywords/serp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keywords: selectedKeywords })
+                });
                 const data = await response.json();
                 if (data.error) throw new Error(data.error);
 
                 const serpMap = data.serp_map || {};
-                cells.forEach(cell => {
+                cellsToUpdate.forEach(cell => {
                     const kw = cell.getAttribute('data-keyword');
                     const serpData = serpMap[kw];
                     if (serpData && serpData.rank_absolute) {
@@ -1799,7 +1820,7 @@
                 });
             } catch (err) {
                 console.error(err);
-                cells.forEach(cell => {
+                cellsToUpdate.forEach(cell => {
                     cell.innerHTML = '<span class="text-red-500" title="Error fetching SERP">!</span>';
                 });
             }

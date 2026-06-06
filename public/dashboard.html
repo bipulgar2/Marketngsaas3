@@ -124,6 +124,104 @@
         .animate-fade-in {
             animation: fadeIn 0.15s ease-out forwards;
         }
+
+        /* ===== DATE RANGE PICKER STYLES ===== */
+        .dp-trigger-btn {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(17,24,39,0.8); border: 1px solid rgba(75,85,99,0.5);
+            color: #e5e7eb; font-size: 12px; font-weight: 500;
+            padding: 6px 12px; border-radius: 8px; cursor: pointer;
+            transition: all 0.2s; backdrop-filter: blur(8px);
+        }
+        .dp-trigger-btn:hover { border-color: rgba(139,92,246,0.5); background: rgba(17,24,39,1); }
+        
+        .dp-dropdown {
+            position: absolute; top: 100%; right: 0; margin-top: 8px;
+            background: #111827; border: 1px solid rgba(75,85,99,0.6);
+            border-radius: 14px; box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 40px rgba(139,92,246,0.05);
+            z-index: 1000; width: 540px; overflow: hidden;
+            animation: dpSlideIn 0.2s ease-out;
+        }
+        @keyframes dpSlideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .dp-header { padding: 12px 16px; border-bottom: 1px solid rgba(75,85,99,0.3); }
+        .dp-presets { display: flex; gap: 6px; }
+        .dp-preset-btn {
+            padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+            background: rgba(31,41,55,0.8); color: #9ca3af; border: 1px solid transparent;
+            cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px;
+        }
+        .dp-preset-btn:hover { color: #e5e7eb; background: rgba(55,65,81,0.8); }
+        .dp-preset-active {
+            background: rgba(139,92,246,0.15) !important; color: #a78bfa !important;
+            border-color: rgba(139,92,246,0.4) !important;
+        }
+        
+        .dp-nav {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 16px; border-bottom: 1px solid rgba(75,85,99,0.2);
+        }
+        .dp-nav-btn {
+            background: none; border: none; color: #6b7280; cursor: pointer;
+            padding: 4px; border-radius: 6px; transition: all 0.15s;
+        }
+        .dp-nav-btn:hover { color: #e5e7eb; background: rgba(55,65,81,0.5); }
+        .dp-nav-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+        
+        .dp-calendar-grid { display: flex; gap: 8px; padding: 12px 16px; }
+        .dp-month { flex: 1; }
+        .dp-month-title { font-size: 12px; font-weight: 700; color: #e5e7eb; text-align: center; margin-bottom: 8px; }
+        .dp-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; margin-bottom: 4px; }
+        .dp-weekdays span { font-size: 10px; color: #4b5563; text-align: center; font-weight: 600; padding: 4px 0; }
+        .dp-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+        .dp-day {
+            font-size: 12px; text-align: center; padding: 6px 2px; color: #d1d5db;
+            cursor: pointer; border-radius: 6px; transition: all 0.1s; font-weight: 500;
+        }
+        .dp-day:hover { background: rgba(139,92,246,0.15); color: #fff; }
+        .dp-selected { background: rgba(139,92,246,0.3) !important; color: #fff !important; font-weight: 700; border-radius: 6px; }
+        .dp-in-range { background: rgba(139,92,246,0.08); color: #c4b5fd; border-radius: 0; }
+        .dp-disabled { color: #374151; cursor: default; pointer-events: none; }
+        .dp-empty { pointer-events: none; }
+        
+        .dp-footer {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; border-top: 1px solid rgba(75,85,99,0.3);
+            background: rgba(17,24,39,0.5);
+        }
+        .dp-selected-range { display: flex; align-items: center; gap: 8px; }
+        .dp-range-label {
+            font-size: 12px; color: #9ca3af; background: rgba(31,41,55,0.8);
+            padding: 4px 10px; border-radius: 6px; min-width: 100px; text-align: center;
+        }
+        .dp-range-arrow { color: #4b5563; font-size: 12px; }
+        .dp-actions { display: flex; gap: 8px; }
+        .dp-cancel-btn {
+            padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 500;
+            background: none; border: 1px solid rgba(75,85,99,0.5); color: #9ca3af;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .dp-cancel-btn:hover { border-color: #6b7280; color: #e5e7eb; }
+        .dp-apply-btn {
+            padding: 6px 16px; border-radius: 6px; font-size: 12px; font-weight: 600;
+            background: rgba(139,92,246,0.8); border: none; color: #fff;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .dp-apply-btn:hover { background: rgba(139,92,246,1); }
+        .dp-apply-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* Comparison bar */
+        .dp-comparison-bar {
+            display: flex; align-items: center; gap: 12px;
+            padding: 8px 14px; border-radius: 10px;
+            background: rgba(17,24,39,0.6); border: 1px solid rgba(75,85,99,0.3);
+            font-size: 12px;
+        }
+        .dp-comparison-period { display: flex; align-items: center; gap: 6px; }
+        .dp-period-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .dp-period-label { color: #6b7280; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .dp-period-dates { color: #d1d5db; font-weight: 500; }
+        .dp-comparison-vs { color: #4b5563; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
     </style>
 </head>
 
@@ -1096,6 +1194,170 @@
         let _analyticsTemplate = localStorage.getItem('analytics_template') || 'gsc';
         let _analyticsDuration = localStorage.getItem('analytics_duration') || '1m';
         let _analyticsView = 'overview';
+        let _analyticsCustomStart = null;  // YYYY-MM-DD when custom range used
+        let _analyticsCustomEnd = null;
+        let _datePickerOpen = false;
+        let _datePickerSelecting = null; // 'start' or 'end'
+        let _datePickerTempStart = null;
+        let _datePickerTempEnd = null;
+        let _datePickerMonth = new Date().getMonth();
+        let _datePickerYear = new Date().getFullYear();
+
+        // =====================================================================
+        // DATE RANGE PICKER — Calendar UI with presets & comparison
+        // =====================================================================
+        function getAnalyticsDateLabel() {
+            if (_analyticsCustomStart && _analyticsCustomEnd) {
+                return formatDateShort(_analyticsCustomStart) + ' – ' + formatDateShort(_analyticsCustomEnd);
+            }
+            const labels = { '7d': 'Last 7 days', '14d': 'Last 14 days', '1m': 'Last 30 days', '3m': 'Last 3 months', '6m': 'Last 6 months', '12m': 'Last 12 months', 'max': 'Max (16 months)' };
+            return labels[_analyticsDuration] || 'Last 30 days';
+        }
+        function getComparisonLabel() {
+            const meta = _analyticsData && _analyticsData.meta;
+            if (meta) {
+                return formatDateShort(meta.prev_start) + ' – ' + formatDateShort(meta.prev_end);
+            }
+            return 'Previous period';
+        }
+        function formatDateShort(isoStr) {
+            if (!isoStr) return '';
+            const d = new Date(isoStr + 'T00:00:00');
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        function toggleDatePicker() {
+            _datePickerOpen = !_datePickerOpen;
+            const picker = document.getElementById('analyticsDatePicker');
+            if (picker) {
+                picker.style.display = _datePickerOpen ? 'block' : 'none';
+            }
+            if (_datePickerOpen) {
+                _datePickerTempStart = _analyticsCustomStart;
+                _datePickerTempEnd = _analyticsCustomEnd;
+                _datePickerSelecting = 'start';
+                renderDatePickerCalendar();
+            }
+        }
+        function closeDatePicker() {
+            _datePickerOpen = false;
+            const picker = document.getElementById('analyticsDatePicker');
+            if (picker) picker.style.display = 'none';
+        }
+
+        function applyDatePreset(presetKey) {
+            _analyticsDuration = presetKey;
+            _analyticsCustomStart = null;
+            _analyticsCustomEnd = null;
+            localStorage.setItem('analytics_duration', presetKey);
+            closeDatePicker();
+            loadAnalyticsDashboard();
+        }
+
+        function applyCustomDateRange() {
+            if (_datePickerTempStart && _datePickerTempEnd) {
+                // Ensure start <= end
+                if (_datePickerTempStart > _datePickerTempEnd) {
+                    [_datePickerTempStart, _datePickerTempEnd] = [_datePickerTempEnd, _datePickerTempStart];
+                }
+                _analyticsCustomStart = _datePickerTempStart;
+                _analyticsCustomEnd = _datePickerTempEnd;
+                _analyticsDuration = 'custom';
+                closeDatePicker();
+                loadAnalyticsDashboard();
+            }
+        }
+
+        function renderDatePickerCalendar() {
+            const cal = document.getElementById('datePickerCalendar');
+            if (!cal) return;
+
+            const month1 = _datePickerMonth;
+            const year1 = _datePickerYear;
+            const month2 = month1 === 11 ? 0 : month1 + 1;
+            const year2 = month1 === 11 ? year1 + 1 : year1;
+
+            cal.innerHTML = buildMonthGrid(year1, month1) + buildMonthGrid(year2, month2);
+        }
+
+        function datePickerNav(dir) {
+            _datePickerMonth += dir;
+            if (_datePickerMonth < 0) { _datePickerMonth = 11; _datePickerYear--; }
+            if (_datePickerMonth > 11) { _datePickerMonth = 0; _datePickerYear++; }
+            renderDatePickerCalendar();
+        }
+
+        function buildMonthGrid(year, month) {
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let html = '<div class="dp-month">';
+            html += '<div class="dp-month-title">' + monthNames[month] + ' ' + year + '</div>';
+            html += '<div class="dp-weekdays"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>';
+            html += '<div class="dp-days">';
+
+            // Empty cells for days before month start
+            for (let i = 0; i < firstDay; i++) {
+                html += '<span class="dp-empty"></span>';
+            }
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+                const dateObj = new Date(year, month, d);
+                const isFuture = dateObj > today;
+                const isStart = dateStr === (_datePickerTempStart || _analyticsCustomStart);
+                const isEnd = dateStr === (_datePickerTempEnd || _analyticsCustomEnd);
+                const inRange = _datePickerTempStart && _datePickerTempEnd && dateStr > _datePickerTempStart && dateStr < _datePickerTempEnd;
+
+                let cls = 'dp-day';
+                if (isFuture) cls += ' dp-disabled';
+                else if (isStart || isEnd) cls += ' dp-selected';
+                else if (inRange) cls += ' dp-in-range';
+
+                html += '<span class="' + cls + '" ' + (isFuture ? '' : 'onclick="pickDate(\'' + dateStr + '\')"') + '>' + d + '</span>';
+            }
+
+            html += '</div></div>';
+            return html;
+        }
+
+        function pickDate(dateStr) {
+            if (!_datePickerTempStart || (_datePickerTempStart && _datePickerTempEnd)) {
+                // Start new selection
+                _datePickerTempStart = dateStr;
+                _datePickerTempEnd = null;
+            } else {
+                // Set end date
+                if (dateStr < _datePickerTempStart) {
+                    _datePickerTempEnd = _datePickerTempStart;
+                    _datePickerTempStart = dateStr;
+                } else {
+                    _datePickerTempEnd = dateStr;
+                }
+            }
+            renderDatePickerCalendar();
+            // Update the input displays
+            const startEl = document.getElementById('dpStartDate');
+            const endEl = document.getElementById('dpEndDate');
+            if (startEl) startEl.textContent = _datePickerTempStart ? formatDateShort(_datePickerTempStart) : 'Start date';
+            if (endEl) endEl.textContent = _datePickerTempEnd ? formatDateShort(_datePickerTempEnd) : 'End date';
+            // Enable apply button
+            const applyBtn = document.getElementById('dpApplyBtn');
+            if (applyBtn) applyBtn.disabled = !(_datePickerTempStart && _datePickerTempEnd);
+        }
+
+        // Close date picker when clicking outside
+        document.addEventListener('mousedown', function(e) {
+            if (!_datePickerOpen) return;
+            const picker = document.getElementById('analyticsDatePicker');
+            const trigger = document.getElementById('datePickerTrigger');
+            if (picker && !picker.contains(e.target) && trigger && !trigger.contains(e.target)) {
+                closeDatePicker();
+            }
+        });
 
         // =====================================================================
         // PREMIUM ANALYTICS DASHBOARD — HELPERS
@@ -1311,10 +1573,15 @@
             lucide.createIcons();
 
             try {
+                const metricsBody = { gsc_property: gscProp, ga4_property: ga4Prop, duration: _analyticsDuration };
+                if (_analyticsCustomStart && _analyticsCustomEnd) {
+                    metricsBody.start_date = _analyticsCustomStart;
+                    metricsBody.end_date = _analyticsCustomEnd;
+                }
                 const response = await fetch('/api/google/metrics', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ gsc_property: gscProp, ga4_property: ga4Prop, duration: _analyticsDuration })
+                    body: JSON.stringify(metricsBody)
                 });
 
                 const data = await response.json();
@@ -1345,6 +1612,8 @@
         }
         function switchAnalyticsDuration(duration) {
             _analyticsDuration = duration;
+            _analyticsCustomStart = null;
+            _analyticsCustomEnd = null;
             localStorage.setItem('analytics_duration', duration);
             loadAnalyticsDashboard(); // Need to fetch new date range data
         }
@@ -1781,7 +2050,10 @@
             const ac = cfg.accent;
             const acRgb = cfg.accentRgb;
 
-            // Template & Duration selector
+            // Template & Duration selector with calendar date picker
+            const activePreset = !_analyticsCustomStart ? _analyticsDuration : null;
+            const presetBtn = (key, label) => `<button onclick="applyDatePreset('${key}')" class="dp-preset-btn ${activePreset === key ? 'dp-preset-active' : ''}">${label}</button>`;
+            
             const tplSelector = `
                 <div class="flex flex-wrap items-center justify-between mb-4">
                     <div class="flex items-center gap-2">
@@ -1790,15 +2062,57 @@
                         <button onclick="switchAnalyticsTemplate('ga4')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='ga4' ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="bar-chart-3" class="w-3 h-3 inline mr-1"></i>GA4</button>
                         <button onclick="switchAnalyticsTemplate('ecom')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='ecom' ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="shopping-cart" class="w-3 h-3 inline mr-1"></i>E-Commerce</button>
                     </div>
-                    <div class="flex items-center gap-2 mt-2 sm:mt-0">
-                        <span class="text-[10px] text-gray-600 uppercase tracking-widest">Duration</span>
-                        <select onchange="switchAnalyticsDuration(this.value)" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
-                            <option value="1m" ${_analyticsDuration === '1m' ? 'selected' : ''}>1 Month</option>
-                            <option value="3m" ${_analyticsDuration === '3m' ? 'selected' : ''}>3 Months</option>
-                            <option value="6m" ${_analyticsDuration === '6m' ? 'selected' : ''}>6 Months</option>
-                            <option value="12m" ${_analyticsDuration === '12m' ? 'selected' : ''}>12 Months</option>
-                            <option value="max" ${_analyticsDuration === 'max' ? 'selected' : ''}>Max (16 Months)</option>
-                        </select>
+                    <div class="relative flex items-center gap-3 mt-2 sm:mt-0">
+                        <!-- Date Range Button -->
+                        <button onclick="toggleDatePicker()" class="dp-trigger-btn" id="datePickerTrigger">
+                            <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                            <span>${getAnalyticsDateLabel()}</span>
+                            <i data-lucide="chevron-down" class="w-3 h-3 opacity-50"></i>
+                        </button>
+                        <!-- Date Picker Dropdown -->
+                        <div id="analyticsDatePicker" class="dp-dropdown" style="display:none">
+                            <div class="dp-header">
+                                <div class="dp-presets">
+                                    ${presetBtn('7d', '7D')}
+                                    ${presetBtn('1m', '1M')}
+                                    ${presetBtn('3m', '3M')}
+                                    ${presetBtn('6m', '6M')}
+                                    ${presetBtn('12m', '1Y')}
+                                    ${presetBtn('max', 'Max')}
+                                </div>
+                            </div>
+                            <div class="dp-nav">
+                                <button onclick="datePickerNav(-1)" class="dp-nav-btn"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                                <span class="dp-nav-label">Select date range</span>
+                                <button onclick="datePickerNav(1)" class="dp-nav-btn"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                            </div>
+                            <div id="datePickerCalendar" class="dp-calendar-grid"></div>
+                            <div class="dp-footer">
+                                <div class="dp-selected-range">
+                                    <span id="dpStartDate" class="dp-range-label">${_datePickerTempStart ? formatDateShort(_datePickerTempStart) : 'Start date'}</span>
+                                    <span class="dp-range-arrow">→</span>
+                                    <span id="dpEndDate" class="dp-range-label">${_datePickerTempEnd ? formatDateShort(_datePickerTempEnd) : 'End date'}</span>
+                                </div>
+                                <div class="dp-actions">
+                                    <button onclick="closeDatePicker()" class="dp-cancel-btn">Cancel</button>
+                                    <button id="dpApplyBtn" onclick="applyCustomDateRange()" class="dp-apply-btn" ${!(_datePickerTempStart && _datePickerTempEnd) ? 'disabled' : ''}>Apply</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Comparison Period Bar -->
+                <div class="dp-comparison-bar mb-4">
+                    <div class="dp-comparison-period dp-current-period">
+                        <span class="dp-period-dot" style="background:${ac}"></span>
+                        <span class="dp-period-label">Current:</span>
+                        <span class="dp-period-dates">${data.meta ? formatDateShort(data.meta.current_start) + ' – ' + formatDateShort(data.meta.current_end) : getAnalyticsDateLabel()}</span>
+                    </div>
+                    <div class="dp-comparison-vs">vs</div>
+                    <div class="dp-comparison-period dp-prev-period">
+                        <span class="dp-period-dot" style="background:#6b7280"></span>
+                        <span class="dp-period-label">Previous:</span>
+                        <span class="dp-period-dates">${getComparisonLabel()}</span>
                     </div>
                 </div>`;
             
@@ -2088,7 +2402,7 @@
                                 <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${ga4Prop?ac:'#4b5563'}"></span>GA4</span>
                                 <div class="h-3 w-[1px] bg-gray-700/50"></div>
                                 <div class="flex items-center gap-1 text-[10px] text-gray-500 tracking-wider uppercase">
-                                    <span>${data.meta && data.meta.duration_days ? 'Last ' + data.meta.duration_days + ' days vs previous' : 'Last 30 days vs previous'}</span>
+                                    <span>${data.meta ? formatDateShort(data.meta.current_start) + ' – ' + formatDateShort(data.meta.current_end) : getAnalyticsDateLabel()}</span>
                                 </div>
                             </div>
                         </div>

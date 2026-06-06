@@ -8943,10 +8943,12 @@ def recommend_links():
 @app.route('/api/google/metrics', methods=['POST'])
 @login_required
 def google_metrics():
-    """Fetch GSC/GA4 metrics for a property over a given duration."""
+    """Fetch GSC/GA4 metrics for a property over a given duration or custom date range."""
     data = request.json
     gsc_property = data.get('gsc_property')
     duration = data.get('duration', '3m')
+    custom_start = data.get('start_date')  # ISO format YYYY-MM-DD
+    custom_end = data.get('end_date')      # ISO format YYYY-MM-DD
 
     if not gsc_property:
         return jsonify({'error': 'gsc_property is required'}), 400
@@ -8955,7 +8957,7 @@ def google_metrics():
     org_id = user.get('organization_id')
     client = supabase_admin or supabase
 
-    duration_map = {'7d': 7, '14d': 14, '1m': 30, '3m': 90, '6m': 180, '1y': 365}
+    duration_map = {'7d': 7, '14d': 14, '1m': 30, '3m': 90, '6m': 180, '12m': 365, '1y': 365, 'max': 485}
     duration_days = duration_map.get(duration, 90)
 
     try:
@@ -8985,10 +8987,23 @@ def google_metrics():
         gsc_service = google_build('searchconsole', 'v1', credentials=creds)
 
         today = date.today()
-        current_start = (today - timedelta(days=duration_days)).isoformat()
-        current_end = today.isoformat()
-        prev_start = (today - timedelta(days=duration_days * 2)).isoformat()
-        prev_end = (today - timedelta(days=duration_days)).isoformat()
+        
+        # Support custom date range from calendar picker
+        if custom_start and custom_end:
+            current_start = custom_start
+            current_end = custom_end
+            # Calculate comparison period: same-length period immediately before
+            start_dt = date.fromisoformat(custom_start)
+            end_dt = date.fromisoformat(custom_end)
+            range_days = (end_dt - start_dt).days
+            prev_end = (start_dt - timedelta(days=1)).isoformat()
+            prev_start = (start_dt - timedelta(days=range_days + 1)).isoformat()
+            duration_days = range_days
+        else:
+            current_start = (today - timedelta(days=duration_days)).isoformat()
+            current_end = today.isoformat()
+            prev_start = (today - timedelta(days=duration_days * 2)).isoformat()
+            prev_end = (today - timedelta(days=duration_days)).isoformat()
 
         def _gsc_query(start, end, row_limit=5000):
             body = {
@@ -9026,6 +9041,15 @@ def google_metrics():
                 'prevQueries': prev_queries,
                 'total_clicks': sum(r['clicks'] for r in current_rows),
                 'total_impressions': sum(r['impressions'] for r in current_rows)
+            },
+            'meta': {
+                'current_start': current_start,
+                'current_end': current_end,
+                'prev_start': prev_start,
+                'prev_end': prev_end,
+                'duration_days': duration_days,
+                'duration_label': f"{current_start} to {current_end}",
+                'comparison_label': f"{prev_start} to {prev_end}"
             }
         })
     except Exception as e:

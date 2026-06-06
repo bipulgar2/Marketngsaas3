@@ -1061,6 +1061,63 @@ def manage_tracked_keywords(campaign_id):
         logger.error(f"Tracked Keywords Error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/campaigns/<campaign_id>/keywords/serp', methods=['GET'])
+@login_required
+def get_tracked_keywords_serp(campaign_id):
+    """Fetch exact live SERP rankings for tracked keywords using DataForSEO."""
+    client = supabase_admin or supabase
+    try:
+        # Get domain and tracked keywords
+        response = client.table('campaigns').select('domain, tracked_keywords').eq('id', campaign_id).single().execute()
+        if not response.data:
+            return jsonify({'error': 'Campaign not found'}), 404
+            
+        domain = response.data.get('domain')
+        tracked_keywords = response.data.get('tracked_keywords') or []
+        
+        if not domain or not tracked_keywords:
+            return jsonify({'serp': []})
+            
+        from api.dataforseo_client import get_organic_keywords
+        
+        # Batch requests if there are too many tracked keywords? 
+        # "keyword in [...]" supports up to 50 items usually. Let's chunk if > 50.
+        all_serp_data = []
+        
+        chunk_size = 50
+        for i in range(0, len(tracked_keywords), chunk_size):
+            chunk = tracked_keywords[i:i + chunk_size]
+            filters = ["keyword", "in", chunk]
+            
+            chunk_results = get_organic_keywords(domain, limit=1000, filters=[filters])
+            all_serp_data.extend(chunk_results)
+            
+        # Format results map: keyword -> { rank, url }
+        results_map = {}
+        for item in all_serp_data:
+            kw = item.get('keyword_data', {}).get('keyword')
+            rank = item.get('ranked_serp_element', {}).get('serp_item', {}).get('rank_absolute')
+            url = item.get('ranked_serp_element', {}).get('serp_item', {}).get('url')
+            if kw and rank:
+                results_map[kw] = {
+                    'rank_absolute': rank,
+                    'url': url
+                }
+                
+        # Also return search volume? Yes!
+        # DataForSEO Labs returns search volume in 'keyword_info'
+        for item in all_serp_data:
+            kw = item.get('keyword_data', {}).get('keyword')
+            sv = item.get('keyword_data', {}).get('keyword_info', {}).get('search_volume')
+            if kw and kw in results_map:
+                results_map[kw]['search_volume'] = sv
+
+        return jsonify({'success': True, 'serp_map': results_map})
+        
+    except Exception as e:
+        logger.error(f"Tracked Keywords SERP Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # =============================================================================
 # BRAND CONFIG ROUTES
 # =============================================================================

@@ -1395,12 +1395,11 @@ def get_organic_keywords(domain: str, limit: int = 1000, location_code: int = 28
             "include_serp_info": True
         }
         if filters:
-            # We will handle filters in memory, so log it, but omit from API payload to prevent syntax errors
-            print(f"DEBUG: Ignoring API filters {filters} in favor of in-memory filtering", file=sys.stderr)
+            payload_item["filters"] = filters
             
         payload = [payload_item]
         
-        print(f"DEBUG: Fetching organic keywords for {domain} (location={location_code}, limit={limit})", file=sys.stderr)
+        print(f"DEBUG: Fetching organic keywords for {domain} (location={location_code}, limit={limit}, filters={filters})", file=sys.stderr)
         
         response = requests.post(
             endpoint,

@@ -374,20 +374,37 @@ def get_google_metrics():
         # =====================================================================
         from datetime import datetime, timedelta
         
-        duration_days_map = {
-            '1m': 30,
-            '3m': 90,
-            '6m': 180,
-            '12m': 365,
-            'max': 480 # ~16 months for GSC max limit
-        }
-        days = duration_days_map.get(duration, 30)
+        custom_start = data.get('start_date')
+        custom_end = data.get('end_date')
         
         today = datetime.now().date()
-        current_end = today.isoformat()
-        current_start = (today - timedelta(days=days-1)).isoformat()
-        prev_end = (today - timedelta(days=days)).isoformat()
-        prev_start = (today - timedelta(days=(days*2)-1)).isoformat()
+        
+        if custom_start and custom_end:
+            current_start = custom_start
+            current_end = custom_end
+            start_dt = datetime.fromisoformat(custom_start).date()
+            end_dt = datetime.fromisoformat(custom_end).date()
+            range_days = (end_dt - start_dt).days
+            # Comparison: immediately before
+            prev_end = (start_dt - timedelta(days=1)).isoformat()
+            prev_start = (start_dt - timedelta(days=range_days + 1)).isoformat()
+            days = range_days
+        else:
+            duration_days_map = {
+                '7d': 7,
+                '14d': 14,
+                '1m': 30,
+                '3m': 90,
+                '6m': 180,
+                '12m': 365,
+                'max': 480 # ~16 months for GSC max limit
+            }
+            days = duration_days_map.get(duration, 30)
+            
+            current_end = today.isoformat()
+            current_start = (today - timedelta(days=days-1)).isoformat()
+            prev_end = (today - timedelta(days=days)).isoformat()
+            prev_start = (today - timedelta(days=(days*2)-1)).isoformat()
         
         results['meta'] = {
             'duration_days': days,

@@ -8950,6 +8950,8 @@ def google_metrics():
     custom_start = data.get('start_date')  # ISO format YYYY-MM-DD
     custom_end = data.get('end_date')      # ISO format YYYY-MM-DD
 
+    print(f"📊 google_metrics called: duration={duration}, custom_start={custom_start}, custom_end={custom_end}", file=sys.stderr)
+
     if not gsc_property:
         return jsonify({'error': 'gsc_property is required'}), 400
 
@@ -9004,6 +9006,8 @@ def google_metrics():
             current_end = today.isoformat()
             prev_start = (today - timedelta(days=duration_days * 2)).isoformat()
             prev_end = (today - timedelta(days=duration_days)).isoformat()
+            
+        print(f"📊 Calculated Dates -> Current: {current_start} to {current_end} | Prev: {prev_start} to {prev_end}", file=sys.stderr)
 
         def _gsc_query(start, end, row_limit=5000):
             body = {

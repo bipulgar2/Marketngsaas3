@@ -1426,14 +1426,22 @@
 
             try {
                 // Fetch new metrics data for the max duration (or current duration)
-                const response = await fetch('/api/google/metrics', {
+                const gscPromise = fetch('/api/google/metrics', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ gsc_property: gscProp, ga4_property: null, duration: _analyticsDuration })
                 });
-
-                const data = await response.json();
+                
+                // Also fetch SERP history
+                const historyPromise = fetch(`/api/campaigns/${currentClient.id}/keywords/serp/history`);
+                
+                const [gscRes, historyRes] = await Promise.all([gscPromise, historyPromise]);
+                const data = await gscRes.json();
+                const historyData = await historyRes.json();
+                
                 if (data.error) throw new Error(data.error);
+                
+                const serpHistoryMap = historyData.serp_map || {};
 
                 const queries = (data.gsc && (data.gsc.allQueries || data.gsc.queries)) || [];
                 const prevQueries = (data.gsc && data.gsc.prevQueries) || [];
@@ -1452,6 +1460,9 @@
                         trackedQueries.push({ query: tq, clicks: 0, impressions: 0, ctr: 0, position: 0 });
                     }
                 });
+                
+                // Store the global history map so fetchLiveSerp can update it
+                window._serpHistoryMap = serpHistoryMap;
                 
                 const ac = '#10b981';
                 const acRgb = '16,185,129';
@@ -1515,13 +1526,32 @@
                                     const pCtr = pq ? pq.ctr : 0;
                                     const pPos = pq ? pq.position : 0;
                                     
+                                    const h = serpHistoryMap[q.query];
+                                    let serpCellHtml = '<div class="live-serp-cell text-gray-500 text-xs font-mono" data-keyword="'+q.query+'">-</div>';
+                                    if (h) {
+                                        if (h.rank_absolute) {
+                                            serpCellHtml = `<div class="live-serp-cell" data-keyword="${q.query}">`;
+                                            serpCellHtml += `<span class="text-white font-medium">#${h.rank_absolute}</span>`;
+                                            if (h.prev_rank) {
+                                                const diff = h.prev_rank - h.rank_absolute; // positive if rank improved
+                                                if (diff > 0) serpCellHtml += `<span class="text-emerald-400 text-[10px] ml-1">▲ ${diff}</span>`;
+                                                else if (diff < 0) serpCellHtml += `<span class="text-red-400 text-[10px] ml-1">▼ ${Math.abs(diff)}</span>`;
+                                            }
+                                            if (h.fetched_at) {
+                                                const d = new Date(h.fetched_at);
+                                                serpCellHtml += `<div class="text-[9px] text-gray-500 mt-0.5" title="${d.toLocaleString()}">Fetched: ${d.toLocaleDateString(undefined, {month:'short', day:'numeric'})}</div>`;
+                                            }
+                                            serpCellHtml += `</div>`;
+                                        } else {
+                                            serpCellHtml = `<div class="live-serp-cell" data-keyword="${q.query}"><span class="text-gray-600 text-xs">>100</span></div>`;
+                                        }
+                                    }
+                                    
                                     return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02] group">
                                         <td class="py-3 px-4"><input type="checkbox" value="${q.query}" onchange="updateTrackedSelection()" class="tracked-checkbox rounded bg-gray-900 border-gray-600 outline-none ring-0"></td>
                                         <td class="py-3 px-4 text-center">${rankStatus}</td>
                                         <td class="py-3 px-4 text-white font-medium">${q.query}</td>
-                                        <td class="py-3 px-4 text-right">
-                                            <div class="live-serp-cell text-gray-500 text-xs font-mono" data-keyword="${q.query}">-</div>
-                                        </td>
+                                        <td class="py-3 px-4 text-right">${serpCellHtml}</td>
                                         <td class="py-3 px-4 text-right">
                                             <div class="font-semibold" style="color:${ac}">${fmtNum(q.clicks)}</div>
                                             <div>${changeBadgeHtml(q.clicks, pClicks)}</div>
@@ -1805,14 +1835,34 @@
                 const data = await response.json();
                 if (data.error) throw new Error(data.error);
 
-                const serpMap = data.serp_map || {};
+                // Now fetch the updated history to get movement
+                const historyRes = await fetch(`/api/campaigns/${currentClient.id}/keywords/serp/history`);
+                const historyData = await historyRes.json();
+                const serpHistoryMap = historyData.serp_map || {};
+                
+                // Update global map
+                if (window._serpHistoryMap) {
+                    Object.assign(window._serpHistoryMap, serpHistoryMap);
+                }
+
                 cellsToUpdate.forEach(cell => {
                     const kw = cell.getAttribute('data-keyword');
-                    const serpData = serpMap[kw];
-                    if (serpData && serpData.rank_absolute) {
-                        cell.innerHTML = `<span class="text-white">#${serpData.rank_absolute}</span>`;
-                        if (serpData.search_volume !== undefined && serpData.search_volume !== null) {
-                            cell.innerHTML += `<div class="text-[9px] text-gray-500 mt-0.5">Vol: ${fmtNum(serpData.search_volume)}</div>`;
+                    const h = serpHistoryMap[kw];
+                    if (h) {
+                        if (h.rank_absolute) {
+                            let serpCellHtml = `<span class="text-white font-medium">#${h.rank_absolute}</span>`;
+                            if (h.prev_rank) {
+                                const diff = h.prev_rank - h.rank_absolute;
+                                if (diff > 0) serpCellHtml += `<span class="text-emerald-400 text-[10px] ml-1">▲ ${diff}</span>`;
+                                else if (diff < 0) serpCellHtml += `<span class="text-red-400 text-[10px] ml-1">▼ ${Math.abs(diff)}</span>`;
+                            }
+                            if (h.fetched_at) {
+                                const d = new Date(h.fetched_at);
+                                serpCellHtml += `<div class="text-[9px] text-gray-500 mt-0.5" title="${d.toLocaleString()}">Fetched: ${d.toLocaleDateString(undefined, {month:'short', day:'numeric'})}</div>`;
+                            }
+                            cell.innerHTML = serpCellHtml;
+                        } else {
+                            cell.innerHTML = '<span class="text-gray-600 text-xs">>100</span>';
                         }
                     } else {
                         cell.innerHTML = '<span class="text-gray-600 text-xs">>100</span>';

@@ -1095,10 +1095,81 @@ def get_tracked_keywords_serp(campaign_id):
         # Fetch live SERP using real Google Search scrape
         results_map = get_live_serp_organic(domain, keywords_to_fetch)
         
+        # Save to Supabase serp_history
+        if results_map:
+            try:
+                records = []
+                for kw, data in results_map.items():
+                    # Only save if we got a rank, or if it explicitly means >100 (rank_absolute=None)
+                    # We will save rank_absolute=None as it is valid for "not found in top 100"
+                    records.append({
+                        'campaign_id': campaign_id,
+                        'keyword': kw,
+                        'rank_absolute': data.get('rank_absolute'),
+                        'url': data.get('url'),
+                        'search_volume': data.get('search_volume')
+                    })
+                
+                if records:
+                    client.table('serp_history').insert(records).execute()
+            except Exception as db_err:
+                logger.error(f"Failed to save SERP history to DB: {db_err}")
+                # We do not fail the request if DB save fails, just return live data
+        
         return jsonify({'success': True, 'serp_map': results_map})
         
     except Exception as e:
         logger.error(f"Tracked Keywords SERP Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/campaigns/<campaign_id>/keywords/serp/history', methods=['GET'])
+@login_required
+def get_tracked_keywords_serp_history(campaign_id):
+    """Fetch the most recently saved SERP history for tracked keywords."""
+    client = supabase_admin or supabase
+    try:
+        # Get all history for this campaign, ordered by fetched_at desc
+        response = client.table('serp_history').select('*').eq('campaign_id', campaign_id).order('fetched_at', desc=True).execute()
+        
+        if not response.data:
+            return jsonify({'serp_map': {}})
+            
+        # We want the LATEST check for each keyword
+        # and optionally the PREVIOUS check for each keyword to calculate movement
+        
+        history_by_kw = {}
+        for row in response.data:
+            kw = row.get('keyword')
+            if not kw: continue
+            
+            if kw not in history_by_kw:
+                history_by_kw[kw] = []
+                
+            history_by_kw[kw].append(row)
+            
+        results_map = {}
+        for kw, records in history_by_kw.items():
+            if not records: continue
+            
+            latest = records[0]
+            prev = records[1] if len(records) > 1 else None
+            
+            # If they checked it multiple times today, we might want a previous record from a different day.
+            # For simplicity, just use the immediate previous record.
+            
+            results_map[kw] = {
+                'rank_absolute': latest.get('rank_absolute'),
+                'url': latest.get('url'),
+                'search_volume': latest.get('search_volume'),
+                'fetched_at': latest.get('fetched_at'),
+                'prev_rank': prev.get('rank_absolute') if prev else None,
+                'prev_fetched_at': prev.get('fetched_at') if prev else None
+            }
+            
+        return jsonify({'success': True, 'serp_map': results_map})
+        
+    except Exception as e:
+        logger.error(f"Tracked Keywords SERP History Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================

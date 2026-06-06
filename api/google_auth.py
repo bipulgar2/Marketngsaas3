@@ -14,7 +14,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow, Flow
 SCOPES = [
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/presentations",
-    "https://www.googleapis.com/auth/spreadsheets",
 ]
 
 # Get project root (parent of api/)

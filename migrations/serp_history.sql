@@ -20,7 +20,7 @@ CREATE POLICY "Users can view serp_history for their campaigns" ON serp_history
     FOR SELECT USING (
         campaign_id IN (
             SELECT id FROM campaigns WHERE organization_id = (
-                SELECT organization_id FROM users WHERE id = auth.uid()
+                SELECT organization_id FROM profiles WHERE id = auth.uid()
             )
         )
     );

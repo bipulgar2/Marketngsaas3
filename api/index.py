@@ -3045,6 +3045,84 @@ def export_audit(audit_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/audits/import-csv', methods=['POST'])
+@login_required
+def import_csv_audit():
+    """Import a Screaming Frog Internal All CSV and create an audit record from it."""
+    client = supabase_admin or supabase
+    try:
+        campaign_id = request.form.get('campaign_id')
+        if not campaign_id:
+            return jsonify({'error': 'campaign_id is required'}), 400
+        
+        if 'csv_file' not in request.files:
+            return jsonify({'error': 'csv_file is required'}), 400
+            
+        csv_file = request.files['csv_file']
+        if not csv_file.filename:
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Get campaign domain
+        camp_res = client.table('campaigns').select('domain').eq('id', campaign_id).single().execute()
+        if not camp_res.data:
+            return jsonify({'error': 'Campaign not found'}), 404
+        domain = camp_res.data['domain']
+        
+        # Parse CSV
+        from execution.parse_screaming_frog_csv import parse_screaming_frog_csv
+        csv_content = csv_file.read()
+        parsed = parse_screaming_frog_csv(csv_content)
+        
+        if not parsed.get('pages'):
+            return jsonify({'error': 'No data found in CSV. Ensure it is a Screaming Frog Internal All export.'}), 400
+        
+        # Build audit results in the same shape as DataForSEO audits
+        audit_results = {
+            'summary': parsed['summary'],
+            'categorized': parsed['categorized'],
+            'pages': parsed['pages'],
+            'import_source': 'screaming_frog_csv',
+            'import_filename': csv_file.filename,
+        }
+        
+        # Create audit record
+        import time as time_mod
+        response = client.table('audits').insert({
+            'campaign_id': campaign_id,
+            'type': 'technical',
+            'status': 'completed',
+            'results': audit_results,
+        }).execute()
+        
+        if not response.data:
+            return jsonify({'error': 'Failed to save audit'}), 500
+        
+        audit = response.data[0]
+        
+        # Create tasks from the categorized data
+        try:
+            create_tasks_from_audit(parsed['categorized'], campaign_id, client)
+        except Exception as task_err:
+            logger.error(f"CSV Import: Task creation failed (non-fatal): {task_err}")
+        
+        return jsonify({
+            'success': True,
+            'audit_id': audit['id'],
+            'pages_count': len(parsed['pages']),
+            'html_pages': parsed['summary'].get('total_html_pages', 0),
+            'issues_summary': {
+                key: val.get('issues', 0)
+                for section in parsed['categorized'].values()
+                for key, val in section.items()
+                if isinstance(val, dict) and val.get('issues', 0) > 0
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"CSV Import Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/audits/<audit_id>/export-sheets', methods=['POST'])
 @login_required
 def export_audit_sheets(audit_id):

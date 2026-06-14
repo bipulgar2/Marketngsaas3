@@ -3566,6 +3566,10 @@
                     <button onclick="runAudit(false, null, parseInt(document.getElementById('techAuditPageLimitTop').value))" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
                         <i data-lucide="play" class="w-4 h-4"></i> Run Audit
                     </button>
+                    <input type="file" id="csvAuditFileInput" accept=".csv" class="hidden" onchange="importCsvAudit(this)">
+                    <button onclick="document.getElementById('csvAuditFileInput').click()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5" id="importCsvBtn">
+                        <i data-lucide="upload" class="w-4 h-4"></i> Import CSV
+                    </button>
                 </div>
                     `;
 
@@ -3723,6 +3727,43 @@
                 }
             } catch (e) {
                 console.error(e);
+            }
+        }
+
+        async function importCsvAudit(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const btn = document.getElementById('importCsvBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Uploading...`;
+            btn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('csv_file', file);
+            formData.append('campaign_id', currentClient.id);
+
+            try {
+                const response = await fetch('/api/audits/import-csv', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to import CSV');
+                }
+
+                alert(`Successfully imported ${data.pages_count} pages!`);
+                await loadAuditContent(); // Reload the audits list
+            } catch (error) {
+                alert('Error importing CSV: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                input.value = ''; // Reset input
+                lucide.createIcons();
             }
         }
 

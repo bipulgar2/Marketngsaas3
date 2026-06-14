@@ -58,6 +58,11 @@ def create_tasks_from_audit(categorized_data: dict, campaign_id: str, supabase_c
             'description': 'Content structure is important. Break up long content with H2 subheadings.',
             'type': 'content', 'role': 'Content Creator', 'priority': 'medium'
         },
+        'h2_duplicate': {
+            'title': 'Fix Duplicate H2 Tags',
+            'description': 'Multiple pages share the same H2 heading. Make H2 headings unique and descriptive per page.',
+            'type': 'onpage', 'role': 'Content Creator', 'priority': 'medium'
+        },
         'low_word_count': {
             'title': 'Expand Thin Content (<300 words)',
             'description': 'These pages have very little content. Expand them to add value or consolidate/redirect them.',
@@ -271,6 +276,7 @@ def categorize_audit_issues(pages: list, summary: dict = None) -> dict:
             "h1_missing": {"issues": 0, "items": []},
             "h1_multiple": {"issues": 0, "items": []},
             "h2_missing": {"issues": 0, "items": []},
+            "h2_duplicate": {"issues": 0, "items": []},
             "low_word_count": {"issues": 0, "items": []},
             "misspelling": {"issues": 0, "items": []},
             "links_broken": {"issues": 0, "items": []},

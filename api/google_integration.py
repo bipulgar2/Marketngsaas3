@@ -376,6 +376,7 @@ def get_google_metrics():
         
         custom_start = data.get('start_date')
         custom_end = data.get('end_date')
+        compare_mode = data.get('compare_mode', 'previous_period') # 'previous_period' or 'previous_year'
         
         today = datetime.now().date()
         
@@ -385,9 +386,23 @@ def get_google_metrics():
             start_dt = datetime.fromisoformat(custom_start).date()
             end_dt = datetime.fromisoformat(custom_end).date()
             range_days = (end_dt - start_dt).days
-            # Comparison: immediately before
-            prev_end = (start_dt - timedelta(days=1)).isoformat()
-            prev_start = (start_dt - timedelta(days=range_days + 1)).isoformat()
+            
+            if compare_mode == 'previous_year':
+                try:
+                    prev_end_dt = end_dt.replace(year=end_dt.year - 1)
+                    prev_start_dt = start_dt.replace(year=start_dt.year - 1)
+                except ValueError:
+                    # Leap year (Feb 29) fallback
+                    prev_end_dt = end_dt - timedelta(days=365)
+                    prev_start_dt = start_dt - timedelta(days=365)
+                prev_end = prev_end_dt.isoformat()
+                prev_start = prev_start_dt.isoformat()
+                duration_label = 'vs previous year'
+            else:
+                # Comparison: immediately before
+                prev_end = (start_dt - timedelta(days=1)).isoformat()
+                prev_start = (start_dt - timedelta(days=range_days + 1)).isoformat()
+                duration_label = f'vs previous {range_days} days'
             days = range_days
         else:
             duration_days_map = {
@@ -403,12 +418,25 @@ def get_google_metrics():
             
             current_end = today.isoformat()
             current_start = (today - timedelta(days=days-1)).isoformat()
-            prev_end = (today - timedelta(days=days)).isoformat()
-            prev_start = (today - timedelta(days=(days*2)-1)).isoformat()
+            
+            if compare_mode == 'previous_year':
+                try:
+                    prev_end_dt = today.replace(year=today.year - 1)
+                    prev_start_dt = (today - timedelta(days=days-1)).replace(year=today.year - 1)
+                except ValueError:
+                    prev_end_dt = today - timedelta(days=365)
+                    prev_start_dt = (today - timedelta(days=days-1)) - timedelta(days=365)
+                prev_end = prev_end_dt.isoformat()
+                prev_start = prev_start_dt.isoformat()
+                duration_label = 'vs previous year'
+            else:
+                prev_end = (today - timedelta(days=days)).isoformat()
+                prev_start = (today - timedelta(days=(days*2)-1)).isoformat()
+                duration_label = f'vs previous {days} days'
         
         results['meta'] = {
             'duration_days': days,
-            'duration_label': f'vs previous {days} days',
+            'duration_label': duration_label,
             'current_start': current_start,
             'current_end': current_end,
             'prev_start': prev_start,

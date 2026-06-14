@@ -1202,6 +1202,7 @@
         let _datePickerTempEnd = null;
         let _datePickerMonth = new Date().getMonth();
         let _datePickerYear = new Date().getFullYear();
+        let _analyticsCompareMode = localStorage.getItem('analytics_compare_mode') || 'previous_period';
 
         // =====================================================================
         // DATE RANGE PICKER — Calendar UI with presets & comparison
@@ -1249,6 +1250,11 @@
             _analyticsDuration = presetKey;
             _analyticsCustomStart = null;
             _analyticsCustomEnd = null;
+            const cmpSelect = document.getElementById('dpCompareSelect');
+            if (cmpSelect) {
+                _analyticsCompareMode = cmpSelect.value;
+                localStorage.setItem('analytics_compare_mode', _analyticsCompareMode);
+            }
             localStorage.setItem('analytics_duration', presetKey);
             closeDatePicker();
             loadAnalyticsDashboard();
@@ -1263,6 +1269,11 @@
                 _analyticsCustomStart = _datePickerTempStart;
                 _analyticsCustomEnd = _datePickerTempEnd;
                 _analyticsDuration = 'custom';
+                const cmpSelect = document.getElementById('dpCompareSelect');
+                if (cmpSelect) {
+                    _analyticsCompareMode = cmpSelect.value;
+                    localStorage.setItem('analytics_compare_mode', _analyticsCompareMode);
+                }
                 closeDatePicker();
                 loadAnalyticsDashboard();
             }
@@ -1617,7 +1628,12 @@
             lucide.createIcons();
 
             try {
-                const metricsBody = { gsc_property: gscProp, ga4_property: ga4Prop, duration: _analyticsDuration };
+                const metricsBody = { 
+                    gsc_property: gscProp, 
+                    ga4_property: ga4Prop, 
+                    duration: _analyticsDuration,
+                    compare_mode: _analyticsCompareMode 
+                };
                 if (_analyticsCustomStart && _analyticsCustomEnd) {
                     metricsBody.start_date = _analyticsCustomStart;
                     metricsBody.end_date = _analyticsCustomEnd;
@@ -2238,8 +2254,15 @@
                                 <button onclick="datePickerNav(1)" class="dp-nav-btn"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
                             </div>
                             <div id="datePickerCalendar" class="dp-calendar-grid"></div>
-                            <div class="dp-footer">
-                                <div class="dp-selected-range">
+                            <div class="dp-footer border-t border-gray-800 pt-3 mt-2">
+                                <div class="mb-3 flex items-center justify-between text-sm">
+                                    <span class="text-gray-400">Compare vs:</span>
+                                    <select id="dpCompareSelect" class="bg-gray-800 border border-gray-700 text-white rounded p-1 text-xs">
+                                        <option value="previous_period" ${_analyticsCompareMode === 'previous_period' ? 'selected' : ''}>Previous period</option>
+                                        <option value="previous_year" ${_analyticsCompareMode === 'previous_year' ? 'selected' : ''}>Previous year</option>
+                                    </select>
+                                </div>
+                                <div class="dp-selected-range mb-3">
                                     <span id="dpStartDate" class="dp-range-label">${_datePickerTempStart ? formatDateShort(_datePickerTempStart) : 'Start date'}</span>
                                     <span class="dp-range-arrow">→</span>
                                     <span id="dpEndDate" class="dp-range-label">${_datePickerTempEnd ? formatDateShort(_datePickerTempEnd) : 'End date'}</span>

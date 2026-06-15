@@ -2753,10 +2753,23 @@ def generate_audit_slides(audit_id):
         template_type = request.json.get('template_type', 'rankjacker') if request.is_json else 'rankjacker'
         
         full_data = audit_data.get('data', {})
+        if not full_data and audit_data.get('results'):
+            full_data = audit_data.get('results')
+            
         # If competitor audit, use that domain for the slides title
         results_obj = audit_data.get('results') or {}
-        domain = results_obj.get('competitor_domain') or audit_data.get('settings', {}).get('domain') or 'Website'
+        domain = results_obj.get('competitor_domain') or audit_data.get('settings', {}).get('domain')
         
+        if not domain or domain == 'Website' or domain == 'unknown':
+            campaign_id = audit_data.get('campaign_id')
+            if campaign_id:
+                camp_res = supabase_admin.table('campaigns').select('domain').eq('id', campaign_id).execute()
+                if camp_res.data and camp_res.data[0].get('domain'):
+                    domain = camp_res.data[0]['domain']
+                    
+        if not domain:
+            domain = 'Website'
+            
         # Fetch pagespeed on-the-fly if missing from audit data
         if not full_data.get('pagespeed') and domain and domain != 'unknown' and domain != 'Website':
             try:

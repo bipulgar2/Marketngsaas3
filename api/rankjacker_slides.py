@@ -91,7 +91,21 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         dups = issue_counts.get('dupH1', 0) + issue_counts.get('dupH2', 0)
         tech_issues_count = title_too_long + no_desc + desc_too_long + no_h1 + dups
     else:
-        tech_issues_count = len(pages) // 2 # Rough estimate fallback
+        title_too_long = sum(1 for p in pages if len(p.get('meta', {}).get('title', '')) > 65)
+        no_desc = sum(1 for p in pages if not p.get('meta', {}).get('desc'))
+        desc_too_long = sum(1 for p in pages if len(p.get('meta', {}).get('desc', '')) > 155)
+        no_h1 = sum(1 for p in pages if not p.get('meta', {}).get('htags', {}).get('h1'))
+        
+        dups = 0
+        for p in pages:
+            h1s = p.get('meta', {}).get('htags', {}).get('h1')
+            h2s = p.get('meta', {}).get('htags', {}).get('h2')
+            if isinstance(h1s, list) and len(h1s) > 1:
+                dups += 1
+            if isinstance(h2s, list) and len(h2s) > 1:
+                dups += 1
+                
+        tech_issues_count = title_too_long + no_desc + desc_too_long + no_h1 + dups
         
     # Backlink gap vs competitor
     domain_authority = backlinks.get('rank', 0) or 0
@@ -125,16 +139,21 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
     desktop_ps = pagespeed_data.get('desktop', {})
     mobile_scores = mobile_ps.get('scores', pagespeed_data.get('scores', {}))
     desktop_scores = desktop_ps.get('scores', {})
-    mobile_perf = mobile_scores.get('performance', 45) or 45
-    desktop_perf = desktop_scores.get('performance', 75) or 75
+    mobile_perf = mobile_scores.get('performance')
+    desktop_perf = desktop_scores.get('performance')
+    
+    mobile_perf_str = str(mobile_perf) if mobile_perf else 'N/A'
+    desktop_perf_str = str(desktop_perf) if desktop_perf else 'N/A'
     
     # 2. Build the replace requests
     replacements = {
         '{{CLIENT_WEBSITE}}': domain.upper(),
+        '[CLIENT WEBSITE]': domain.upper(),
+        'WEBSITE': domain.upper(),
         '{{DATE}}': datetime.now().strftime("%B %d, %Y"),
         '{{NOT_PAGE_1_PCT}}': str(not_page_1_pct),
         '{{CRITICAL_ISSUES_COUNT}}': str(tech_issues_count),
-        '{{BACKLINK_GAP}}': '3.2', # Hardcoded or dynamic if you have competitor
+        '{{BACKLINK_GAP}}': '0', # Hardcoded or dynamic if you have competitor
         
         '{{TOTAL_KEYWORDS}}': format_number(total_keywords),
         '{{PAGE_1_RANKINGS}}': format_number(page_1_count),
@@ -148,25 +167,25 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         '{{OPPORTUNITY_KEYWORDS}}': format_number(needs_work_count),
         '{{OPPORTUNITY_TRAFFIC}}': format_number(needs_work_count * 12), # Estimated potential
         
-        '{{DESKTOP_SPEED}}': str(desktop_perf),
-        '{{MOBILE_SPEED}}': str(mobile_perf),
+        '{{DESKTOP_SPEED}}': desktop_perf_str,
+        '{{MOBILE_SPEED}}': mobile_perf_str,
         
         '{{THIN_CONTENT_PAGES}}': str(len([p for p in pages if (p.get('meta', {}).get('word_count') or 0) < 300])),
-        '{{MISSING_PAGES_COUNT}}': '14', # Sample default
-        '{{MISSING_BLOGS_COUNT}}': '28', # Sample default
+        '{{MISSING_PAGES_COUNT}}': '0', # Cannot calculate from CSV
+        '{{MISSING_BLOGS_COUNT}}': '0', # Cannot calculate from CSV
         '{{EXPANSION_PAGES_COUNT}}': str(len(pages) // 3),
         
         '{{TOTAL_BACKLINKS}}': format_number(total_backlinks),
-        '{{SPAM_SCORE}}': str(spam_score),
-        '{{COMPETITOR_DOMAINS_GAP}}': '4',
+        '{{SPAM_SCORE}}': str(spam_score) if total_backlinks > 0 else '0',
+        '{{COMPETITOR_DOMAINS_GAP}}': '0',
         
-        '{{CRITICAL_ISSUE_1}}': 'Missing H1 Tags on Core Landing Pages',
-        '{{CRITICAL_ISSUE_2}}': 'Unoptimized Meta Descriptions Across Site',
-        '{{CRITICAL_ISSUE_3}}': 'Slow Mobile Page Speed Blocking Indexation',
+        '{{CRITICAL_ISSUE_1}}': 'Missing H1 Tags on Core Landing Pages' if no_h1 > 0 else 'Technical Audit Required',
+        '{{CRITICAL_ISSUE_2}}': 'Unoptimized Meta Descriptions Across Site' if no_desc > 0 else 'Content Review Required',
+        '{{CRITICAL_ISSUE_3}}': 'Slow Mobile Page Speed Blocking Indexation' if (mobile_perf and mobile_perf < 50) else 'Backlink Analysis Required',
         
-        '{{VISIBILITY_PROJECTION}}': '45',
-        '{{TRAFFIC_PROJECTION}}': '85',
-        '{{REVENUE_PROJECTION}}': '120'
+        '{{VISIBILITY_PROJECTION}}': '0',
+        '{{TRAFFIC_PROJECTION}}': '0',
+        '{{REVENUE_PROJECTION}}': '0'
     }
 
     requests = []

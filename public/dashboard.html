@@ -3661,6 +3661,7 @@
                                                 View Results
                                             </button>
                                             <select id="tmpl-${audit.id}" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5" style="max-width:130px">
+                                                <option value="rankjacker" selected>RankJacker</option>
                                                 <option value="default">Classic</option>
                                                 <option value="authority_shift">4-Pillar</option>
                                             </select>
@@ -11245,7 +11246,9 @@
                     const slidesSection = a.status === 'completed' ? `
                         <div class="flex items-center gap-2">
                             <select id="tmpl-${a.id}" class="bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-cyan-500 outline-none">
+                                <option value="rankjacker" selected>RankJacker SEO Growth</option>
                                 <option value="authority_shift">4-Pillar Authority (19 slides)</option>
+                                <option value="default">Classic</option>
                             </select>
                             <button onclick="generateAudit2Slides('${a.id}')"
                                 id="slides-btn-${a.id}"

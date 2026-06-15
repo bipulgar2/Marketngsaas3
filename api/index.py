@@ -2757,6 +2757,40 @@ def generate_audit_slides(audit_id):
         results_obj = audit_data.get('results') or {}
         domain = results_obj.get('competitor_domain') or audit_data.get('settings', {}).get('domain') or 'Website'
         
+        # Fetch pagespeed on-the-fly if missing from audit data
+        if not full_data.get('pagespeed') and domain and domain != 'unknown' and domain != 'Website':
+            try:
+                from execution.pagespeed_insights import fetch_pagespeed_scores
+                import time as _time
+                ps_data = {}
+                mobile = fetch_pagespeed_scores(f"https://{domain}", strategy="mobile")
+                if mobile and mobile.get('success') is not False:
+                    ps_data['mobile'] = {'scores': mobile.get('scores', {}), 'metrics': mobile.get('metrics', {})}
+                    ps_data['scores'] = mobile.get('scores', {})
+                    ps_data['metrics'] = mobile.get('metrics', {})
+                _time.sleep(3)
+                desktop = fetch_pagespeed_scores(f"https://{domain}", strategy="desktop")
+                if desktop and desktop.get('success') is not False:
+                    ps_data['desktop'] = {'scores': desktop.get('scores', {}), 'metrics': desktop.get('metrics', {})}
+                if ps_data:
+                    full_data['pagespeed'] = ps_data
+                    logger.info(f"Slides: fetched pagespeed on-the-fly for {domain}")
+            except Exception as ps_err:
+                logger.warning(f"Slides: on-the-fly pagespeed failed: {ps_err}")
+                
+        # Fetch domain metrics on-the-fly if missing (for ranking opportunities in slides)
+        if not full_data.get('total_traffic') and not full_data.get('domain_metrics') and domain and domain != 'unknown' and domain != 'Website':
+            try:
+                from api.dataforseo_client import fetch_domain_metrics
+                dm = fetch_domain_metrics(domain)
+                if dm and dm.get('success'):
+                    full_data['total_traffic'] = dm.get('total_traffic', 0)
+                    full_data['total_keywords'] = dm.get('total_keywords', 0)
+                    full_data['domain_metrics'] = dm
+                    logger.info(f"Slides: fetched domain metrics on-the-fly for {domain}")
+            except Exception as dm_err:
+                logger.warning(f"Slides: on-the-fly domain metrics failed: {dm_err}")
+        
         try:
             if template_type == 'authority_shift':
                 from api.deep_audit_slides import create_authority_shift_slides

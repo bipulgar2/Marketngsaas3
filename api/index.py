@@ -2750,13 +2750,35 @@ def generate_audit_slides(audit_id):
         # For now, running synchronously but it might timeout on Vercel/Railway if > 30s.
         # We'll assume it's fast enough or user accepts wait.
         
+        template_type = request.json.get('template_type', 'rankjacker') if request.is_json else 'rankjacker'
+        
         full_data = audit_data.get('data', {})
         # If competitor audit, use that domain for the slides title
         results_obj = audit_data.get('results') or {}
         domain = results_obj.get('competitor_domain') or audit_data.get('settings', {}).get('domain') or 'Website'
         
         try:
-            result = create_deep_audit_slides(full_data, domain)
+            if template_type == 'authority_shift':
+                from api.deep_audit_slides import create_authority_shift_slides
+                result = create_authority_shift_slides(
+                    data=full_data,
+                    domain=domain,
+                    creds=None,
+                    screenshots=None,
+                    issue_counts=None
+                )
+            elif template_type == 'rankjacker':
+                from api.rankjacker_slides import create_rankjacker_audit_slides
+                result = create_rankjacker_audit_slides(
+                    data=full_data,
+                    domain=domain,
+                    creds=None,
+                    issue_counts=None
+                )
+            else:
+                from api.deep_audit_slides import create_deep_audit_slides
+                result = create_deep_audit_slides(full_data, domain)
+                
             slides_url = result.get('presentation_url')
             
             # Update audit record
@@ -4829,7 +4851,16 @@ def generate_deep_audit_slides_endpoint():
                 screenshots=processed_screenshots,
                 issue_counts=issue_counts
             )
+        elif template_type == 'rankjacker':
+            from api.rankjacker_slides import create_rankjacker_audit_slides
+            result = create_rankjacker_audit_slides(
+                data=audit_data,
+                domain=domain,
+                creds=creds,
+                issue_counts=issue_counts
+            )
         else:
+            from api.deep_audit_slides import create_deep_audit_slides
             result = create_deep_audit_slides(
                 data=audit_data,
                 domain=domain,

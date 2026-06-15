@@ -112,18 +112,27 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
     total_backlinks = backlinks.get('backlinks', 0) or 0
     spam_score = backlinks.get('spam_score', 12) or 12 # Default visual
     
-    # Sort top pages by traffic
-    sorted_pages = sorted(pages, key=lambda x: x.get('traffic', 0) or 0, reverse=True)
+    # Sort top pages by traffic, filtering out non-HTML assets
+    valid_pages = []
+    excluded_exts = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.css', '.js', '.woff', '.woff2', '.pdf', '.json', '.xml')
+    for p in pages:
+        url = p.get('url', '').lower()
+        if not url.endswith(excluded_exts) and 'wp-content/uploads' not in url:
+            valid_pages.append(p)
+            
+    sorted_pages = sorted(valid_pages, key=lambda x: x.get('traffic', 0) or 0, reverse=True)
+    if not sorted_pages:
+        sorted_pages = pages # fallback just in case
     
-    top_url_1 = sorted_pages[0].get('url', '').replace('https://', '') if len(sorted_pages) > 0 else 'N/A'
+    top_url_1 = sorted_pages[0].get('url', '').replace('https://', '').replace('http://', '').replace('www.', '') if len(sorted_pages) > 0 else 'N/A'
     top_traf_1 = format_number(sorted_pages[0].get('traffic', 0)) if len(sorted_pages) > 0 else '0'
     top_kw_1 = format_number(len(sorted_pages[0].get('keywords', [])) if len(sorted_pages) > 0 and isinstance(sorted_pages[0].get('keywords'), list) else 0)
     
-    top_url_2 = sorted_pages[1].get('url', '').replace('https://', '') if len(sorted_pages) > 1 else 'N/A'
+    top_url_2 = sorted_pages[1].get('url', '').replace('https://', '').replace('http://', '').replace('www.', '') if len(sorted_pages) > 1 else 'N/A'
     top_traf_2 = format_number(sorted_pages[1].get('traffic', 0)) if len(sorted_pages) > 1 else '0'
     top_kw_2 = format_number(len(sorted_pages[1].get('keywords', [])) if len(sorted_pages) > 1 and isinstance(sorted_pages[1].get('keywords'), list) else 0)
 
-    top_url_3 = sorted_pages[2].get('url', '').replace('https://', '') if len(sorted_pages) > 2 else 'N/A'
+    top_url_3 = sorted_pages[2].get('url', '').replace('https://', '').replace('http://', '').replace('www.', '') if len(sorted_pages) > 2 else 'N/A'
     top_traf_3 = format_number(sorted_pages[2].get('traffic', 0)) if len(sorted_pages) > 2 else '0'
     top_kw_3 = format_number(len(sorted_pages[2].get('keywords', [])) if len(sorted_pages) > 2 and isinstance(sorted_pages[2].get('keywords'), list) else 0)
 

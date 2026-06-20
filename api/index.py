@@ -4811,38 +4811,52 @@ def generate_deep_audit_slides_endpoint():
         
         if not domain or domain == 'unknown':
            domain = audit_data.get('domain', 'Website')
+           
+        # Clean domain (e.g., "WEEDPOSTERS (TESTING)" -> "weedposters.io")
+        import re
+        clean_domain = re.sub(r'\(.*?\)', '', domain).strip()
+        clean_domain = clean_domain.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
+        
+        if '.' not in clean_domain:
+            pages_list = audit_data.get('pages', [])
+            if pages_list and isinstance(pages_list, list) and len(pages_list) > 0:
+                first_url = pages_list[0].get('url', '')
+                if first_url:
+                    extracted = first_url.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
+                    if '.' in extracted:
+                        clean_domain = extracted
         
         # Fetch pagespeed on-the-fly if missing from audit data
-        if not audit_data.get('pagespeed') and domain and domain != 'unknown' and domain != 'Website':
+        if not audit_data.get('pagespeed') and clean_domain and clean_domain != 'unknown' and clean_domain != 'Website':
             try:
                 from execution.pagespeed_insights import fetch_pagespeed_scores
                 import time as _time
                 ps_data = {}
-                mobile = fetch_pagespeed_scores(f"https://{domain}", strategy="mobile")
+                mobile = fetch_pagespeed_scores(f"https://{clean_domain}", strategy="mobile")
                 if mobile and mobile.get('success') is not False:
                     ps_data['mobile'] = {'scores': mobile.get('scores', {}), 'metrics': mobile.get('metrics', {})}
                     ps_data['scores'] = mobile.get('scores', {})
                     ps_data['metrics'] = mobile.get('metrics', {})
                 _time.sleep(3)
-                desktop = fetch_pagespeed_scores(f"https://{domain}", strategy="desktop")
+                desktop = fetch_pagespeed_scores(f"https://{clean_domain}", strategy="desktop")
                 if desktop and desktop.get('success') is not False:
                     ps_data['desktop'] = {'scores': desktop.get('scores', {}), 'metrics': desktop.get('metrics', {})}
                 if ps_data:
                     audit_data['pagespeed'] = ps_data
-                    logger.info(f"Slides: fetched pagespeed on-the-fly for {domain}")
+                    logger.info(f"Slides: fetched pagespeed on-the-fly for {clean_domain}")
             except Exception as ps_err:
                 logger.warning(f"Slides: on-the-fly pagespeed failed: {ps_err}")
         
         # Fetch domain metrics on-the-fly if missing (for ranking opportunities in slides)
-        if not audit_data.get('total_traffic') and not audit_data.get('domain_metrics') and domain and domain != 'unknown' and domain != 'Website':
+        if not audit_data.get('total_traffic') and not audit_data.get('domain_metrics') and clean_domain and clean_domain != 'unknown' and clean_domain != 'Website':
             try:
                 from api.dataforseo_client import fetch_domain_metrics
-                dm = fetch_domain_metrics(domain)
+                dm = fetch_domain_metrics(clean_domain)
                 if dm and dm.get('success'):
                     audit_data['total_traffic'] = dm.get('total_traffic', 0)
                     audit_data['total_keywords'] = dm.get('total_keywords', 0)
                     audit_data['domain_metrics'] = dm
-                    logger.info(f"Slides: fetched domain metrics on-the-fly for {domain}")
+                    logger.info(f"Slides: fetched domain metrics on-the-fly for {clean_domain}")
             except Exception as dm_err:
                 logger.warning(f"Slides: on-the-fly domain metrics failed: {dm_err}")
         

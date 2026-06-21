@@ -210,12 +210,26 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         try:
             import requests
             from api.dataforseo_client import get_auth_header
+            # Map common 2-letter country codes to DataForSEO location codes
+            country_code = data.get('location', 'US').upper()
+            location_map = {
+                'US': 2840,
+                'CA': 2124,
+                'UK': 2826,
+                'GB': 2826,
+                'AU': 2036,
+                'IN': 2356,
+                'NZ': 2554,
+                'ZA': 2710
+            }
+            loc_code = location_map.get(country_code, 2840)
+            
             # 1. Fetch Top Competitor
-            print(f"DEBUG SLIDES: Fetching competitor for {clean_domain}", file=sys.stderr)
+            print(f"DEBUG SLIDES: Fetching competitor for {clean_domain} in loc {loc_code}", file=sys.stderr)
             comp_res = requests.post(
                 'https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live',
                 headers={**get_auth_header(), 'Content-Type': 'application/json'},
-                json=[{'target': clean_domain, 'location_code': 2840, 'language_code': 'en', 'limit': 15}]
+                json=[{'target': clean_domain, 'location_code': loc_code, 'language_code': 'en', 'limit': 15}]
             )
             
             if comp_res.status_code == 200:

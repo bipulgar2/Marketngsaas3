@@ -342,9 +342,9 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
     
     # 2. Build the replace requests
     replacements = {
-        '{{CLIENT_WEBSITE}}': domain.upper(),
-        '[CLIENT WEBSITE]': domain.upper(),
-        'WEBSITE': domain.upper(),
+        '{{CLIENT_WEBSITE}}': clean_domain.upper(),
+        '[CLIENT WEBSITE]': clean_domain.upper(),
+        'WEBSITE': clean_domain.upper(),
         '{{DATE}}': datetime.now().strftime("%B %d, %Y"),
         '{{NOT_PAGE_1_PCT}}': str(not_page_1_pct),
         '{{CRITICAL_ISSUES_COUNT}}': str(tech_issues_count),

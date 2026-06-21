@@ -138,7 +138,12 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
 
     # Backlink gap vs competitor
     raw_rank = backlinks.get('rank', 0) or 0
-    total_backlinks = backlinks.get('backlinks', 0) or 0
+    total_backlinks = backlinks.get('total_backlinks', backlinks.get('backlinks', 0)) or 0
+    ref_domains = backlinks.get('referring_domains', 0) or 0
+    
+    if total_backlinks == 0 and ref_domains > 0:
+        total_backlinks = ref_domains
+        backlinks['total_backlinks'] = ref_domains
     
     if total_backlinks == 0:
         print(f"DEBUG SLIDES: Total backlinks is 0, attempting deep fetch for {clean_domain}", file=sys.stderr)
@@ -148,9 +153,12 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
             if bl_data and bl_data.get('success'):
                 raw_rank = bl_data.get('rank', 0) or 0
                 total_backlinks = bl_data.get('total_backlinks', 0) or 0
+                ref_domains = bl_data.get('referring_domains', 0) or 0
+                if total_backlinks == 0 and ref_domains > 0:
+                    total_backlinks = ref_domains
                 backlinks['spam_score'] = bl_data.get('spam_score', 12)
                 backlinks['rank'] = raw_rank
-                backlinks['backlinks'] = total_backlinks
+                backlinks['total_backlinks'] = total_backlinks
         except Exception as e:
             print(f"DEBUG SLIDES: Exception fetching backlinks: {e}", file=sys.stderr)
 

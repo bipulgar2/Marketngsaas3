@@ -201,6 +201,70 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
     top_traf_3 = format_number(sorted_pages[2].get('traffic', 0)) if len(sorted_pages) > 2 else '0'
     top_kw_3 = format_number(len(sorted_pages[2].get('keywords', [])) if len(sorted_pages) > 2 and isinstance(sorted_pages[2].get('keywords'), list) else 0)
 
+    # Automated Competitor & Gap Analysis
+    backlink_gap_multiplier = '0'
+    missing_pages_count = '14'
+    missing_blogs_count = '28'
+    
+    if clean_domain and clean_domain != 'unknown':
+        try:
+            import requests
+            from api.dataforseo_client import get_auth_header
+            # 1. Fetch Top Competitor
+            print(f"DEBUG SLIDES: Fetching competitor for {clean_domain}", file=sys.stderr)
+            comp_res = requests.post(
+                'https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live',
+                headers={**get_auth_header(), 'Content-Type': 'application/json'},
+                json=[{'target': clean_domain, 'location_code': 2840, 'language_code': 'en', 'limit': 10}],
+                timeout=10
+            )
+            
+            if comp_res.status_code == 200:
+                comp_data = comp_res.json()
+                items = comp_data.get('tasks', [{}])[0].get('result', [{}])[0].get('items', [])
+                
+                # Find the first true competitor that isn't the target domain or a giant generic site
+                ignore_list = ['amazon.com', 'wikipedia.org', 'facebook.com', 'twitter.com', 'instagram.com', 'youtube.com', 'reddit.com', 'pinterest.com', 'apple.com', 'yelp.com']
+                top_competitor = None
+                comp_total_keywords = 0
+                
+                for item in items:
+                    c_domain = item.get('domain', '')
+                    if c_domain and c_domain != clean_domain and c_domain not in ignore_list:
+                        top_competitor = c_domain
+                        comp_total_keywords = item.get('full_domain_metrics', {}).get('organic', {}).get('count', 0)
+                        break
+                
+                if top_competitor:
+                    print(f"DEBUG SLIDES: Found top competitor: {top_competitor}", file=sys.stderr)
+                    # Content Gap Math: Assume 10% of their keywords are high-intent missing pages, up to a reasonable cap
+                    if comp_total_keywords > total_keywords:
+                        raw_missing = comp_total_keywords - total_keywords
+                        missing_pages_count = str(min(max(raw_missing // 50, 5), 150))
+                        missing_blogs_count = str(min(max(raw_missing // 20, 10), 300))
+                    
+                    # 2. Fetch Backlinks for Competitor
+                    bl_res = requests.post(
+                        'https://api.dataforseo.com/v3/backlinks/summary/live',
+                        headers={**get_auth_header(), 'Content-Type': 'application/json'},
+                        json=[{'target': top_competitor}],
+                        timeout=10
+                    )
+                    if bl_res.status_code == 200:
+                        bl_data = bl_res.json()
+                        comp_backlinks = bl_data.get('tasks', [{}])[0].get('result', [{}])[0].get('backlinks', 0)
+                        if comp_backlinks > 0:
+                            # Avoid division by zero
+                            client_bls = max(total_backlinks, 1)
+                            multiplier = max(round(comp_backlinks / client_bls, 1), 1.0)
+                            if multiplier == int(multiplier):
+                                backlink_gap_multiplier = str(int(multiplier))
+                            else:
+                                backlink_gap_multiplier = str(multiplier)
+                            print(f"DEBUG SLIDES: Competitor backlinks: {comp_backlinks}, Gap multiplier: {backlink_gap_multiplier}x", file=sys.stderr)
+        except Exception as e:
+            print(f"DEBUG SLIDES: Failed to fetch competitor data: {e}", file=sys.stderr)
+
     # Speed
     pagespeed_data = data.get('pagespeed', {})
     if isinstance(pagespeed_data, str):
@@ -240,7 +304,7 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         '{{DATE}}': datetime.now().strftime("%B %d, %Y"),
         '{{NOT_PAGE_1_PCT}}': str(not_page_1_pct),
         '{{CRITICAL_ISSUES_COUNT}}': str(tech_issues_count),
-        '{{BACKLINK_GAP}}': '0', # Hardcoded or dynamic if you have competitor
+        '{{BACKLINK_GAP}}': backlink_gap_multiplier,
         
         '{{TOTAL_KEYWORDS}}': format_number(total_keywords),
         '{{TOTAL KEYWORDS}}': format_number(total_keywords),
@@ -267,13 +331,13 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         '{{MOBILE_SPEED}}': mobile_perf_str,
         
         '{{THIN_CONTENT_PAGES}}': str(len([p for p in pages if (p.get('meta', {}).get('word_count') or 0) < 300])),
-        '{{MISSING_PAGES_COUNT}}': '14', # Static sales estimate if no keyword gap API is present
-        '{{MISSING_BLOGS_COUNT}}': '28', # Static sales estimate if no keyword gap API is present
+        '{{MISSING_PAGES_COUNT}}': missing_pages_count,
+        '{{MISSING_BLOGS_COUNT}}': missing_blogs_count,
         '{{EXPANSION_PAGES_COUNT}}': str(len(pages) // 3),
         
         '{{TOTAL_BACKLINKS}}': format_number(total_backlinks),
         '{{SPAM_SCORE}}': str(spam_score) if total_backlinks > 0 else '0',
-        '{{COMPETITOR_DOMAINS_GAP}}': '0',
+        '{{COMPETITOR_DOMAINS_GAP}}': backlink_gap_multiplier,
         
         '{{CRITICAL_ISSUE_1}}': 'Missing H1 Tags on Core Landing Pages' if no_h1 > 0 else 'Technical Audit Required',
         '{{CRITICAL_ISSUE_DESC_1}}': f'We found {no_h1} key pages missing an H1 tag. Without a primary heading, Google struggles to understand the topical relevance of your page, actively suppressing your ability to rank for high-intent keywords.' if no_h1 > 0 else 'A deep-dive technical audit is required to identify the root structural causes preventing your site from achieving higher organic visibility.',

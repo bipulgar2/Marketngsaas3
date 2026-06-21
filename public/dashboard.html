@@ -181,6 +181,8 @@
         .dp-day:hover { background: rgba(139,92,246,0.15); color: #fff; }
         .dp-selected { background: rgba(139,92,246,0.3) !important; color: #fff !important; font-weight: 700; border-radius: 6px; }
         .dp-in-range { background: rgba(139,92,246,0.08); color: #c4b5fd; border-radius: 0; }
+        .dp-selected-compare { background: rgba(249,115,22,0.3) !important; color: #fff !important; font-weight: 700; border-radius: 6px; }
+        .dp-in-range-compare { background: rgba(249,115,22,0.08); color: #fdba74; border-radius: 0; }
         .dp-disabled { color: #374151; cursor: default; pointer-events: none; }
         .dp-empty { pointer-events: none; }
         
@@ -1201,11 +1203,13 @@
         
         // State vars for date picker UI
         let _datePickerOpen = false;
-        let _datePickerSelecting = null;
+        let _datePickerActiveTab = 'current'; // 'current' or 'compare'
         let _datePickerMonth = new Date().getMonth();
         let _datePickerYear = new Date().getFullYear();
         let _datePickerTempStart = null;
         let _datePickerTempEnd = null;
+        let _datePickerCompareTempStart = null;
+        let _datePickerCompareTempEnd = null;
         
         let _analyticsCompareMode = localStorage.getItem('analytics_compare_mode') || 'previous_period';
 
@@ -1241,8 +1245,11 @@
             if (_datePickerOpen) {
                 _datePickerTempStart = _analyticsCustomStart;
                 _datePickerTempEnd = _analyticsCustomEnd;
+                _datePickerCompareTempStart = _analyticsCompareCustomStart;
+                _datePickerCompareTempEnd = _analyticsCompareCustomEnd;
                 _datePickerSelecting = 'start';
                 renderDatePickerCalendar();
+                updateDatePickerFooterLabels();
             }
         }
         function closeDatePicker() {
@@ -1271,10 +1278,13 @@
                 _analyticsCompareMode = cmpSelect.value;
                 localStorage.setItem('analytics_compare_mode', _analyticsCompareMode);
                 if (_analyticsCompareMode === 'custom') {
-                    const cStart = document.getElementById('dpCompareCustomStart');
-                    const cEnd = document.getElementById('dpCompareCustomEnd');
-                    if (cStart && cStart.value) _analyticsCompareCustomStart = cStart.value;
-                    if (cEnd && cEnd.value) _analyticsCompareCustomEnd = cEnd.value;
+                    if (_datePickerCompareTempStart && _datePickerCompareTempEnd) {
+                        if (_datePickerCompareTempStart > _datePickerCompareTempEnd) {
+                            [_datePickerCompareTempStart, _datePickerCompareTempEnd] = [_datePickerCompareTempEnd, _datePickerCompareTempStart];
+                        }
+                        _analyticsCompareCustomStart = _datePickerCompareTempStart;
+                        _analyticsCompareCustomEnd = _datePickerCompareTempEnd;
+                    }
                 }
             }
 
@@ -1331,16 +1341,30 @@
                 const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
                 const dateObj = new Date(year, month, d);
                 const isFuture = dateObj > today;
-                const isStart = dateStr === (_datePickerTempStart || _analyticsCustomStart);
-                const isEnd = dateStr === (_datePickerTempEnd || _analyticsCustomEnd);
-                const inRange = _datePickerTempStart && _datePickerTempEnd && dateStr > _datePickerTempStart && dateStr < _datePickerTempEnd;
+                
+                // Current period logic
+                const isCurrentStart = dateStr === (_datePickerTempStart || _analyticsCustomStart);
+                const isCurrentEnd = dateStr === (_datePickerTempEnd || _analyticsCustomEnd);
+                const inCurrentRange = (_datePickerTempStart || _analyticsCustomStart) && (_datePickerTempEnd || _analyticsCustomEnd) && dateStr > (_datePickerTempStart || _analyticsCustomStart) && dateStr < (_datePickerTempEnd || _analyticsCustomEnd);
+                
+                // Compare period logic
+                const isCompareStart = dateStr === (_datePickerCompareTempStart || _analyticsCompareCustomStart);
+                const isCompareEnd = dateStr === (_datePickerCompareTempEnd || _analyticsCompareCustomEnd);
+                const inCompareRange = (_datePickerCompareTempStart || _analyticsCompareCustomStart) && (_datePickerCompareTempEnd || _analyticsCompareCustomEnd) && dateStr > (_datePickerCompareTempStart || _analyticsCompareCustomStart) && dateStr < (_datePickerCompareTempEnd || _analyticsCompareCustomEnd);
 
                 let cls = 'dp-day';
                 if (isFuture) cls += ' dp-disabled';
-                else if (isStart || isEnd) cls += ' dp-selected';
-                else if (inRange) cls += ' dp-in-range';
+                
+                if (_datePickerActiveTab === 'current') {
+                    if (isCurrentStart || isCurrentEnd) cls += ' dp-selected';
+                    else if (inCurrentRange) cls += ' dp-in-range';
+                } else if (_datePickerActiveTab === 'compare') {
+                    if (isCompareStart || isCompareEnd) cls += ' dp-selected dp-selected-compare';
+                    else if (inCompareRange) cls += ' dp-in-range dp-in-range-compare';
+                    if (_analyticsCompareMode !== 'custom') cls += ' dp-disabled';
+                }
 
-                html += '<span class="' + cls + '" ' + (isFuture ? '' : 'onclick="pickDate(\'' + dateStr + '\')"') + '>' + d + '</span>';
+                html += '<span class="' + cls + '" ' + ((isFuture || (_datePickerActiveTab === 'compare' && _analyticsCompareMode !== 'custom')) ? '' : 'onclick="pickDate(\'' + dateStr + '\')"') + '>' + d + '</span>';
             }
 
             html += '</div></div>';
@@ -1348,25 +1372,9 @@
         }
 
         function pickDate(dateStr) {
-            if (!_datePickerTempStart || (_datePickerTempStart && _datePickerTempEnd)) {
-                // Start new selection
-                _datePickerTempStart = dateStr;
-                _datePickerTempEnd = null;
-            } else {
-                // Set end date
-                if (dateStr < _datePickerTempStart) {
-                    _datePickerTempEnd = _datePickerTempStart;
+            if (_datePickerActiveTab === 'current') {
+                if (!_datePickerTempStart || (_datePickerTempStart && _datePickerTempEnd)) {
                     _datePickerTempStart = dateStr;
-                } else {
-                    _datePickerTempEnd = dateStr;
-                }
-            }
-            renderDatePickerCalendar();
-            // Update the input displays
-            const startEl = document.getElementById('dpStartDate');
-            const endEl = document.getElementById('dpEndDate');
-            if (startEl) startEl.textContent = _datePickerTempStart ? formatDateShort(_datePickerTempStart) : 'Start date';
-            if (endEl) endEl.textContent = _datePickerTempEnd ? formatDateShort(_datePickerTempEnd) : 'End date';
             // Enable apply button
             const applyBtn = document.getElementById('dpApplyBtn');
             if (applyBtn) applyBtn.disabled = !(_datePickerTempStart && _datePickerTempEnd);
@@ -2255,13 +2263,30 @@
                         <!-- Date Picker Dropdown -->
                         <div id="analyticsDatePicker" class="dp-dropdown" style="display:none">
                             <div class="dp-header">
-                                <div class="dp-presets">
-                                    ${presetBtn('7d', '7D')}
-                                    ${presetBtn('1m', '1M')}
-                                    ${presetBtn('3m', '3M')}
-                                    ${presetBtn('6m', '6M')}
-                                    ${presetBtn('12m', '1Y')}
-                                    ${presetBtn('max', 'Max')}
+                                <div class="flex mb-3 border-b border-gray-800">
+                                    <button id="dpTabCurrent" onclick="switchDpTab('current')" class="flex-1 py-2 text-xs font-semibold border-b-2 border-violet-500 text-white">Current Period</button>
+                                    <button id="dpTabCompare" onclick="switchDpTab('compare')" class="flex-1 py-2 text-xs font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-300">Compare Period</button>
+                                </div>
+                                <div id="dpCurrentView">
+                                    <div class="dp-presets">
+                                        ${presetBtn('7d', '7D')}
+                                        ${presetBtn('1m', '1M')}
+                                        ${presetBtn('3m', '3M')}
+                                        ${presetBtn('6m', '6M')}
+                                        ${presetBtn('12m', '1Y')}
+                                        ${presetBtn('max', 'Max')}
+                                    </div>
+                                </div>
+                                <div id="dpCompareView" style="display:none;">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span class="text-xs text-gray-400">Mode:</span>
+                                        <select id="dpCompareSelect" onchange="updateDpCompareMode(this.value)" class="bg-gray-800 border border-gray-700 text-white rounded p-1 text-xs flex-1">
+                                            <option value="previous_period" ${_analyticsCompareMode === 'previous_period' ? 'selected' : ''}>Previous period</option>
+                                            <option value="previous_year" ${_analyticsCompareMode === 'previous_year' ? 'selected' : ''}>Previous year</option>
+                                            <option value="custom" ${_analyticsCompareMode === 'custom' ? 'selected' : ''}>Custom</option>
+                                        </select>
+                                    </div>
+                                    <div class="text-[10px] text-gray-500 mt-1">Select "Custom" to unlock the calendar below for comparison dates.</div>
                                 </div>
                             </div>
                             <div class="dp-nav">
@@ -2271,21 +2296,7 @@
                             </div>
                             <div id="datePickerCalendar" class="dp-calendar-grid"></div>
                             <div class="dp-footer border-t border-gray-800 pt-3 mt-2">
-                                <div class="mb-3">
-                                    <div class="flex items-center justify-between text-sm mb-2">
-                                        <span class="text-gray-400">Compare vs:</span>
-                                        <select id="dpCompareSelect" onchange="document.getElementById('dpCompareCustomWrap').style.display = this.value === 'custom' ? 'flex' : 'none'" class="bg-gray-800 border border-gray-700 text-white rounded p-1 text-xs">
-                                            <option value="previous_period" ${_analyticsCompareMode === 'previous_period' ? 'selected' : ''}>Previous period</option>
-                                            <option value="previous_year" ${_analyticsCompareMode === 'previous_year' ? 'selected' : ''}>Previous year</option>
-                                            <option value="custom" ${_analyticsCompareMode === 'custom' ? 'selected' : ''}>Custom</option>
-                                        </select>
-                                    </div>
-                                    <div id="dpCompareCustomWrap" class="gap-2 w-full" style="display: ${_analyticsCompareMode === 'custom' ? 'flex' : 'none'}">
-                                        <input type="date" id="dpCompareCustomStart" class="bg-gray-800 border border-gray-700 text-white rounded text-xs p-1.5 flex-1" value="${_analyticsCompareCustomStart || ''}" max="${new Date().toISOString().split('T')[0]}" />
-                                        <input type="date" id="dpCompareCustomEnd" class="bg-gray-800 border border-gray-700 text-white rounded text-xs p-1.5 flex-1" value="${_analyticsCompareCustomEnd || ''}" max="${new Date().toISOString().split('T')[0]}" />
-                                    </div>
-                                </div>
-                                <div class="dp-selected-range mb-3">
+                                <div class="dp-selected-range">
                                     <span id="dpStartDate" class="dp-range-label">${_datePickerTempStart ? formatDateShort(_datePickerTempStart) : 'Start date'}</span>
                                     <span class="dp-range-arrow">→</span>
                                     <span id="dpEndDate" class="dp-range-label">${_datePickerTempEnd ? formatDateShort(_datePickerTempEnd) : 'End date'}</span>
@@ -2629,13 +2640,15 @@
                 gradient.addColorStop(0, 'rgba('+acRgb+',0.25)');
                 gradient.addColorStop(1, 'rgba('+acRgb+',0)');
 
-                let labels, dataCurr, dataPrev;
+                let labels, dataCurr, dataPrev, labelsPrev;
                 if (tpl === 'gsc') {
                     labels = (gsc.timeseries||[]).map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
+                    labelsPrev = (gsc.prevTimeseries||[]).map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
                     dataCurr = (gsc.timeseries||[]).map(r => r.impressions);
                     dataPrev = (gsc.prevTimeseries||[]).map(r => r.impressions);
                 } else {
                     labels = (ga4.timeseries||[]).map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
+                    labelsPrev = (ga4.prevTimeseries||[]).map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
                     dataCurr = (ga4.timeseries||[]).map(r => r.sessions);
                     dataPrev = (ga4.prevTimeseries||[]).map(r => r.sessions);
                 }
@@ -2644,9 +2657,30 @@
                     type: 'line',
                     data: { labels, datasets: [
                         { label: tpl==='gsc'?'Impressions':'Sessions', data: dataCurr, borderColor: ac, backgroundColor: gradient, fill: true, tension: 0.35, borderWidth: 2, pointRadius: 2, pointBackgroundColor: ac, pointBorderColor: ac, pointHoverRadius: 5 },
-                        { label: 'Previous ' + (_analyticsData && _analyticsData.meta && _analyticsData.meta.duration_days ? _analyticsData.meta.duration_days + 'd' : ''), data: dataPrev, borderColor: '#4b5563', borderDash: [5,5], fill: false, tension: 0.35, borderWidth: 1.5, pointRadius: 0 }
+                        { label: 'Previous', data: dataPrev, borderColor: '#4b5563', borderDash: [5,5], fill: false, tension: 0.35, borderWidth: 1.5, pointRadius: 0 }
                     ]},
-                    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af', borderColor: '#374151', borderWidth: 1 } }, scales: { x: { grid: { color: gridColor }, ticks: { color: tickColor, font: chartFont, maxTicksLimit: 10 } }, y: { grid: { color: gridColor }, ticks: { color: tickColor, font: chartFont, callback: v => fmtK(v) } } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } }
+                    options: { 
+                        responsive: true, maintainAspectRatio: true, 
+                        plugins: { 
+                            legend: { display: false }, 
+                            tooltip: { 
+                                mode: 'index', intersect: false, backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af', borderColor: '#374151', borderWidth: 1,
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) label += ': ';
+                                        label += context.parsed.y;
+                                        // Append the actual previous date to the tooltip
+                                        if (context.datasetIndex === 1 && labelsPrev && labelsPrev[context.dataIndex]) {
+                                            label += ' (' + labelsPrev[context.dataIndex] + ')';
+                                        }
+                                        return label;
+                                    }
+                                }
+                            } 
+                        }, 
+                        scales: { x: { grid: { color: gridColor }, ticks: { color: tickColor, font: chartFont, maxTicksLimit: 10 } }, y: { grid: { color: gridColor }, ticks: { color: tickColor, font: chartFont, callback: v => fmtK(v) } } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } 
+                    }
                 });
             }
 

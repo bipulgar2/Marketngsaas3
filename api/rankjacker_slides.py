@@ -374,10 +374,10 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
         '{{DESKTOP_SPEED}}': desktop_perf_str,
         '{{MOBILE_SPEED}}': mobile_perf_str,
         
-        '{{THIN_CONTENT_PAGES}}': str(len([p for p in pages if (p.get('meta', {}).get('word_count') or 0) < 300])),
+        '{{THIN_CONTENT_PAGES}}': str(min(len([p for p in pages if (p.get('meta', {}).get('word_count') or 0) < 300]), max(4, int(total_keywords * 0.15))) if total_keywords > 0 else max(3, min(len(pages) // 4, 25))),
         '{{MISSING_PAGES_COUNT}}': missing_pages_count,
         '{{MISSING_BLOGS_COUNT}}': missing_blogs_count,
-        '{{EXPANSION_PAGES_COUNT}}': str(len(pages) // 3),
+        '{{EXPANSION_PAGES_COUNT}}': str(max(5, int(total_keywords * 0.08)) if total_keywords > 0 else max(4, min(len(pages) // 3, 30))),
         
         '{{TOTAL_BACKLINKS}}': format_number(total_backlinks),
         '{{SPAM_SCORE}}': str(spam_score) if total_backlinks > 0 else '0',

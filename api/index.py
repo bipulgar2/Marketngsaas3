@@ -4938,7 +4938,8 @@ def generate_deep_audit_slides_endpoint():
                 data=audit_data,
                 domain=domain,
                 creds=creds,
-                issue_counts=issue_counts
+                issue_counts=issue_counts,
+                competitor_url=competitor_url
             )
         else:
             from api.deep_audit_slides import create_deep_audit_slides

@@ -17,7 +17,11 @@ else:
 # The user's Google Slides template ID
 TEMPLATE_ID = '1qXzhrZRuDdyJQS9XTgfcaY8clTitvXm8Pss7h2V-rEc'
 
-def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
+def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, competitor_url=None):
+    """
+    Creates a new Google Slides presentation by duplicating the RankJacker template
+    and replacing variables with audit data, using deep fallback logic for missing data.
+    """
     if not creds:
         from api.google_auth import get_google_credentials
         creds = get_google_credentials()
@@ -225,31 +229,35 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
             loc_code = location_map.get(country_code, 2840)
             
             # 1. Fetch Top Competitor
-            print(f"DEBUG SLIDES: Fetching competitor for {clean_domain} in loc {loc_code}", file=sys.stderr)
-            comp_res = requests.post(
-                'https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live',
-                headers={**get_auth_header(), 'Content-Type': 'application/json'},
-                json=[{'target': clean_domain, 'location_code': loc_code, 'language_code': 'en', 'limit': 15}]
-            )
+            if competitor_url:
+                print(f"DEBUG SLIDES: Using explicit competitor URL: {competitor_url}", file=sys.stderr)
+                # Clean the provided URL just in case
+                top_competitor = competitor_url.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
+                comp_total_keywords = 0 # Default to 0, we don't know without a separate API call, but we will fetch backlinks
+            else:
+                print(f"DEBUG SLIDES: Fetching competitor for {clean_domain} in loc {loc_code}", file=sys.stderr)
+                comp_res = requests.post(
+                    'https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live',
+                    headers={**get_auth_header(), 'Content-Type': 'application/json'},
+                    json=[{'target': clean_domain, 'location_code': loc_code, 'language_code': 'en', 'limit': 15}]
+                )
+                
+                if comp_res.status_code == 200:
+                    comp_data = comp_res.json()
+                    items = comp_data.get('tasks', [{}])[0].get('result', [{}])[0].get('items', [])
+                    
+                    # Find the first true competitor that isn't the target domain or a giant generic site
+                    ignore_list = ['amazon.com', 'wikipedia.org', 'facebook.com', 'twitter.com', 'instagram.com', 'youtube.com', 'reddit.com', 'pinterest.com', 'apple.com', 'yelp.com']
+                    
+                    for item in items:
+                        c_domain = item.get('domain', '')
+                        if c_domain and c_domain != clean_domain and c_domain not in ignore_list:
+                            top_competitor = c_domain
+                            comp_total_keywords = item.get('full_domain_metrics', {}).get('organic', {}).get('count', 0)
+                            break
             
-            if comp_res.status_code == 200:
-                comp_data = comp_res.json()
-                items = comp_data.get('tasks', [{}])[0].get('result', [{}])[0].get('items', [])
-                
-                # Find the first true competitor that isn't the target domain or a giant generic site
-                ignore_list = ['amazon.com', 'wikipedia.org', 'facebook.com', 'twitter.com', 'instagram.com', 'youtube.com', 'reddit.com', 'pinterest.com', 'apple.com', 'yelp.com']
-                top_competitor = None
-                comp_total_keywords = 0
-                
-                for item in items:
-                    c_domain = item.get('domain', '')
-                    if c_domain and c_domain != clean_domain and c_domain not in ignore_list:
-                        top_competitor = c_domain
-                        comp_total_keywords = item.get('full_domain_metrics', {}).get('organic', {}).get('count', 0)
-                        break
-                
-                if top_competitor:
-                    print(f"DEBUG SLIDES: Found top competitor: {top_competitor}", file=sys.stderr)
+            if top_competitor:
+                print(f"DEBUG SLIDES: Found top competitor: {top_competitor}", file=sys.stderr)
                     # Content Gap Math: Assume 10% of their keywords are high-intent missing pages, up to a reasonable cap
                     if comp_total_keywords > total_keywords:
                         raw_missing = comp_total_keywords - total_keywords

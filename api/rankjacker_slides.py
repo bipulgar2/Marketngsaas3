@@ -138,6 +138,7 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         
     # If this is a CSV import, all traffic will be 0. We must fetch true top pages on-the-fly from DataForSEO
     if sorted_pages and (sorted_pages[0].get('traffic', 0) or 0) == 0:
+        print(f"DEBUG SLIDES: Traffic is 0, attempting deep fix for {domain}", file=sys.stderr)
         try:
             from api.dataforseo_client import fetch_ranked_keywords
             # Clean domain
@@ -145,11 +146,13 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
             if '(' in clean_domain:
                 clean_domain = clean_domain.split('(')[0].strip()
             clean_domain = clean_domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
+            print(f"DEBUG SLIDES: Clean domain is {clean_domain}", file=sys.stderr)
             
             # Fetch top 100 keywords to extract the best URLs
             res = fetch_ranked_keywords(clean_domain, limit=100)
             if res and res.get('success'):
                 fetched_kws = res.get('keywords', [])
+                print(f"DEBUG SLIDES: Fetched {len(fetched_kws)} keywords", file=sys.stderr)
                 url_map = {}
                 for kw_item in fetched_kws:
                     serp_item = kw_item.get('ranked_serp_element', {}).get('serp_item', {})
@@ -168,7 +171,13 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
                 
                 if url_map:
                     sorted_pages = sorted(list(url_map.values()), key=lambda x: x.get('traffic', 0), reverse=True)
+                    print(f"DEBUG SLIDES: Sorted pages successfully updated, top URL is {sorted_pages[0].get('url')} with {sorted_pages[0].get('traffic')} traffic", file=sys.stderr)
+                else:
+                    print(f"DEBUG SLIDES: URL map was empty after processing keywords", file=sys.stderr)
+            else:
+                print(f"DEBUG SLIDES: fetch_ranked_keywords returned failure or None: {res}", file=sys.stderr)
         except Exception as e:
+            print(f"DEBUG SLIDES: Exception in deep fix: {e}", file=sys.stderr)
             pass
             
     

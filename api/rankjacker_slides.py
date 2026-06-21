@@ -405,8 +405,33 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
         '{{NEXT_STEP_4}}': 'Explain exactly how our Lifecycle Link Building framework builds authority and drives measurable revenue'
     }
 
-    requests = []
+    # Expand replacements to handle template typos (e.g. spaces inside braces)
+    expanded_replacements = {}
     for tag, value in replacements.items():
+        expanded_replacements[tag] = value
+        if tag.startswith('{{') and tag.endswith('}}'):
+            inner = tag[2:-2].strip()
+            # Handle common spacing typos inside braces seen in templates
+            expanded_replacements[f'{{{{ {inner} }}}}'] = value
+            expanded_replacements[f'{{{{{inner} }}}}'] = value
+            expanded_replacements[f'{{{{ {inner}}}}}'] = value
+            expanded_replacements[f'{{{{{inner}  }}}}'] = value
+            expanded_replacements[f'{{{{  {inner}  }}}}'] = value
+            # Handle the specific typo seen in the screenshot: {{FOO} }
+            expanded_replacements[f'{{{{{inner}}} }}'] = value
+            expanded_replacements[f'{{{{{inner}}}  }}'] = value
+            # Handle space before the closing braces: {{FOO }}
+            expanded_replacements[f'{{{{{inner} }}}}'] = value
+            expanded_replacements[f'{{{{{inner}  }}}}'] = value
+            # Handle missing underscores
+            if '_' in inner:
+                expanded_replacements[f'{{{{{inner.replace("_", " ")}}}}}'] = value
+                expanded_replacements[f'{{{{ {inner.replace("_", " ")} }}}}'] = value
+
+    requests = []
+    # Sort by length descending so longer exact matches are replaced before shorter ones if they overlap
+    for tag in sorted(expanded_replacements.keys(), key=len, reverse=True):
+        value = expanded_replacements[tag]
         requests.append({
             'replaceAllText': {
                 'containsText': {

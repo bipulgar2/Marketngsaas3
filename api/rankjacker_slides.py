@@ -140,8 +140,14 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
     if sorted_pages and (sorted_pages[0].get('traffic', 0) or 0) == 0:
         try:
             from api.dataforseo_client import fetch_ranked_keywords
+            # Clean domain
+            clean_domain = domain.lower()
+            if '(' in clean_domain:
+                clean_domain = clean_domain.split('(')[0].strip()
+            clean_domain = clean_domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
+            
             # Fetch top 100 keywords to extract the best URLs
-            res = fetch_ranked_keywords(domain, limit=100)
+            res = fetch_ranked_keywords(clean_domain, limit=100)
             if res and res.get('success'):
                 fetched_kws = res.get('keywords', [])
                 url_map = {}
@@ -182,10 +188,17 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
     pagespeed_data = data.get('pagespeed', {})
     if isinstance(pagespeed_data, str):
         try:
-            import json
             pagespeed_data = json.loads(pagespeed_data)
         except:
             pagespeed_data = {}
+    if not pagespeed_data and domain and domain != 'unknown':
+        from execution.pagespeed_insights import fetch_pagespeed_scores
+        # Clean domain
+        clean_domain = domain.lower()
+        if '(' in clean_domain:
+            clean_domain = clean_domain.split('(')[0].strip()
+        clean_domain = clean_domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
+        pagespeed_data = fetch_pagespeed_scores(f"https://{clean_domain}") or {}
     mobile_ps = pagespeed_data.get('mobile', {})
     desktop_ps = pagespeed_data.get('desktop', {})
     mobile_scores = mobile_ps.get('scores', pagespeed_data.get('scores', {}))

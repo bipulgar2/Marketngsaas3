@@ -135,6 +135,36 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
     sorted_pages = sorted(valid_pages, key=lambda x: x.get('traffic', 0) or 0, reverse=True)
     if not sorted_pages:
         sorted_pages = pages # fallback just in case
+        
+    # If this is a CSV import, all traffic will be 0. We must fetch true top pages on-the-fly from DataForSEO
+    if sorted_pages and (sorted_pages[0].get('traffic', 0) or 0) == 0:
+        try:
+            from api.dataforseo_client import fetch_ranked_keywords
+            # Fetch top 100 keywords to extract the best URLs
+            res = fetch_ranked_keywords(domain, limit=100)
+            if res and res.get('success'):
+                fetched_kws = res.get('keywords', [])
+                url_map = {}
+                for kw_item in fetched_kws:
+                    serp_item = kw_item.get('ranked_serp_element', {}).get('serp_item', {})
+                    kw_str = kw_item.get('keyword_data', {}).get('keyword', '')
+                    url = serp_item.get('url', '')
+                    traffic = serp_item.get('etv', 0) or 0
+                    
+                    if not url or url.endswith(excluded_exts) or 'wp-content/uploads' in url:
+                        continue
+                        
+                    if url not in url_map:
+                        url_map[url] = {'url': url, 'traffic': 0, 'keywords': []}
+                    url_map[url]['traffic'] += traffic
+                    if kw_str:
+                        url_map[url]['keywords'].append(kw_str)
+                
+                if url_map:
+                    sorted_pages = sorted(list(url_map.values()), key=lambda x: x.get('traffic', 0), reverse=True)
+        except Exception as e:
+            pass
+            
     
     top_url_1 = sorted_pages[0].get('url', '').replace('https://', '').replace('http://', '').replace('www.', '') if len(sorted_pages) > 0 else 'N/A'
     top_traf_1 = format_number(sorted_pages[0].get('traffic', 0)) if len(sorted_pages) > 0 else '0'

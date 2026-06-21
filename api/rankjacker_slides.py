@@ -123,11 +123,37 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
                 
         tech_issues_count = title_too_long + no_desc + desc_too_long + no_h1 + dups
         
+    import re
+    clean_domain = re.sub(r'\(.*?\)', '', domain).strip().lower()
+    clean_domain = clean_domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
+    
+    if '.' not in clean_domain:
+        if pages and len(pages) > 0:
+            first_url = pages[0].get('url', '')
+            if first_url:
+                extracted = first_url.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
+                if '.' in extracted:
+                    clean_domain = extracted
+    print(f"DEBUG SLIDES: Clean domain is {clean_domain}", file=sys.stderr)
+
     # Backlink gap vs competitor
     raw_rank = backlinks.get('rank', 0) or 0
+    total_backlinks = backlinks.get('backlinks', 0) or 0
+    
+    if total_backlinks == 0:
+        print(f"DEBUG SLIDES: Total backlinks is 0, attempting deep fetch for {clean_domain}", file=sys.stderr)
+        try:
+            from api.dataforseo_client import fetch_backlinks_summary
+            bl_data = fetch_backlinks_summary(clean_domain)
+            if bl_data and bl_data.get('success'):
+                raw_rank = bl_data.get('rank', 0) or 0
+                total_backlinks = bl_data.get('backlinks', 0) or 0
+                backlinks['spam_score'] = bl_data.get('spam_score', 12)
+        except Exception as e:
+            print(f"DEBUG SLIDES: Exception fetching backlinks: {e}", file=sys.stderr)
+
     # DataForSEO rank is out of 1000. Ahrefs/Moz DA is out of 100. Divide by 10 for a close approximation.
     domain_authority = int(round(raw_rank / 10)) if raw_rank > 0 else 0
-    total_backlinks = backlinks.get('backlinks', 0) or 0
     spam_score = backlinks.get('spam_score', 12) or 12 # Default visual
     
     # Sort top pages by traffic, filtering out non-HTML assets
@@ -147,19 +173,7 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
         print(f"DEBUG SLIDES: Traffic is 0, attempting deep fix for {domain}", file=sys.stderr)
         try:
             from api.dataforseo_client import fetch_ranked_keywords
-            import re
-            clean_domain = re.sub(r'\(.*?\)', '', domain).strip().lower()
-            clean_domain = clean_domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
-            
-            if '.' not in clean_domain:
-                if pages and len(pages) > 0:
-                    first_url = pages[0].get('url', '')
-                    if first_url:
-                        extracted = first_url.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
-                        if '.' in extracted:
-                            clean_domain = extracted
-            print(f"DEBUG SLIDES: Clean domain is {clean_domain}", file=sys.stderr)
-            
+            # clean_domain is now defined earlier
             # Fetch top 100 keywords to extract the best URLs
             res = fetch_ranked_keywords(clean_domain, limit=100)
             if res and res.get('success'):

@@ -276,8 +276,13 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         '{{COMPETITOR_DOMAINS_GAP}}': '0',
         
         '{{CRITICAL_ISSUE_1}}': 'Missing H1 Tags on Core Landing Pages' if no_h1 > 0 else 'Technical Audit Required',
+        '{{CRITICAL_ISSUE_DESC_1}}': f'We found {no_h1} key pages missing an H1 tag. Without a primary heading, Google struggles to understand the topical relevance of your page, actively suppressing your ability to rank for high-intent keywords.' if no_h1 > 0 else 'A deep-dive technical audit is required to identify the root structural causes preventing your site from achieving higher organic visibility.',
+        
         '{{CRITICAL_ISSUE_2}}': 'Unoptimized Meta Descriptions Across Site' if no_desc > 0 else 'Content Review Required',
+        '{{CRITICAL_ISSUE_DESC_2}}': f'We identified {no_desc} pages with missing or unoptimized meta descriptions. This directly lowers your click-through rate (CTR) in the search results, meaning you are bleeding potential traffic and leads to competitors.' if no_desc > 0 else 'A comprehensive review of your content architecture is needed to ensure every page is fully optimized to capture and convert search intent.',
+        
         '{{CRITICAL_ISSUE_3}}': 'Slow Mobile Page Speed Blocking Indexation' if (mobile_perf and mobile_perf < 50) else 'Backlink Analysis Required',
+        '{{CRITICAL_ISSUE_DESC_3}}': f'Your mobile performance score is critically low ({mobile_perf_str}/100). Google operates on a mobile-first index, meaning slow load times are actively penalizing your rankings and causing potential customers to bounce.' if (mobile_perf and mobile_perf < 50) else 'A thorough analysis of your backlink profile is required to determine the gap in link equity between your domain and the top-ranking competitors.',
         
         '{{VISIBILITY_PROJECTION}}': '45',
         '{{TRAFFIC_PROJECTION}}': '85',

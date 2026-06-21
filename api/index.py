@@ -4720,6 +4720,7 @@ def generate_deep_audit_slides_endpoint():
         audit_id = data.get('audit_id') or data.get('project_id')  # autoGenerateSlides sends as project_id
         issue_counts = data.get('issue_counts', {})
         template_type = data.get('template_type', 'default')  # 'default' or 'authority_shift'
+        competitor_url = data.get('competitor_url')
         
         client = supabase_admin or supabase
         

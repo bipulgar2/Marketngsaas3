@@ -4632,6 +4632,9 @@
         // SLIDE GENERATION (Hidden Iframe Flow)
         // ==========================================================================
         function startSlideGeneration(auditId, templateType = 'default') {
+            const compUrl = prompt("Optional: Enter the Top Competitor URL for the gap analysis, or leave blank to auto-detect:", "");
+            if (compUrl === null) return; // User clicked Cancel
+            
             // Show loading modal
             const modal = document.createElement('div');
             modal.id = 'slideGenModal';
@@ -4666,10 +4669,10 @@
             setTimeout(() => updateProgress(60, 'Capturing screenshots...'), 10000);
             setTimeout(() => updateProgress(75, 'Building Google Slides presentation...'), 20000);
 
-            // Create hidden iframe — pass template_type
+            // Create hidden iframe — pass template_type and competitor_url
             const iframe = document.createElement('iframe');
             iframe.id = 'slideGenIframe';
-            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}&role=${currentUser?.role || ''}`;
+            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}&role=${currentUser?.role || ''}&competitor_url=${encodeURIComponent(compUrl)}`;
             iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1400px;height:900px;opacity:0;pointer-events:none;';
             document.body.appendChild(iframe);
 
@@ -11288,6 +11291,9 @@
         }
 
         async function generateAudit2Slides(auditId) {
+            const compUrl = prompt("Optional: Enter the Top Competitor URL for the gap analysis, or leave blank to auto-detect:", "");
+            if (compUrl === null) return; // User clicked Cancel
+            
             const templateType = document.getElementById(`tmpl-${auditId}`)?.value || 'authority_shift';
             const btn = document.getElementById(`slides-btn-${auditId}`);
 
@@ -11346,7 +11352,7 @@
             const iframe = document.createElement('iframe');
             iframe.id = 'siteAuditSlideIframe';
             iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:1400px;height:900px;border:none;opacity:0;pointer-events:none;';
-            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}&role=${currentUser?.role || ''}`;
+            iframe.src = `/audit-dashboard.html?audit_id=${auditId}&auto_generate=true&template_type=${templateType}&role=${currentUser?.role || ''}&competitor_url=${encodeURIComponent(compUrl)}`;
             document.body.appendChild(iframe);
 
             // Timeout after 3 minutes

@@ -1735,6 +1735,7 @@
 
                 // Step 3: Send to API with screenshots and issue counts
                 const templateType = document.getElementById('template-type-select')?.value || 'default';
+                const competitorUrl = params.get('competitor_url');
                 const response = await fetch('/api/deep-audit/generate-slides', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1742,7 +1743,8 @@
                         project_id: projectId,
                         screenshots: screenshots,
                         issue_counts: issueCounts,
-                        template_type: templateType
+                        template_type: templateType,
+                        competitor_url: competitorUrl
                     })
                 });
 
@@ -1951,6 +1953,8 @@
             // Step 4: Send to API (read template_type from URL params for iframe mode)
             const autoParams = new URLSearchParams(window.location.search);
             const autoTemplateType = autoParams.get('template_type') || document.getElementById('template-type-select')?.value || 'default';
+            const autoCompetitorUrl = autoParams.get('competitor_url');
+            
             const response = await fetch('/api/deep-audit/generate-slides', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1958,7 +1962,8 @@
                     project_id: auditId,
                     screenshots: screenshots,
                     issue_counts: issueCounts,
-                    template_type: autoTemplateType
+                    template_type: autoTemplateType,
+                    competitor_url: autoCompetitorUrl
                 })
             });
 

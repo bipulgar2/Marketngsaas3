@@ -258,30 +258,30 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
             
             if top_competitor:
                 print(f"DEBUG SLIDES: Found top competitor: {top_competitor}", file=sys.stderr)
-                    # Content Gap Math: Assume 10% of their keywords are high-intent missing pages, up to a reasonable cap
-                    if comp_total_keywords > total_keywords:
-                        raw_missing = comp_total_keywords - total_keywords
-                        missing_pages_count = str(min(max(raw_missing // 50, 5), 150))
-                        missing_blogs_count = str(min(max(raw_missing // 20, 10), 300))
-                    
-                    # 2. Fetch Backlinks for Competitor
-                    bl_res = requests.post(
-                        'https://api.dataforseo.com/v3/backlinks/summary/live',
-                        headers={**get_auth_header(), 'Content-Type': 'application/json'},
-                        json=[{'target': top_competitor}]
-                    )
-                    if bl_res.status_code == 200:
-                        bl_data = bl_res.json()
-                        comp_backlinks = bl_data.get('tasks', [{}])[0].get('result', [{}])[0].get('backlinks', 0)
-                        if comp_backlinks > 0:
-                            # Avoid division by zero
-                            client_bls = max(total_backlinks, 1)
-                            multiplier = max(round(comp_backlinks / client_bls, 1), 1.0)
-                            if multiplier == int(multiplier):
-                                backlink_gap_multiplier = str(int(multiplier))
-                            else:
-                                backlink_gap_multiplier = str(multiplier)
-                            print(f"DEBUG SLIDES: Competitor backlinks: {comp_backlinks}, Gap multiplier: {backlink_gap_multiplier}x", file=sys.stderr)
+                # Content Gap Math: Assume 10% of their keywords are high-intent missing pages, up to a reasonable cap
+                if comp_total_keywords > total_keywords:
+                    raw_missing = comp_total_keywords - total_keywords
+                    missing_pages_count = str(min(max(raw_missing // 50, 5), 150))
+                    missing_blogs_count = str(min(max(raw_missing // 20, 10), 300))
+                
+                # 2. Fetch Backlinks for Competitor
+                bl_res = requests.post(
+                    'https://api.dataforseo.com/v3/backlinks/summary/live',
+                    headers={**get_auth_header(), 'Content-Type': 'application/json'},
+                    json=[{'target': top_competitor}]
+                )
+                if bl_res.status_code == 200:
+                    bl_data = bl_res.json()
+                    comp_backlinks = bl_data.get('tasks', [{}])[0].get('result', [{}])[0].get('backlinks', 0)
+                    if comp_backlinks > 0:
+                        # Avoid division by zero
+                        client_bls = max(total_backlinks, 1)
+                        multiplier = max(round(comp_backlinks / client_bls, 1), 1.0)
+                        if multiplier == int(multiplier):
+                            backlink_gap_multiplier = str(int(multiplier))
+                        else:
+                            backlink_gap_multiplier = str(multiplier)
+                        print(f"DEBUG SLIDES: Competitor backlinks: {comp_backlinks}, Gap multiplier: {backlink_gap_multiplier}x", file=sys.stderr)
         except Exception as e:
             print(f"DEBUG SLIDES: Failed to fetch competitor data: {e}", file=sys.stderr)
 

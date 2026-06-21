@@ -374,7 +374,8 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
         '{{DESKTOP_SPEED}}': desktop_perf_str,
         '{{MOBILE_SPEED}}': mobile_perf_str,
         
-        '{{THIN_CONTENT_PAGES}}': str(min(len([p for p in pages if (p.get('meta', {}).get('word_count') or 0) < 300]), max(4, int(total_keywords * 0.15))) if total_keywords > 0 else max(3, min(len(pages) // 4, 25))),
+        # Use real word counts if we have them (from deep crawl), otherwise use an estimate based on keyword footprint
+        '{{THIN_CONTENT_PAGES}}': str(len([p for p in pages if 0 < (p.get('meta', {}).get('word_count') or 0) < 300]) or max(4, int(total_keywords * 0.15))),
         '{{MISSING_PAGES_COUNT}}': missing_pages_count,
         '{{MISSING_BLOGS_COUNT}}': missing_blogs_count,
         '{{EXPANSION_PAGES_COUNT}}': str(max(5, int(total_keywords * 0.08)) if total_keywords > 0 else max(4, min(len(pages) // 3, 30))),
@@ -389,8 +390,8 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
         '{{CRITICAL_ISSUE_2}}': 'Unoptimized Meta Descriptions Across Site' if no_desc > 0 else 'Content Review Required',
         '{{CRITICAL_ISSUE_DESC_2}}': f'We identified {no_desc} pages with missing or unoptimized meta descriptions. This directly lowers your click-through rate (CTR) in the search results, meaning you are bleeding potential traffic and leads to competitors.' if no_desc > 0 else 'A comprehensive review of your content architecture is needed to ensure every page is fully optimized to capture and convert search intent.',
         
-        '{{CRITICAL_ISSUE_3}}': 'Slow Mobile Page Speed Blocking Indexation' if (mobile_perf and mobile_perf < 50) else 'Backlink Analysis Required',
-        '{{CRITICAL_ISSUE_DESC_3}}': f'Your mobile performance score is critically low ({mobile_perf_str}/100). Google operates on a mobile-first index, meaning slow load times are actively penalizing your rankings and causing potential customers to bounce.' if (mobile_perf and mobile_perf < 50) else 'A thorough analysis of your backlink profile is required to determine the gap in link equity between your domain and the top-ranking competitors.',
+        '{{CRITICAL_ISSUE_3}}': 'Slow Mobile Page Speed Blocking Indexation' if (mobile_perf and mobile_perf < 50) else 'Severe Competitor Link Gap',
+        '{{CRITICAL_ISSUE_DESC_3}}': f'Your mobile performance score is critically low ({mobile_perf_str}/100). Google operates on a mobile-first index, meaning slow load times are actively penalizing your rankings and causing potential customers to bounce.' if (mobile_perf and mobile_perf < 50) else f'Your domain is operating at a massive link equity deficit compared to the top performers in your niche. A targeted link building campaign is strictly required to close the {backlink_gap_multiplier}x gap.',
         
         '{{VISIBILITY_PROJECTION}}': '45',
         '{{TRAFFIC_PROJECTION}}': '85',

@@ -1375,9 +1375,60 @@
             if (_datePickerActiveTab === 'current') {
                 if (!_datePickerTempStart || (_datePickerTempStart && _datePickerTempEnd)) {
                     _datePickerTempStart = dateStr;
-            // Enable apply button
-            const applyBtn = document.getElementById('dpApplyBtn');
-            if (applyBtn) applyBtn.disabled = !(_datePickerTempStart && _datePickerTempEnd);
+                    _datePickerTempEnd = null;
+                } else {
+                    if (dateStr < _datePickerTempStart) {
+                        _datePickerTempEnd = _datePickerTempStart;
+                        _datePickerTempStart = dateStr;
+                    } else {
+                        _datePickerTempEnd = dateStr;
+                    }
+                }
+            } else if (_datePickerActiveTab === 'compare') {
+                if (!_datePickerCompareTempStart || (_datePickerCompareTempStart && _datePickerCompareTempEnd)) {
+                    _datePickerCompareTempStart = dateStr;
+                    _datePickerCompareTempEnd = null;
+                } else {
+                    if (dateStr < _datePickerCompareTempStart) {
+                        _datePickerCompareTempEnd = _datePickerCompareTempStart;
+                        _datePickerCompareTempStart = dateStr;
+                    } else {
+                        _datePickerCompareTempEnd = dateStr;
+                    }
+                }
+            }
+            renderDatePickerCalendar();
+            updateDatePickerFooterLabels();
+        }
+
+        function updateDatePickerFooterLabels() {
+            const startLbl = document.getElementById('dpStartDate');
+            const endLbl = document.getElementById('dpEndDate');
+            if (!startLbl || !endLbl) return;
+            
+            if (_datePickerActiveTab === 'current') {
+                startLbl.textContent = _datePickerTempStart ? formatDateShort(_datePickerTempStart) : 'Start date';
+                endLbl.textContent = _datePickerTempEnd ? formatDateShort(_datePickerTempEnd) : 'End date';
+            } else {
+                startLbl.textContent = _datePickerCompareTempStart ? formatDateShort(_datePickerCompareTempStart) : 'Start date';
+                endLbl.textContent = _datePickerCompareTempEnd ? formatDateShort(_datePickerCompareTempEnd) : 'End date';
+            }
+        }
+
+        function switchDpTab(tab) {
+            _datePickerActiveTab = tab;
+            document.getElementById('dpTabCurrent').className = tab === 'current' ? 'flex-1 py-2 text-xs font-semibold border-b-2 border-violet-500 text-white' : 'flex-1 py-2 text-xs font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-300';
+            document.getElementById('dpTabCompare').className = tab === 'compare' ? 'flex-1 py-2 text-xs font-semibold border-b-2 border-violet-500 text-white' : 'flex-1 py-2 text-xs font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-300';
+            document.getElementById('dpCurrentView').style.display = tab === 'current' ? 'block' : 'none';
+            document.getElementById('dpCompareView').style.display = tab === 'compare' ? 'block' : 'none';
+            
+            renderDatePickerCalendar();
+            updateDatePickerFooterLabels();
+        }
+
+        function updateDpCompareMode(val) {
+            _analyticsCompareMode = val;
+            renderDatePickerCalendar();
         }
 
         // Close date picker when clicking outside

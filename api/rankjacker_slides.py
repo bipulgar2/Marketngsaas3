@@ -120,7 +120,9 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         tech_issues_count = title_too_long + no_desc + desc_too_long + no_h1 + dups
         
     # Backlink gap vs competitor
-    domain_authority = backlinks.get('rank', 0) or 0
+    raw_rank = backlinks.get('rank', 0) or 0
+    # DataForSEO rank is out of 1000. Ahrefs/Moz DA is out of 100. Divide by 10 for a close approximation.
+    domain_authority = int(round(raw_rank / 10)) if raw_rank > 0 else 0
     total_backlinks = backlinks.get('backlinks', 0) or 0
     spam_score = backlinks.get('spam_score', 12) or 12 # Default visual
     

@@ -374,11 +374,13 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None, 
         '{{DESKTOP_SPEED}}': desktop_perf_str,
         '{{MOBILE_SPEED}}': mobile_perf_str,
         
-        # Use real word counts if we have them (from deep crawl), otherwise use an estimate based on keyword footprint
-        '{{THIN_CONTENT_PAGES}}': str(len([p for p in pages if 0 < (p.get('meta', {}).get('word_count') or 0) < 300]) or max(4, int(total_keywords * 0.15))),
+        # Use real word counts if we have them (from deep crawl), otherwise use a double-bound estimate.
+        # This double-bounding prevents telling a 5-page site they have 50 thin pages, while also
+        # preventing a spider-trap from saying they have 10,000 thin pages.
+        '{{THIN_CONTENT_PAGES}}': str(len([p for p in valid_pages if 0 < (p.get('meta', {}).get('word_count') or 0) < 300]) or max(1, min(len(valid_pages) // 2, int(total_keywords * 0.15)))),
         '{{MISSING_PAGES_COUNT}}': missing_pages_count,
         '{{MISSING_BLOGS_COUNT}}': missing_blogs_count,
-        '{{EXPANSION_PAGES_COUNT}}': str(max(5, int(total_keywords * 0.08)) if total_keywords > 0 else max(4, min(len(pages) // 3, 30))),
+        '{{EXPANSION_PAGES_COUNT}}': str(max(1, min(len(valid_pages) // 3, int(total_keywords * 0.08))) if total_keywords > 0 else max(1, min(len(valid_pages) // 4, 30))),
         
         '{{TOTAL_BACKLINKS}}': format_number(total_backlinks),
         '{{SPAM_SCORE}}': str(spam_score) if total_backlinks > 0 else '0',

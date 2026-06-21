@@ -37,7 +37,7 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         return {'error': f"Failed to clone template: {str(e)}"}
     
     # Extract data parts
-    rank_overview = data.get('domain_rank', {})
+    rank_overview = data.get('domain_rank') or data.get('domain_metrics', {})
     backlinks = data.get('backlinks_summary', {})
     keywords = data.get('organic_keywords', [])
     
@@ -79,6 +79,14 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
             needs_work_count += 1
         elif pos and pos <= 10:
             page_1_count += 1
+            
+    # Fallback to labs api metrics if keywords list is empty
+    if page_1_count == 0 and not keywords:
+        metrics = rank_overview.get('metrics', {}) if rank_overview else {}
+        organic_metrics = metrics.get('organic') if metrics else {}
+        if organic_metrics:
+            page_1_count = organic_metrics.get('pos_1', 0) + organic_metrics.get('pos_2_3', 0) + organic_metrics.get('pos_4_10', 0)
+            needs_work_count = total_keywords - page_1_count
             
     not_page_1_pct = round((needs_work_count / total_keywords * 100) if total_keywords > 0 else 0)
     

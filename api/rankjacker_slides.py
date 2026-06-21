@@ -215,8 +215,7 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
             comp_res = requests.post(
                 'https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live',
                 headers={**get_auth_header(), 'Content-Type': 'application/json'},
-                json=[{'target': clean_domain, 'location_code': 2840, 'language_code': 'en', 'limit': 10}],
-                timeout=10
+                json=[{'target': clean_domain, 'location_code': 2840, 'language_code': 'en', 'limit': 15}]
             )
             
             if comp_res.status_code == 200:
@@ -247,8 +246,7 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
                     bl_res = requests.post(
                         'https://api.dataforseo.com/v3/backlinks/summary/live',
                         headers={**get_auth_header(), 'Content-Type': 'application/json'},
-                        json=[{'target': top_competitor}],
-                        timeout=10
+                        json=[{'target': top_competitor}]
                     )
                     if bl_res.status_code == 200:
                         bl_data = bl_res.json()

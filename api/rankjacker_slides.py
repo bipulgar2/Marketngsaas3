@@ -82,11 +82,15 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
             
     # Fallback to labs api metrics if keywords list is empty
     if page_1_count == 0 and not keywords:
-        metrics = rank_overview.get('metrics', {}) if rank_overview else {}
-        organic_metrics = metrics.get('organic') if metrics else {}
-        if organic_metrics:
-            page_1_count = organic_metrics.get('pos_1', 0) + organic_metrics.get('pos_2_3', 0) + organic_metrics.get('pos_4_10', 0)
-            needs_work_count = total_keywords - page_1_count
+        if rank_overview and 'top_10_keywords' in rank_overview:
+            page_1_count = rank_overview.get('top_10_keywords', 0)
+            needs_work_count = max(0, total_keywords - page_1_count)
+        else:
+            metrics = rank_overview.get('metrics', {}) if rank_overview else {}
+            organic_metrics = metrics.get('organic') if metrics else {}
+            if organic_metrics:
+                page_1_count = organic_metrics.get('pos_1', 0) + organic_metrics.get('pos_2_3', 0) + organic_metrics.get('pos_4_10', 0)
+                needs_work_count = max(0, total_keywords - page_1_count)
             
     not_page_1_pct = round((needs_work_count / total_keywords * 100) if total_keywords > 0 else 0)
     
@@ -173,16 +177,25 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         '{{BACKLINK_GAP}}': '0', # Hardcoded or dynamic if you have competitor
         
         '{{TOTAL_KEYWORDS}}': format_number(total_keywords),
+        '{{TOTAL KEYWORDS}}': format_number(total_keywords),
         '{{PAGE_1_RANKINGS}}': format_number(page_1_count),
+        '{{PAGE 1 RANKINGS}}': format_number(page_1_count),
         '{{MONTHLY_TRAFFIC}}': format_number(total_traffic),
+        '{{MONTHLY TRAFFIC}}': format_number(total_traffic),
         '{{DOMAIN_AUTHORITY}}': str(domain_authority),
+        '{{DOMAIN AUTHORITY}}': str(domain_authority),
         
         '{{TOP_URL_1}}': top_url_1, '{{TOP_TRAF_1}}': top_traf_1, '{{TOP_KW_1}}': top_kw_1,
+        '{{TOP URL 1}}': top_url_1, '{{TOP TRAF 1}}': top_traf_1, '{{TOP KW 1}}': top_kw_1,
         '{{TOP_URL_2}}': top_url_2, '{{TOP_TRAF_2}}': top_traf_2, '{{TOP_KW_2}}': top_kw_2,
+        '{{TOP URL 2}}': top_url_2, '{{TOP TRAF 2}}': top_traf_2, '{{TOP KW 2}}': top_kw_2,
         '{{TOP_URL_3}}': top_url_3, '{{TOP_TRAF_3}}': top_traf_3, '{{TOP_KW_3}}': top_kw_3,
+        '{{TOP URL 3}}': top_url_3, '{{TOP TRAF 3}}': top_traf_3, '{{TOP KW 3}}': top_kw_3,
         
         '{{OPPORTUNITY_KEYWORDS}}': format_number(needs_work_count),
+        '{{OPPORTUNITY KEYWORDS}}': format_number(needs_work_count),
         '{{OPPORTUNITY_TRAFFIC}}': format_number(needs_work_count * 12), # Estimated potential
+        '{{OPPORTUNITY TRAFFIC}}': format_number(needs_work_count * 12), # Estimated potential
         
         '{{DESKTOP_SPEED}}': desktop_perf_str,
         '{{MOBILE_SPEED}}': mobile_perf_str,

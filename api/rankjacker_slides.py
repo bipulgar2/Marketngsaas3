@@ -286,7 +286,12 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         
         '{{VISIBILITY_PROJECTION}}': '45',
         '{{TRAFFIC_PROJECTION}}': '85',
-        '{{REVENUE_PROJECTION}}': '120'
+        '{{REVENUE_PROJECTION}}': '120',
+        
+        '{{NEXT_STEP_1}}': f'Walk through the {tech_issues_count} technical roadblocks identified and answer every question' if tech_issues_count > 0 else 'Walk through your audit findings in detail and answer every question',
+        '{{NEXT_STEP_2}}': f'Present a phased SEO Growth Roadmap built specifically to capture your {format_number(needs_work_count * 12)} lost monthly traffic potential' if needs_work_count > 0 else 'Present a phased SEO Growth Roadmap built specifically for your business',
+        '{{NEXT_STEP_3}}': 'Share exact timelines to resolve your structural gaps and deploy the new content architecture',
+        '{{NEXT_STEP_4}}': 'Explain exactly how our Lifecycle Link Building framework builds authority and drives measurable revenue'
     }
 
     requests = []

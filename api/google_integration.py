@@ -398,6 +398,10 @@ def get_google_metrics():
                 prev_end = prev_end_dt.isoformat()
                 prev_start = prev_start_dt.isoformat()
                 duration_label = 'vs previous year'
+            elif compare_mode == 'custom' and data.get('compare_start_date') and data.get('compare_end_date'):
+                prev_start = data.get('compare_start_date')
+                prev_end = data.get('compare_end_date')
+                duration_label = f'vs {prev_start} to {prev_end}'
             else:
                 # Comparison: immediately before
                 prev_end = (start_dt - timedelta(days=1)).isoformat()
@@ -429,6 +433,10 @@ def get_google_metrics():
                 prev_end = prev_end_dt.isoformat()
                 prev_start = prev_start_dt.isoformat()
                 duration_label = 'vs previous year'
+            elif compare_mode == 'custom' and data.get('compare_start_date') and data.get('compare_end_date'):
+                prev_start = data.get('compare_start_date')
+                prev_end = data.get('compare_end_date')
+                duration_label = f'vs {prev_start} to {prev_end}'
             else:
                 prev_end = (today - timedelta(days=days)).isoformat()
                 prev_start = (today - timedelta(days=(days*2)-1)).isoformat()

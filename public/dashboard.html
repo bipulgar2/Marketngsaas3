@@ -1196,12 +1196,15 @@
         let _analyticsView = 'overview';
         let _analyticsCustomStart = null;  // YYYY-MM-DD when custom range used
         let _analyticsCustomEnd = null;
-        let _datePickerOpen = false;
-        let _datePickerSelecting = null; // 'start' or 'end'
-        let _datePickerTempStart = null;
-        let _datePickerTempEnd = null;
+        let _analyticsCompareCustomStart = null;
+        let _analyticsCompareCustomEnd = null;
+        
+        // State vars for date picker UI
         let _datePickerMonth = new Date().getMonth();
         let _datePickerYear = new Date().getFullYear();
+        let _datePickerTempStart = null;
+        let _datePickerTempEnd = null;
+        
         let _analyticsCompareMode = localStorage.getItem('analytics_compare_mode') || 'previous_period';
 
         // =====================================================================
@@ -1261,6 +1264,18 @@
         }
 
         function applyCustomDateRange() {
+            const cmpSelect = document.getElementById('dpCompareSelect');
+            if (cmpSelect) {
+                _analyticsCompareMode = cmpSelect.value;
+                localStorage.setItem('analytics_compare_mode', _analyticsCompareMode);
+                if (_analyticsCompareMode === 'custom') {
+                    const cStart = document.getElementById('dpCompareCustomStart');
+                    const cEnd = document.getElementById('dpCompareCustomEnd');
+                    if (cStart && cStart.value) _analyticsCompareCustomStart = cStart.value;
+                    if (cEnd && cEnd.value) _analyticsCompareCustomEnd = cEnd.value;
+                }
+            }
+
             if (_datePickerTempStart && _datePickerTempEnd) {
                 // Ensure start <= end
                 if (_datePickerTempStart > _datePickerTempEnd) {
@@ -1269,14 +1284,9 @@
                 _analyticsCustomStart = _datePickerTempStart;
                 _analyticsCustomEnd = _datePickerTempEnd;
                 _analyticsDuration = 'custom';
-                const cmpSelect = document.getElementById('dpCompareSelect');
-                if (cmpSelect) {
-                    _analyticsCompareMode = cmpSelect.value;
-                    localStorage.setItem('analytics_compare_mode', _analyticsCompareMode);
-                }
-                closeDatePicker();
-                loadAnalyticsDashboard();
             }
+            closeDatePicker();
+            loadAnalyticsDashboard();
         }
 
         function renderDatePickerCalendar() {
@@ -1637,6 +1647,10 @@
                 if (_analyticsCustomStart && _analyticsCustomEnd) {
                     metricsBody.start_date = _analyticsCustomStart;
                     metricsBody.end_date = _analyticsCustomEnd;
+                }
+                if (_analyticsCompareMode === 'custom' && _analyticsCompareCustomStart && _analyticsCompareCustomEnd) {
+                    metricsBody.compare_start_date = _analyticsCompareCustomStart;
+                    metricsBody.compare_end_date = _analyticsCompareCustomEnd;
                 }
                 console.log('📊 Analytics request body:', JSON.stringify(metricsBody));
                 console.log('📊 Custom dates:', _analyticsCustomStart, _analyticsCustomEnd);
@@ -2255,12 +2269,19 @@
                             </div>
                             <div id="datePickerCalendar" class="dp-calendar-grid"></div>
                             <div class="dp-footer border-t border-gray-800 pt-3 mt-2">
-                                <div class="mb-3 flex items-center justify-between text-sm">
-                                    <span class="text-gray-400">Compare vs:</span>
-                                    <select id="dpCompareSelect" class="bg-gray-800 border border-gray-700 text-white rounded p-1 text-xs">
-                                        <option value="previous_period" ${_analyticsCompareMode === 'previous_period' ? 'selected' : ''}>Previous period</option>
-                                        <option value="previous_year" ${_analyticsCompareMode === 'previous_year' ? 'selected' : ''}>Previous year</option>
-                                    </select>
+                                <div class="mb-3">
+                                    <div class="flex items-center justify-between text-sm mb-2">
+                                        <span class="text-gray-400">Compare vs:</span>
+                                        <select id="dpCompareSelect" onchange="document.getElementById('dpCompareCustomWrap').style.display = this.value === 'custom' ? 'flex' : 'none'" class="bg-gray-800 border border-gray-700 text-white rounded p-1 text-xs">
+                                            <option value="previous_period" ${_analyticsCompareMode === 'previous_period' ? 'selected' : ''}>Previous period</option>
+                                            <option value="previous_year" ${_analyticsCompareMode === 'previous_year' ? 'selected' : ''}>Previous year</option>
+                                            <option value="custom" ${_analyticsCompareMode === 'custom' ? 'selected' : ''}>Custom</option>
+                                        </select>
+                                    </div>
+                                    <div id="dpCompareCustomWrap" class="gap-2 w-full" style="display: ${_analyticsCompareMode === 'custom' ? 'flex' : 'none'}">
+                                        <input type="date" id="dpCompareCustomStart" class="bg-gray-800 border border-gray-700 text-white rounded text-xs p-1.5 flex-1" value="${_analyticsCompareCustomStart || ''}" max="${new Date().toISOString().split('T')[0]}" />
+                                        <input type="date" id="dpCompareCustomEnd" class="bg-gray-800 border border-gray-700 text-white rounded text-xs p-1.5 flex-1" value="${_analyticsCompareCustomEnd || ''}" max="${new Date().toISOString().split('T')[0]}" />
+                                    </div>
                                 </div>
                                 <div class="dp-selected-range mb-3">
                                     <span id="dpStartDate" class="dp-range-label">${_datePickerTempStart ? formatDateShort(_datePickerTempStart) : 'Start date'}</span>
@@ -2269,7 +2290,7 @@
                                 </div>
                                 <div class="dp-actions">
                                     <button onclick="closeDatePicker()" class="dp-cancel-btn">Cancel</button>
-                                    <button id="dpApplyBtn" onclick="applyCustomDateRange()" class="dp-apply-btn" ${!(_datePickerTempStart && _datePickerTempEnd) ? 'disabled' : ''}>Apply</button>
+                                    <button id="dpApplyBtn" onclick="applyCustomDateRange()" class="dp-apply-btn">Apply</button>
                                 </div>
                             </div>
                         </div>

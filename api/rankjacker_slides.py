@@ -141,11 +141,17 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
         print(f"DEBUG SLIDES: Traffic is 0, attempting deep fix for {domain}", file=sys.stderr)
         try:
             from api.dataforseo_client import fetch_ranked_keywords
-            # Clean domain
-            clean_domain = domain.lower()
-            if '(' in clean_domain:
-                clean_domain = clean_domain.split('(')[0].strip()
+            import re
+            clean_domain = re.sub(r'\(.*?\)', '', domain).strip().lower()
             clean_domain = clean_domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
+            
+            if '.' not in clean_domain:
+                if pages and len(pages) > 0:
+                    first_url = pages[0].get('url', '')
+                    if first_url:
+                        extracted = first_url.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
+                        if '.' in extracted:
+                            clean_domain = extracted
             print(f"DEBUG SLIDES: Clean domain is {clean_domain}", file=sys.stderr)
             
             # Fetch top 100 keywords to extract the best URLs
@@ -202,11 +208,17 @@ def create_rankjacker_audit_slides(data, domain, creds=None, issue_counts=None):
             pagespeed_data = {}
     if not pagespeed_data and domain and domain != 'unknown':
         from execution.pagespeed_insights import fetch_pagespeed_scores
-        # Clean domain
-        clean_domain = domain.lower()
-        if '(' in clean_domain:
-            clean_domain = clean_domain.split('(')[0].strip()
+        import re
+        clean_domain = re.sub(r'\(.*?\)', '', domain).strip().lower()
         clean_domain = clean_domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
+        
+        if '.' not in clean_domain:
+            if pages and len(pages) > 0:
+                first_url = pages[0].get('url', '')
+                if first_url:
+                    extracted = first_url.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
+                    if '.' in extracted:
+                        clean_domain = extracted
         pagespeed_data = fetch_pagespeed_scores(f"https://{clean_domain}") or {}
     mobile_ps = pagespeed_data.get('mobile', {})
     desktop_ps = pagespeed_data.get('desktop', {})

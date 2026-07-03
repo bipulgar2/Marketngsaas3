@@ -2771,23 +2771,8 @@ def generate_audit_slides(audit_id):
             domain = 'Website'
             
         # Clean domain and extract from pages if invalid (e.g., "weedposters (testing)")
-        import re
-        clean_domain = re.sub(r'\(.*?\)', '', domain).strip()
-        clean_domain = clean_domain.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
-        
-        if '.' not in clean_domain:
-            # Domain is missing a TLD, try to grab it from the pages list
-            pages_list = full_data.get('pages')
-            if isinstance(pages_list, dict):
-                pages_list = pages_list.get('pages', [])
-            if pages_list and isinstance(pages_list, list):
-                for p in pages_list:
-                    url = p.get('url', '')
-                    if url and url.startswith('http'):
-                        extracted = url.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
-                        if '.' in extracted:
-                            clean_domain = extracted
-                            break
+        from api.utils import resolve_clean_domain
+        clean_domain = resolve_clean_domain(domain, full_data)
                             
         # Fetch pagespeed on-the-fly if missing from audit data
         if not full_data.get('pagespeed') and clean_domain and clean_domain != 'unknown' and clean_domain != 'Website':
@@ -2801,7 +2786,7 @@ def generate_audit_slides(audit_id):
                     ps_data['scores'] = mobile.get('scores', {})
                     ps_data['metrics'] = mobile.get('metrics', {})
                 _time.sleep(3)
-                desktop = fetch_pagespeed_scores(f"https://{domain}", strategy="desktop")
+                desktop = fetch_pagespeed_scores(f"https://{clean_domain}", strategy="desktop")
                 if desktop and desktop.get('success') is not False:
                     ps_data['desktop'] = {'scores': desktop.get('scores', {}), 'metrics': desktop.get('metrics', {})}
                 if ps_data:
@@ -4340,17 +4325,19 @@ def get_project_data(audit_id):
                 logger.warning(f"Merge from audits failed: {merge_err}")
         
         # Fetch pagespeed on-the-fly if still missing
-        domain = project.get('domain') or audit_data.get('domain', '')
-        if not audit_data.get('pagespeed') and domain:
+        from api.utils import resolve_clean_domain
+        raw_domain = project.get('domain') or audit_data.get('domain', '')
+        domain = resolve_clean_domain(raw_domain, audit_data)
+        if not audit_data.get('pagespeed') and domain and '.' in domain:
             try:
                 from execution.pagespeed_insights import fetch_pagespeed_scores
                 ps_data = {}
-                mobile = fetch_pagespeed_scores(f"https://{domain}", strategy="mobile")
+                mobile = fetch_pagespeed_scores(f"https://{domain}", strategy="mobile", max_retries=1)
                 if mobile and mobile.get('success'):
                     ps_data['mobile'] = {'scores': mobile.get('scores', {}), 'metrics': mobile.get('metrics', {})}
                     ps_data['scores'] = mobile.get('scores', {})
                     ps_data['metrics'] = mobile.get('metrics', {})
-                desktop = fetch_pagespeed_scores(f"https://{domain}", strategy="desktop")
+                desktop = fetch_pagespeed_scores(f"https://{domain}", strategy="desktop", max_retries=1)
                 if desktop and desktop.get('success'):
                     ps_data['desktop'] = {'scores': desktop.get('scores', {}), 'metrics': desktop.get('metrics', {})}
                 if ps_data:
@@ -5364,8 +5351,11 @@ def refresh_pagespeed(audit_id):
         if domain:
             domain = domain.replace('https://', '').replace('http://', '').rstrip('/')
         
-        if not domain:
-            return jsonify({'error': 'No domain found'}), 400
+        # Clean domain properly — strip campaign names like "weedposters (testing)"
+        from api.utils import resolve_clean_domain
+        domain = resolve_clean_domain(domain)
+        if not domain or '.' not in domain:
+            return jsonify({'error': f'No valid domain found (raw: {domain})'}), 400
         
         from execution.pagespeed_insights import fetch_pagespeed_scores
         pagespeed = {}

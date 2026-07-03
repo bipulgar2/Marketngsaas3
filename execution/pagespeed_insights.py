@@ -14,7 +14,7 @@ PAGESPEED_API = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 PAGESPEED_API_KEY = os.environ.get("PAGESPEED_API_KEY", "AIzaSyBSz0KCoCYy_9VSUaqVlWr-wF-BL2KdpPM")
 
 
-def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int = 3) -> Optional[Dict[str, Any]]:
+def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int = 2) -> Optional[Dict[str, Any]]:
     """
     Fetch PageSpeed Insights scores for a URL.
     
@@ -35,7 +35,7 @@ def fetch_pagespeed_scores(url: str, strategy: str = "mobile", max_retries: int 
                 "category": ["performance", "accessibility", "best-practices", "seo"]
             }
             
-            response = requests.get(PAGESPEED_API, params=params, timeout=120)
+            response = requests.get(PAGESPEED_API, params=params, timeout=30)
             
             # Handle rate limiting
             if response.status_code == 429:
@@ -123,7 +123,7 @@ def fetch_screenshot(url: str, output_path: str = None) -> Optional[str]:
         }
         
         print(f"DEBUG: Requesting screenshot for {url}...")
-        response = requests.get(PAGESPEED_API, params=params, timeout=60)
+        response = requests.get(PAGESPEED_API, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
         

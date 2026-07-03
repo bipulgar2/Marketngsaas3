@@ -1,5 +1,74 @@
 from supabase import create_client
 import os
+import re
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def resolve_clean_domain(raw_domain: str, data: dict = None) -> str:
+    """
+    Extract the actual website domain from a raw value that might be:
+    - A campaign name like "weedposters (testing)"
+    - A full URL like "https://weedposters.io/"
+    - Already clean like "weedposters.io"
+    
+    Falls back to extracting domain from page URLs or keyword data in `data` dict.
+    Returns a clean domain like "weedposters.io" or empty string if nothing found.
+    """
+    if not raw_domain:
+        raw_domain = ''
+    
+    # Step 1: Strip parentheticals, protocol, www, trailing slash
+    clean = re.sub(r'\(.*?\)', '', raw_domain).strip()
+    clean = clean.replace('https://', '').replace('http://', '').replace('www.', '').strip('/').strip()
+    # Take only the hostname part (before any path)
+    clean = clean.split('/')[0].strip().lower()
+    
+    # Step 2: If it has a dot, it's likely a valid domain already
+    if '.' in clean and ' ' not in clean:
+        return clean
+    
+    # Step 3: Try to extract from the data dict
+    if data:
+        # Try data['domain'] field
+        data_domain = data.get('domain', '')
+        if data_domain and data_domain != raw_domain:
+            candidate = re.sub(r'\(.*?\)', '', data_domain).strip()
+            candidate = candidate.replace('https://', '').replace('http://', '').replace('www.', '').strip('/').split('/')[0].strip().lower()
+            if '.' in candidate and ' ' not in candidate:
+                return candidate
+        
+        # Try page URLs
+        pages_list = data.get('pages', [])
+        if isinstance(pages_list, dict):
+            pages_list = pages_list.get('pages', [])
+        if pages_list and isinstance(pages_list, list):
+            for p in pages_list:
+                url = ''
+                if isinstance(p, dict):
+                    url = p.get('url', '') or p.get('page', '')
+                elif isinstance(p, str):
+                    url = p
+                if url and ('http://' in url or 'https://' in url):
+                    extracted = url.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0].strip().lower()
+                    if '.' in extracted and ' ' not in extracted:
+                        return extracted
+        
+        # Try organic_keywords for the domain
+        keywords = data.get('organic_keywords', [])
+        if keywords and isinstance(keywords, list) and len(keywords) > 0:
+            first_kw = keywords[0] if isinstance(keywords[0], dict) else {}
+            ranked = first_kw.get('ranked_serp_element', {})
+            serp_url = ranked.get('serp_item', {}).get('url', '')
+            if serp_url:
+                extracted = serp_url.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0].strip().lower()
+                if '.' in extracted and ' ' not in extracted:
+                    return extracted
+    
+    # Step 4: Nothing worked — return whatever we have (may be empty or invalid)
+    return clean
+
 
 def create_tasks_from_audit(categorized_data: dict, campaign_id: str, supabase_client) -> list:
     """

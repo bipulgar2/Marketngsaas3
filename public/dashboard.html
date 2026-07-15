@@ -1778,6 +1778,43 @@
             }
         }
         
+        async function trackSelectedKeywords() {
+            if (!currentClient) return;
+            
+            const checkboxes = document.querySelectorAll('.kw-checkbox:checked');
+            const keywords = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (keywords.length === 0) return;
+
+            try {
+                const response = await fetch(`/api/campaigns/${currentClient.id}/keywords`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keywords })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentClient.tracked_keywords = data.keywords;
+                    showToast(`${keywords.length} keyword${keywords.length > 1 ? 's' : ''} pushed to tracking!`, 'success');
+                    renderAnalyticsDashboard();
+                } else {
+                    showToast('Failed to save keywords', 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                showToast('Error saving keywords', 'error');
+            }
+        }
+
+        function untrackSelectedKeywords() {
+            const checkboxes = document.querySelectorAll('.kw-checkbox:checked');
+            const keywords = Array.from(checkboxes).map(cb => cb.value);
+            if (keywords.length > 0) {
+                removeTrackedKeywords(keywords);
+            }
+        }
+
         function filterGscKeywords(val) {
             const searchTerms = val.toLowerCase().trim().split(' ');
             const rows = document.querySelectorAll('.gsc-keyword-row');
@@ -2460,7 +2497,7 @@
                     </div>`;
                 } else if (_analyticsView === 'keywords') {
                     const queries = gsc.queries || [];
-                    const tracked = (currentClient.settings && currentClient.settings.tracked_keywords) || [];
+                    const tracked = currentClient.tracked_keywords || [];
                     viewHtml = `
                     <div class="flex items-center justify-between mb-4">
                         <h4 class="text-sm font-semibold text-white">Top 25 Organic Keywords (GSC)</h4>
@@ -2637,7 +2674,7 @@
                 } else if (_analyticsView === 'organic') {
                     const queries = gsc.queries || [];
                     const pages = gsc.pages || [];
-                    const tracked = (currentClient.settings && currentClient.settings.tracked_keywords) || [];
+                    const tracked = currentClient.tracked_keywords || [];
                     if (!gscProp || gsc.error) {
                         viewHtml = '<div class="text-gray-500 text-center py-16">GSC not connected. Organic data requires GSC. Go to Settings → Google.</div>';
                     } else {

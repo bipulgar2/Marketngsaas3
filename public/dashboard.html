@@ -2593,6 +2593,25 @@
 
             // ========================= ALL USER TRAFFIC =========================
             else if (_analyticsView === 'all-traffic') {
+                if (ga4.error) {
+                    viewHtml = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">${ga4.error}</span></div>`;
+                } else if (!ga4Prop) {
+                    viewHtml = '<div class="text-gray-500 text-center py-16">GA4 not connected. Go to Settings → Google to connect.</div>';
+                } else {
+                    const channels = ga4.channels || [];
+                    const countries = ga4.countries || [];
+                    viewHtml = `
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold text-white mb-3">Channel Breakdown</h4>
+                            <canvas id="premiumChannelBar" height="200"></canvas>
+                        </div>
+                        <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
+                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Channel</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th></tr></thead><tbody>
+                            ${channels.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'.</td><td class="py-2.5 px-4 text-white font-medium">'+c.channel+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(c.activeUsers)+'</td></tr>').join('')}
+                            <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-2.5 px-4 text-gray-300">Total</td><td class="py-2.5 px-4 text-right text-white">${fmtNum(channels.reduce((s,c)=>s+c.sessions,0))}</td><td class="py-2.5 px-4 text-right text-white">${fmtNum(channels.reduce((s,c)=>s+c.activeUsers,0))}</td></tr>
+                            </tbody></table>
+                        </div>
                     </div>
                     <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
                         <h4 class="text-sm font-semibold text-white px-4 pt-4 mb-3">Traffic by Country</h4>

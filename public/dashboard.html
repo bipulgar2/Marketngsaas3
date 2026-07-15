@@ -2273,36 +2273,49 @@
             const contentArea = document.getElementById('contentArea');
             const data = _analyticsData;
             if (!data) return;
-
             const gsc = data.gsc || {};
             const ga4 = data.ga4 || {};
             const gscProp = currentClient.settings.gsc_property;
             const ga4Prop = currentClient.settings.ga4_property;
-            const tpl = _analyticsTemplate;
+            
+            // ---- Focus alias map ----
+            function getFocusGroup(focus) {
+                const map = {'Product':'ecommerce','Ecommerce':'ecommerce','Service':'service','Local':'service','Leadgen':'leadgen','SaaS':'saas'};
+                return map[focus] || 'service';
+            }
+            const rawFocus = (currentClient && currentClient.settings && currentClient.settings.focus) || 'Service';
+            const focusGroup = getFocusGroup(rawFocus);
 
-            const T = {
-                gsc:  { accent: '#10b981', accentRgb: '16,185,129', name: 'Google Search Console', subtitle: 'Overview - Site', icon: 'search',
-                        views: [{id:'overview',icon:'layout-dashboard',label:'Overview'},{id:'keywords',icon:'search',label:'Keywords'},{id:'landing-pages',icon:'file-text',label:'Landing Page'},{id:'geographics',icon:'globe',label:'Geographics'}] },
-                ga4:  { accent: '#f59e0b', accentRgb: '245,158,11', name: 'Google Analytics 4', subtitle: 'Overview', icon: 'bar-chart-3',
-                        views: [{id:'overview',icon:'layout-dashboard',label:'Overview'},{id:'engagements',icon:'activity',label:'Engagements'},{id:'channels',icon:'git-branch',label:'Channels'},{id:'geographics',icon:'globe',label:'Geographics'}] },
-                ecom: { accent: '#3b82f6', accentRgb: '59,130,246', name: 'E-Commerce Dashboard', subtitle: 'Revenue & Conversions', icon: 'shopping-cart',
-                        views: [{id:'overview',icon:'layout-dashboard',label:'Overview'},{id:'channels',icon:'git-branch',label:'Channels'},{id:'locations',icon:'map-pin',label:'Locations'},{id:'products',icon:'package',label:'Products'}] }
+            // Focus-specific config
+            const FOCUS_CFG = {
+                ecommerce: { accent:'#3b82f6', accentRgb:'59,130,246', label:'E-Commerce', convLabel:'Conversions', convIcon:'shopping-cart', convSubtitle:'Revenue & Transactions' },
+                service:   { accent:'#10b981', accentRgb:'16,185,129', label:'Service', convLabel:'Conversions', convIcon:'target', convSubtitle:'Goals & Completions' },
+                leadgen:   { accent:'#8b5cf6', accentRgb:'139,92,246', label:'Lead Gen', convLabel:'Leads', convIcon:'user-plus', convSubtitle:'Lead Generation' },
+                saas:      { accent:'#f59e0b', accentRgb:'245,158,11', label:'SaaS', convLabel:'Conversions', convIcon:'zap', convSubtitle:'Subscriptions & Sign-ups' }
             };
-            const cfg = T[tpl];
-            const ac = cfg.accent;
-            const acRgb = cfg.accentRgb;
+            const fc = FOCUS_CFG[focusGroup];
+            const ac = fc.accent;
+            const acRgb = fc.accentRgb;
 
-            // Template & Duration selector with calendar date picker
+            // Unified sidebar views (same for all focus types, label differs for conversions)
+            const unifiedViews = [
+                {id:'overview', icon:'layout-dashboard', label:'Overview'},
+                {id:'engagements', icon:'activity', label:'Engagements'},
+                {id:'conversions', icon:fc.convIcon, label:fc.convLabel},
+                {id:'ai-overview', icon:'sparkles', label:'AI Overview'},
+                {id:'all-traffic', icon:'users', label:'All Traffic'},
+                {id:'organic', icon:'search', label:'Organic'}
+            ];
+
+            // Template & Duration selector with focus badge (no more GSC/GA4/Ecom toggle)
             const activePreset = !_analyticsCustomStart ? _analyticsDuration : null;
             const presetBtn = (key, label) => `<button onclick="applyDatePreset('${key}')" class="dp-preset-btn ${activePreset === key ? 'dp-preset-active' : ''}">${label}</button>`;
             
             const tplSelector = `
                 <div class="flex flex-wrap items-center justify-between mb-4">
                     <div class="flex items-center gap-2">
-                        <span class="text-[10px] text-gray-600 uppercase tracking-widest mr-1">Template</span>
-                        <button onclick="switchAnalyticsTemplate('gsc')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='gsc' ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="search" class="w-3 h-3 inline mr-1"></i>GSC</button>
-                        <button onclick="switchAnalyticsTemplate('ga4')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='ga4' ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="bar-chart-3" class="w-3 h-3 inline mr-1"></i>GA4</button>
-                        <button onclick="switchAnalyticsTemplate('ecom')" class="px-3 py-1 rounded-full text-xs font-semibold transition-all ${tpl==='ecom' ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/40' : 'bg-gray-800/60 text-gray-500 hover:text-gray-300'}"><i data-lucide="shopping-cart" class="w-3 h-3 inline mr-1"></i>E-Commerce</button>
+                        <span class="px-3 py-1 rounded-full text-xs font-semibold ring-1" style="background:rgba(${acRgb},0.15);color:${ac};ring-color:rgba(${acRgb},0.3)"><i data-lucide="${fc.convIcon}" class="w-3 h-3 inline mr-1"></i>${fc.label}</span>
+                        <span class="text-[10px] text-gray-600 ml-1">Analytics</span>
                     </div>
                     <div class="relative flex items-center gap-3 mt-2 sm:mt-0">
                         <!-- Date Range Button -->
@@ -2380,7 +2393,7 @@
             const durationLabelHtml = durationLabelText ? `<div class="text-[10px] text-gray-500 mt-1 whitespace-nowrap">${durationLabelText}</div>` : '';
 
             // Left sidebar
-            const sidebarHtml = cfg.views.map(v => `
+            const sidebarHtml = unifiedViews.map(v => `
                 <button onclick="switchAnalyticsView('${v.id}')" class="group flex flex-col items-center gap-1 py-3 px-1.5 rounded-xl transition-all w-full" style="${_analyticsView === v.id ? 'background:rgba('+acRgb+',0.18);color:'+ac+';' : 'color:#6b7280;'}">
                     <i data-lucide="${v.icon}" class="w-5 h-5"></i>
                     <span class="text-[10px] font-semibold leading-tight text-center">${v.label}</span>
@@ -2389,131 +2402,46 @@
 
             // Build view content
             let viewHtml = '';
+            const ga4Prev = ga4.prev || {};
+            const gscPrev = gsc.prev || {};
 
-            // =========================== GSC VIEWS ===========================
-            if (tpl === 'gsc') {
-                if (gsc.error) {
-                    viewHtml = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400 font-medium">GSC Error:</span> <span class="text-gray-400">${gsc.error}</span><br><button onclick="switchSideTab('google'); switchTopTab('client-settings');" class="mt-3 text-white px-4 py-1.5 rounded-lg text-xs font-medium" style="background:${ac}">Reconnect Google</button></div>`;
-                } else if (!gscProp) {
-                    viewHtml = '<div class="text-gray-500 text-center py-16">GSC not connected. Go to Settings → Google to connect.</div>';
-                } else if (_analyticsView === 'overview') {
-                    const gscPrev = gsc.prev || {};
-                    const countries = gsc.countries || [];
-                    viewHtml = `
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                        ${[{l:'Impressions',v:gsc.impressions,p:gscPrev.impressions},{l:'Clicks',v:gsc.clicks,p:gscPrev.clicks},{l:'Site CTR',v:gsc.ctr,p:gscPrev.ctr,fmt:'pct'},{l:'Average Position',v:gsc.position,p:gscPrev.position,inv:true,fmt:'dec'},{l:'Unique Queries',v:(gsc.queries||[]).length},{l:'Unique Pages',v:(gsc.pages||[]).length}].map(m => {
+            // ========================= OVERVIEW =========================
+            if (_analyticsView === 'overview') {
+                // GSC error/not connected
+                const gscBlock = gsc.error 
+                    ? `<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 text-center text-sm"><span class="text-red-400">GSC Error:</span> <span class="text-gray-400">${gsc.error}</span></div>`
+                    : !gscProp 
+                    ? `<div class="text-gray-500 text-center py-6 text-sm border border-gray-800 rounded-xl">GSC not connected. Go to Settings → Google.</div>`
+                    : `<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+                        ${[{l:'Impressions',v:gsc.impressions,p:gscPrev.impressions},{l:'Clicks',v:gsc.clicks,p:gscPrev.clicks},{l:'Site CTR',v:gsc.ctr,p:gscPrev.ctr,fmt:'pct'},{l:'Avg Position',v:gsc.position,p:gscPrev.position,inv:true,fmt:'dec'},{l:'Unique Queries',v:(gsc.queries||[]).length},{l:'Unique Pages',v:(gsc.pages||[]).length}].map(m => {
                             let display = m.fmt === 'pct' ? ((m.v||0)*100).toFixed(2)+'%' : m.fmt === 'dec' ? (m.v||0).toFixed(2) : fmtK(m.v||0);
                             return '<div class="border border-gray-700/60 rounded-lg p-3 text-center" style="background:rgba('+acRgb+',0.04)"><div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div>' + durationLabelHtml + '</div>';
                         }).join('')}
                     </div>
-                    <div class="border border-gray-700/60 rounded-xl p-4 mb-6" style="background:rgba(${acRgb},0.03)">
+                    <div class="border border-gray-700/60 rounded-xl p-4 mb-4" style="background:rgba(${acRgb},0.03)">
                         <div class="flex items-center justify-between mb-2">
                             <div class="flex items-center gap-4">
                                 <span class="flex items-center gap-1.5 text-xs text-gray-400"><span class="w-4 h-[2px] rounded" style="background:${ac}"></span>Impressions</span>
-                                <span class="flex items-center gap-1.5 text-xs text-gray-500"><span class="w-4 h-[2px] rounded border-t border-dashed border-gray-500" style="border-style:dashed"></span>Previous ${data.meta && data.meta.duration_days ? data.meta.duration_days + 'd' : 'Period'}</span>
+                                <span class="flex items-center gap-1.5 text-xs text-gray-500"><span class="w-4 h-[2px] rounded border-t border-dashed border-gray-500" style="border-style:dashed"></span>Previous</span>
                             </div>
                         </div>
                         <canvas id="premiumLineChart" height="110"></canvas>
-                    </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
-                            <h4 class="text-sm font-semibold italic mb-4" style="color:${ac}">Impressions by Device Category</h4>
-                            <div class="flex items-center gap-6">
-                                <div class="w-36 h-36 flex-shrink-0 relative"><canvas id="premiumDonut"></canvas>
-                                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none"><div class="text-center"><div class="text-lg font-bold text-white">${fmtK((gsc.devices||[]).reduce((s,d)=>s+d.impressions,0))}</div><div class="text-[9px] text-gray-500 uppercase">Total</div></div></div>
-                                </div>
-                                <div id="premiumDonutLegend" class="flex-1"></div>
-                            </div>
-                        </div>
-                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
-                            <h4 class="text-sm font-semibold text-white mb-3">Top Acquisition Country</h4>
-                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac}"><th class="text-left pb-2 w-8">#</th><th class="text-left pb-2">Country</th><th class="text-right pb-2">Impressions ▼</th></tr></thead><tbody>
-                            ${countries.slice(0,7).map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">'+(i+1)+'.</td><td class="py-1.5 text-white">'+(c.country||'').toUpperCase()+'</td><td class="py-1.5 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.impressions)+'</td></tr>').join('')}
-                            <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-1.5 text-gray-300">Grand total</td><td class="py-1.5 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.impressions,0))}</td></tr>
-                            </tbody></table>
-                        </div>
                     </div>`;
-                } else if (_analyticsView === 'keywords') {
-                    const queries = gsc.allQueries || gsc.queries || [];
-                    const tracked = currentClient.tracked_keywords || [];
-                    
-                    viewHtml = `
-                    <div class="flex flex-wrap items-center justify-between mb-4 gap-4">
-                        <div id="keywordActionToolbar" class="hidden p-2.5 bg-gray-800 border border-gray-700 rounded-lg flex items-center gap-4">
-                            <div class="text-sm text-gray-300"><span id="selectedKeywordCount" class="font-bold text-white">0</span> selected</div>
-                            <button id="saveTrackedBtn" onclick="saveTrackedKeywords()" class="px-4 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-1.5">Push to Tracked</button>
-                        </div>
-                        <div class="relative flex-1 min-w-[200px] max-w-sm ml-auto">
-                            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"></i>
-                            <input type="text" onkeyup="filterGscKeywords(this.value)" placeholder="Search keywords..." class="w-full bg-gray-800/80 border border-gray-700 text-white text-sm rounded-lg pl-9 pr-4 py-2 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 placeholder-gray-500">
-                        </div>
-                    </div>
-                    
-                    <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
-                        <table class="w-full text-sm">
-                            <thead>
-                                <tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)">
-                                    <th class="text-left py-3 px-4 w-12"><input type="checkbox" onchange="toggleAllKeywords(this)" class="rounded bg-gray-900 border-gray-600 outline-none ring-0"></th>
-                                    <th class="text-left py-3 px-4">#</th>
-                                    <th class="text-left py-3 px-4">Query</th>
-                                    <th class="text-center py-3 px-4">Status</th>
-                                    <th class="text-right py-3 px-4">Clicks</th>
-                                    <th class="text-right py-3 px-4">Impressions</th>
-                                    <th class="text-right py-3 px-4">CTR</th>
-                                    <th class="text-right py-3 px-4">Position</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                    ${queries.map((q,i) => {
-                        const isTracked = tracked.includes(q.query);
-                        const statusBadge = isTracked 
-                            ? '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full text-[10px] font-semibold uppercase tracking-wider">Tracked</span>' 
-                            : '<span class="text-gray-600 text-[10px]">—</span>';
-                        return `<tr class="gsc-keyword-row border-t border-gray-800/60 hover:bg-white/[0.02]" data-query="${q.query.toLowerCase().replace(/"/g, '&quot;')}">
-                            <td class="py-2.5 px-4"><input type="checkbox" value="${q.query}" onchange="updateKeywordSelection()" class="kw-checkbox rounded bg-gray-900 border-gray-600"></td>
-                            <td class="py-2.5 px-4 text-gray-500">${i+1}</td>
-                            <td class="py-2.5 px-4 text-white font-medium">${q.query}</td>
-                            <td class="py-2.5 px-4 text-center">${statusBadge}</td>
-                            <td class="py-2.5 px-4 text-right font-semibold" style="color:${ac}">${fmtNum(q.clicks)}</td>
-                            <td class="py-2.5 px-4 text-right text-gray-300">${fmtNum(q.impressions)}</td>
-                            <td class="py-2.5 px-4 text-right text-gray-400">${(q.ctr*100).toFixed(2)}%</td>
-                            <td class="py-2.5 px-4 text-right text-gray-400">${q.position.toFixed(1)}</td>
-                        </tr>`;
-                    }).join('')}
-                    </tbody></table></div>`;
-                } else if (_analyticsView === 'landing-pages') {
-                    const pages = gsc.pages || [];
-                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Page</th><th class="text-right py-3 px-4">Clicks</th><th class="text-right py-3 px-4">Impressions</th><th class="text-right py-3 px-4">CTR</th><th class="text-right py-3 px-4">Position</th></tr></thead><tbody>
-                    ${pages.map((p,i) => '<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2.5 px-4 text-white font-medium truncate max-w-xs" title="'+p.page+'">'+(p.page.length>50?p.page.substring(0,50)+'...':p.page)+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(p.clicks)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(p.impressions)+'</td><td class="py-2.5 px-4 text-right text-gray-400">'+(p.ctr*100).toFixed(2)+'%</td><td class="py-2.5 px-4 text-right text-gray-400">'+p.position.toFixed(1)+'</td></tr>').join('')}
-                    </tbody></table></div>`;
-                } else if (_analyticsView === 'geographics') {
-                    const countries = gsc.countries || [];
-                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Country</th><th class="text-right py-3 px-4">Clicks</th><th class="text-right py-3 px-4">Impressions</th><th class="text-right py-3 px-4">CTR</th><th class="text-right py-3 px-4">Position</th></tr></thead><tbody>
-                    ${countries.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2 px-4 text-white">'+(c.country||'').toUpperCase()+'</td><td class="py-2 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.clicks)+'</td><td class="py-2 px-4 text-right text-gray-300">'+fmtNum(c.impressions)+'</td><td class="py-2 px-4 text-right text-gray-400">'+(c.ctr*100).toFixed(2)+'%</td><td class="py-2 px-4 text-right text-gray-400">'+c.position.toFixed(1)+'</td></tr>').join('')}
-                    <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-2 px-4 text-gray-300">Grand total</td><td class="py-2 px-4 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.clicks,0))}</td><td class="py-2 px-4 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.impressions,0))}</td><td></td><td></td></tr>
-                    </tbody></table></div>`;
-                }
-            }
-            // =========================== GA4 VIEWS ===========================
-            else if (tpl === 'ga4') {
-                if (ga4.error) {
-                    viewHtml = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">${ga4.error}</span><br><button onclick="switchSideTab('google'); switchTopTab('client-settings');" class="mt-3 text-white px-4 py-1.5 rounded-lg text-xs font-medium" style="background:${ac}">Reconnect Google</button></div>`;
-                } else if (!ga4Prop) {
-                    viewHtml = '<div class="text-gray-500 text-center py-16">GA4 not connected. Go to Settings → Google to connect.</div>';
-                } else if (_analyticsView === 'overview') {
-                    const ga4Prev = ga4.prev || {};
-                    const countries = ga4.countries || [];
-                    viewHtml = `
-                    <p class="text-xs text-gray-500 mb-4" style="color:rgba(${acRgb},0.6)">Explore Website Performance — sessions, users, bounce rate, conversions, and more.</p>
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                        ${[{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Bounce Rate',v:ga4.bounceRate,p:ga4Prev.bounceRate,fmt:'pctraw',inv:true},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'},{l:'Transactions',v:ga4.transactions,p:ga4Prev.transactions},{l:'Purchaser Rate',v:ga4.purchaserRate,p:ga4Prev.purchaserRate,fmt:'pctraw'}].map(m => {
+
+                // GA4 error/not connected
+                const ga4Block = ga4.error 
+                    ? `<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 text-center text-sm"><span class="text-red-400">GA4 Error:</span> <span class="text-gray-400">${ga4.error}</span></div>`
+                    : !ga4Prop 
+                    ? `<div class="text-gray-500 text-center py-6 text-sm border border-gray-800 rounded-xl">GA4 not connected. Go to Settings → Google.</div>`
+                    : `<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+                        ${[{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Users',v:ga4.activeUsers,p:ga4Prev.activeUsers},{l:'Page Views',v:ga4.pageViews,p:ga4Prev.pageViews},{l:'Bounce Rate',v:ga4.bounceRate,p:ga4Prev.bounceRate,fmt:'pctraw',inv:true},{l:'Avg Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'},{l:'Key Events',v:ga4.conversions,p:ga4Prev.conversions}].map(m => {
                             let display = m.fmt === 'pctraw' ? (m.v||0).toFixed(2)+'%' : m.fmt === 'dur' ? formatDuration(m.v||0) : fmtK(m.v||0);
                             return '<div class="border border-gray-700/60 rounded-lg p-3 text-center" style="background:rgba('+acRgb+',0.04)"><div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div>' + durationLabelHtml + '</div>';
                         }).join('')}
                     </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
-                            <h4 class="text-sm font-semibold italic mb-4" style="color:${ac}">Sessions by Device Category</h4>
+                            <h4 class="text-sm font-semibold italic mb-4" style="color:${ac}">Sessions by Device</h4>
                             <div class="flex items-center gap-6">
                                 <div class="w-36 h-36 flex-shrink-0 relative"><canvas id="premiumDonut"></canvas>
                                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none"><div class="text-center"><div class="text-lg font-bold text-white">${fmtK((ga4.devices||[]).reduce((s,d)=>s+d.sessions,0))}</div><div class="text-[9px] text-gray-500 uppercase">Total</div></div></div>
@@ -2522,122 +2450,164 @@
                             </div>
                         </div>
                         <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-sm font-semibold text-white">KPI Performance Overtime</h4>
-                                <div class="flex items-center gap-3 text-[10px]">
-                                    <span class="flex items-center gap-1 text-gray-400"><span class="w-3 h-[2px] rounded" style="background:${ac}"></span>Sessions</span>
-                                    <span class="flex items-center gap-1 text-gray-500"><span class="w-3 h-[2px] rounded" style="background:#6b7280;border-top:1px dashed"></span>Previous</span>
-                                </div>
-                            </div>
-                            <canvas id="premiumLineChart" height="130"></canvas>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
-                            <h4 class="text-sm font-semibold text-white mb-3">Top Acquisition Channels</h4>
-                            <div class="flex items-center gap-4">
-                                <div class="w-32 h-32 flex-shrink-0"><canvas id="premiumChannelDonut"></canvas></div>
-                                <div class="flex-1">
-                                    <table class="w-full text-xs"><thead><tr style="color:${ac}" class="uppercase tracking-wider"><th class="text-left pb-1.5">#</th><th class="text-left pb-1.5">Channels</th><th class="text-right pb-1.5">Sessions ▼</th></tr></thead><tbody>
-                                    ${(ga4.channels||[]).slice(0,5).map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1 text-gray-500">'+(i+1)+'.</td><td class="py-1 text-white">'+c.channel+'</td><td class="py-1 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td></tr>').join('')}
-                                    <tr class="border-t border-gray-700 font-bold"><td></td><td class="py-1 text-gray-300">Grand total</td><td class="py-1 text-right text-white">${fmtNum((ga4.channels||[]).reduce((s,c)=>s+c.sessions,0))}</td></tr>
-                                    </tbody></table>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
-                            <h4 class="text-sm font-semibold text-white mb-3">Top Acquisition Country</h4>
-                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac}"><th class="text-left pb-2 w-8">#</th><th class="text-left pb-2">Country</th><th class="text-right pb-2">Sessions ▼</th></tr></thead><tbody>
-                            ${countries.slice(0,7).map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">'+(i+1)+'.</td><td class="py-1.5 text-white">'+c.country+'</td><td class="py-1.5 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td></tr>').join('')}
-                            <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-1.5 text-gray-300">Grand total</td><td class="py-1.5 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.sessions,0))}</td></tr>
+                            <h4 class="text-sm font-semibold text-white mb-3">Top Channels</h4>
+                            <table class="w-full text-xs"><thead><tr style="color:${ac}" class="uppercase tracking-wider"><th class="text-left pb-1.5">#</th><th class="text-left pb-1.5">Channel</th><th class="text-right pb-1.5">Sessions ▼</th></tr></thead><tbody>
+                            ${(ga4.channels||[]).slice(0,5).map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1 text-gray-500">'+(i+1)+'.</td><td class="py-1 text-white">'+c.channel+'</td><td class="py-1 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td></tr>').join('')}
                             </tbody></table>
                         </div>
                     </div>`;
-                } else if (_analyticsView === 'engagements') {
-                    const ga4Prev = ga4.prev || {};
+
+                viewHtml = `
+                    <div class="mb-6">
+                        <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="search" class="w-4 h-4" style="color:${ac}"></i>Google Search Console</h3>
+                        ${gscBlock}
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-4 h-4" style="color:${ac}"></i>Google Analytics 4</h3>
+                        ${ga4Block}
+                    </div>`;
+            }
+
+            // ========================= ENGAGEMENTS =========================
+            else if (_analyticsView === 'engagements') {
+                if (ga4.error) {
+                    viewHtml = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">${ga4.error}</span></div>`;
+                } else if (!ga4Prop) {
+                    viewHtml = '<div class="text-gray-500 text-center py-16">GA4 not connected. Go to Settings → Google to connect.</div>';
+                } else {
                     viewHtml = `
                     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        ${[{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Users',v:ga4.activeUsers,p:ga4Prev.activeUsers},{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'}].map(m => {
-                            let display = m.fmt === 'dur' ? formatDuration(m.v||0) : fmtK(m.v||0);
-                            return '<div class="border border-gray-700/60 rounded-xl p-5 text-center" style="background:rgba('+acRgb+',0.05)"><div class="text-xs uppercase tracking-wider text-gray-500 mb-2">'+m.l+'</div><div class="text-3xl font-bold text-white mb-1">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p)+'</div></div>';
-                        }).join('')}
-                    </div>
-                    <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
-                        <h4 class="text-sm font-semibold text-white mb-3">Sessions Over Time</h4>
-                        <canvas id="premiumLineChart" height="120"></canvas>
-                    </div>`;
-                } else if (_analyticsView === 'channels') {
-                    const channels = ga4.channels || [];
-                    viewHtml = `
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
-                            <h4 class="text-sm font-semibold text-white mb-3">Channel Breakdown</h4>
-                            <canvas id="premiumChannelBar" height="200"></canvas>
-                        </div>
-                        <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
-                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Channel</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th></tr></thead><tbody>
-                            ${channels.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'.</td><td class="py-2.5 px-4 text-white font-medium">'+c.channel+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(c.activeUsers)+'</td></tr>').join('')}
-                            <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-2.5 px-4 text-gray-300">Total</td><td class="py-2.5 px-4 text-right text-white">${fmtNum(channels.reduce((s,c)=>s+c.sessions,0))}</td><td class="py-2.5 px-4 text-right text-white">${fmtNum(channels.reduce((s,c)=>s+c.activeUsers,0))}</td></tr>
-                            </tbody></table>
-                        </div>
-                    </div>`;
-                } else if (_analyticsView === 'geographics') {
-                    const countries = ga4.countries || [];
-                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Country</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th></tr></thead><tbody>
-                    ${countries.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2 px-4 text-white">'+c.country+'</td><td class="py-2 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td><td class="py-2 px-4 text-right text-gray-300">'+fmtNum(c.activeUsers)+'</td></tr>').join('')}
-                    <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-2 px-4 text-gray-300">Grand total</td><td class="py-2 px-4 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.sessions,0))}</td><td class="py-2 px-4 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.activeUsers,0))}</td></tr>
-                    </tbody></table></div>`;
-                }
-            }
-            // =========================== E-COM VIEWS ===========================
-            else if (tpl === 'ecom') {
-                if (ga4.error) {
-                    viewHtml = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">${ga4.error}</span><br><button onclick="switchSideTab('google'); switchTopTab('client-settings');" class="mt-3 text-white px-4 py-1.5 rounded-lg text-xs font-medium" style="background:${ac}">Reconnect Google</button></div>`;
-                } else if (!ga4Prop) {
-                    viewHtml = '<div class="text-gray-500 text-center py-16">GA4 not connected. E-Commerce data requires GA4. Go to Settings → Google to connect.</div>';
-                } else if (_analyticsView === 'overview') {
-                    const ga4Prev = ga4.prev || {};
-                    viewHtml = `
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-                        ${[{l:'Total Users',v:ga4.activeUsers,p:ga4Prev.activeUsers},{l:'Purchasers',v:ga4.transactions,p:ga4Prev.transactions},{l:'Total Revenue',v:ga4.totalRevenue,p:ga4Prev.totalRevenue,fmt:'money'},{l:'Transactions',v:ga4.transactions,p:ga4Prev.transactions}].map(m => {
-                            let display = m.fmt === 'money' ? '$'+fmtK(m.v||0) : fmtK(m.v||0);
-                            return '<div class="border rounded-xl p-4 text-center" style="border-color:rgba('+acRgb+',0.3);background:rgba('+acRgb+',0.06)"><div class="text-[10px] uppercase tracking-wider text-gray-400 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p)+'</div></div>';
+                        ${[{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Users',v:ga4.activeUsers,p:ga4Prev.activeUsers},{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'},{l:'Page Views',v:ga4.pageViews,p:ga4Prev.pageViews},{l:'Bounce Rate',v:ga4.bounceRate,p:ga4Prev.bounceRate,fmt:'pctraw',inv:true}].map(m => {
+                            let display = m.fmt === 'dur' ? formatDuration(m.v||0) : m.fmt === 'pctraw' ? (m.v||0).toFixed(2)+'%' : fmtK(m.v||0);
+                            return '<div class="border border-gray-700/60 rounded-xl p-5 text-center" style="background:rgba('+acRgb+',0.05)"><div class="text-xs uppercase tracking-wider text-gray-500 mb-2">'+m.l+'</div><div class="text-3xl font-bold text-white mb-1">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div></div>';
                         }).join('')}
                     </div>
                     <div class="border border-gray-700/60 rounded-xl p-4 mb-6" style="background:rgba(${acRgb},0.03)">
-                        <h4 class="text-sm font-semibold text-white mb-2">Performance Over Time</h4>
+                        <h4 class="text-sm font-semibold text-white mb-3">Sessions Over Time</h4>
                         <canvas id="premiumLineChart" height="120"></canvas>
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
-                            <h4 class="text-sm font-semibold text-white mb-3">Revenue by Channel</h4>
-                            <canvas id="premiumChannelBar" height="180"></canvas>
-                        </div>
-                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
-                            <h4 class="text-sm font-semibold text-white mb-3">Revenue by Country</h4>
-                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac}"><th class="text-left pb-2">#</th><th class="text-left pb-2">Country</th><th class="text-right pb-2">Sessions ▼</th></tr></thead><tbody>
-                            ${(ga4.countries||[]).slice(0,10).map((c,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">'+(i+1)+'.</td><td class="py-1.5 text-white">'+c.country+'</td><td class="py-1.5 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td></tr>').join('')}
+                            <h4 class="text-sm font-semibold text-white mb-3">Top Landing Pages (GA4)</h4>
+                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac}"><th class="text-left pb-2">#</th><th class="text-left pb-2">Page</th><th class="text-right pb-2">Sessions</th><th class="text-right pb-2">Bounce</th></tr></thead><tbody>
+                            ${(ga4.landingPages||[]).slice(0,10).map((p,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">'+(i+1)+'</td><td class="py-1.5 text-white truncate max-w-[200px]" title="'+p.page+'">'+(p.page.length>40?p.page.substring(0,40)+'...':p.page)+'</td><td class="py-1.5 text-right font-semibold" style="color:'+ac+'">'+fmtNum(p.sessions)+'</td><td class="py-1.5 text-right text-gray-400">'+(p.bounceRate||0).toFixed(1)+'%</td></tr>').join('')}
                             </tbody></table>
                         </div>
+                        <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold text-white mb-3">Sessions by Device</h4>
+                            <div class="w-48 h-48 mx-auto relative"><canvas id="premiumDonut"></canvas>
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none"><div class="text-center"><div class="text-lg font-bold text-white">${fmtK((ga4.devices||[]).reduce((s,d)=>s+d.sessions,0))}</div><div class="text-[9px] text-gray-500 uppercase">Total</div></div></div>
+                            </div>
+                            <div id="premiumDonutLegend" class="mt-3"></div>
+                        </div>
                     </div>`;
-                } else if (_analyticsView === 'channels') {
-                    const channels = ga4.channels || [];
-                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Channel</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th></tr></thead><tbody>
-                    ${channels.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'.</td><td class="py-2.5 px-4 text-white font-medium">'+c.channel+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(c.activeUsers)+'</td></tr>').join('')}
-                    </tbody></table></div>`;
-                } else if (_analyticsView === 'locations') {
-                    const countries = ga4.countries || [];
-                    viewHtml = `<div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)"><table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Country</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th></tr></thead><tbody>
-                    ${countries.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2 px-4 text-white">'+c.country+'</td><td class="py-2 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td><td class="py-2 px-4 text-right text-gray-300">'+fmtNum(c.activeUsers)+'</td></tr>').join('')}
-                    </tbody></table></div>`;
+                }
+            }
+
+            // ========================= CONVERSIONS / LEADS =========================
+            else if (_analyticsView === 'conversions') {
+                if (ga4.error) {
+                    viewHtml = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400 font-medium">GA4 Error:</span> <span class="text-gray-400">${ga4.error}</span></div>`;
+                } else if (!ga4Prop) {
+                    viewHtml = '<div class="text-gray-500 text-center py-16">GA4 not connected. Go to Settings → Google to connect.</div>';
                 } else {
-                    viewHtml = '<div class="text-gray-500 text-center py-16">This view requires e-commerce data configured in GA4.</div>';
+                    // Focus-specific KPI cards
+                    let convKpis = [];
+                    if (focusGroup === 'ecommerce') {
+                        convKpis = [{l:'Total Revenue',v:ga4.totalRevenue,p:ga4Prev.totalRevenue,fmt:'money'},{l:'Transactions',v:ga4.transactions,p:ga4Prev.transactions},{l:'Key Events',v:ga4.conversions,p:ga4Prev.conversions},{l:'Conv. Rate',v:ga4.transactions&&ga4.sessions?(ga4.transactions/ga4.sessions*100):0,p:ga4Prev.transactions&&ga4Prev.sessions?(ga4Prev.transactions/ga4Prev.sessions*100):0,fmt:'pctraw'}];
+                    } else if (focusGroup === 'leadgen') {
+                        convKpis = [{l:'Total Leads',v:ga4.conversions,p:ga4Prev.conversions},{l:'Lead Rate',v:ga4.conversions&&ga4.sessions?(ga4.conversions/ga4.sessions*100):0,fmt:'pctraw'},{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions}];
+                    } else if (focusGroup === 'saas') {
+                        convKpis = [{l:'Key Events',v:ga4.conversions,p:ga4Prev.conversions},{l:'Revenue',v:ga4.totalRevenue,p:ga4Prev.totalRevenue,fmt:'money'},{l:'Conv. Rate',v:ga4.conversions&&ga4.sessions?(ga4.conversions/ga4.sessions*100):0,fmt:'pctraw'},{l:'Users',v:ga4.activeUsers,p:ga4Prev.activeUsers}];
+                    } else {
+                        convKpis = [{l:'Key Events',v:ga4.conversions,p:ga4Prev.conversions},{l:'Revenue',v:ga4.totalRevenue,p:ga4Prev.totalRevenue,fmt:'money'},{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions}];
+                    }
+
+                    const keyEvents = ga4.keyEvents || [];
+
+                    viewHtml = `
+                    <p class="text-xs text-gray-500 mb-4">${fc.convSubtitle} — powered by GA4 Key Events</p>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        ${convKpis.map(m => {
+                            let display = m.fmt === 'money' ? '$'+fmtK(m.v||0) : m.fmt === 'pctraw' ? (m.v||0).toFixed(2)+'%' : fmtK(m.v||0);
+                            return '<div class="border rounded-xl p-5 text-center" style="border-color:rgba('+acRgb+',0.3);background:rgba('+acRgb+',0.06)"><div class="text-[10px] uppercase tracking-wider text-gray-400 mb-1">'+m.l+'</div><div class="text-2xl font-bold text-white">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p)+'</div></div>';
+                        }).join('')}
+                    </div>
+                    <div class="border border-gray-700/60 rounded-xl p-4 mb-6" style="background:rgba(${acRgb},0.03)">
+                        <h4 class="text-sm font-semibold text-white mb-3">Performance Over Time</h4>
+                        <canvas id="premiumLineChart" height="120"></canvas>
+                    </div>
+                    ${keyEvents.length > 0 ? `
+                    <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
+                        <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Event Name</th><th class="text-right py-3 px-4">Count</th>${focusGroup === 'ecommerce' ? '<th class="text-right py-3 px-4">Revenue</th>' : ''}</tr></thead><tbody>
+                        ${keyEvents.map((e,i) => '<tr class="border-t border-gray-800/60"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2.5 px-4 text-white font-medium">'+e.event+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(e.count)+'</td>'+(focusGroup === 'ecommerce' ? '<td class="py-2.5 px-4 text-right text-gray-300">$'+fmtK(e.revenue||0)+'</td>' : '')+'</tr>').join('')}
+                        <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-2.5 px-4 text-gray-300">Total</td><td class="py-2.5 px-4 text-right text-white">${fmtNum(keyEvents.reduce((s,e)=>s+e.count,0))}</td>${focusGroup === 'ecommerce' ? '<td class="py-2.5 px-4 text-right text-white">$'+fmtK(keyEvents.reduce((s,e)=>s+(e.revenue||0),0))+'</td>' : ''}</tr>
+                        </tbody></table>
+                    </div>` : '<div class="text-gray-500 text-center py-10 border border-gray-800 rounded-xl">No key events recorded in this period. Configure key events in GA4 to track conversions.</div>'}`;
+                }
+            }
+
+            // ========================= AI OVERVIEW =========================
+            else if (_analyticsView === 'ai-overview') {
+                // Auto-generate insights from the available data
+                const insights = [];
+                if (gscProp && !gsc.error) {
+                    const clickChange = gscPrev.clicks ? ((gsc.clicks - gscPrev.clicks) / gscPrev.clicks * 100) : 0;
+                    const posChange = gscPrev.position ? (gsc.position - gscPrev.position) : 0;
+                    insights.push({icon:'search', title:'Search Visibility', text: `${fmtK(gsc.impressions)} impressions and ${fmtK(gsc.clicks)} clicks. Clicks ${clickChange >= 0 ? 'up' : 'down'} ${Math.abs(clickChange).toFixed(1)}% vs previous period. Average position: ${(gsc.position||0).toFixed(1)} (${posChange <= 0 ? 'improved' : 'declined'} by ${Math.abs(posChange).toFixed(1)} positions).`});
+                    insights.push({icon:'trending-up', title:'Top Performing Query', text: (gsc.queries && gsc.queries.length > 0) ? `"${gsc.queries[0].query}" — ${gsc.queries[0].clicks} clicks, ${gsc.queries[0].impressions} impressions, position ${gsc.queries[0].position.toFixed(1)}` : 'No query data available.'});
+                }
+                if (ga4Prop && !ga4.error) {
+                    const sessChange = ga4Prev.sessions ? ((ga4.sessions - ga4Prev.sessions) / ga4Prev.sessions * 100) : 0;
+                    insights.push({icon:'users', title:'User Engagement', text: `${fmtK(ga4.sessions)} sessions from ${fmtK(ga4.activeUsers)} users. Sessions ${sessChange >= 0 ? 'up' : 'down'} ${Math.abs(sessChange).toFixed(1)}%. Bounce rate: ${(ga4.bounceRate||0).toFixed(1)}%. Avg session duration: ${formatDuration(ga4.avgSessionDuration||0)}.`});
+                    if (ga4.channels && ga4.channels.length > 0) {
+                        const topCh = ga4.channels[0];
+                        insights.push({icon:'git-branch', title:'Top Traffic Channel', text: `${topCh.channel} drives ${fmtNum(topCh.sessions)} sessions (${ga4.sessions ? (topCh.sessions/ga4.sessions*100).toFixed(0) : 0}% of total traffic).`});
+                    }
+                    if (focusGroup === 'ecommerce' && ga4.totalRevenue) {
+                        insights.push({icon:'dollar-sign', title:'Revenue', text: `$${fmtK(ga4.totalRevenue)} revenue from ${ga4.transactions} transactions. ${ga4Prev.totalRevenue ? (ga4.totalRevenue > ga4Prev.totalRevenue ? '📈 Revenue is UP vs previous period.' : '📉 Revenue is DOWN vs previous period.') : ''}`});
+                    }
+                    if (ga4.conversions > 0) {
+                        insights.push({icon:'target', title:'Conversions', text: `${fmtK(ga4.conversions)} key events recorded. Conversion rate: ${ga4.sessions ? (ga4.conversions/ga4.sessions*100).toFixed(2) : 0}%.`});
+                    }
+                }
+                if (insights.length === 0) {
+                    insights.push({icon:'alert-circle', title:'No Data', text: 'Connect GSC and GA4 in Settings → Google to see AI-generated insights.'});
+                }
+
+                viewHtml = `
+                <p class="text-xs text-gray-500 mb-4">Auto-generated performance summary based on your GSC & GA4 data.</p>
+                <div class="space-y-4">
+                    ${insights.map(ins => `
+                    <div class="border border-gray-700/60 rounded-xl p-5" style="background:rgba(${acRgb},0.03)">
+                        <div class="flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center" style="background:rgba(${acRgb},0.15)"><i data-lucide="${ins.icon}" class="w-4 h-4" style="color:${ac}"></i></div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-white mb-1">${ins.title}</h4>
+                                <p class="text-sm text-gray-400 leading-relaxed">${ins.text}</p>
+                            </div>
+                        </div>
+                    </div>`).join('')}
+                </div>`;
+            }
+
+            // ========================= ALL USER TRAFFIC =========================
+            else if (_analyticsView === 'all-traffic') {
+                    </div>
+                    <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
+                        <h4 class="text-sm font-semibold text-white px-4 pt-4 mb-3">Traffic by Country</h4>
+                        <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Country</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th></tr></thead><tbody>
+                        ${countries.map((c,i) => '<tr class="border-t border-gray-800/60"><td class="py-2 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2 px-4 text-white">'+c.country+'</td><td class="py-2 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(c.sessions)+'</td><td class="py-2 px-4 text-right text-gray-300">'+fmtNum(c.activeUsers)+'</td></tr>').join('')}
+                        <tr class="border-t-2 border-gray-700 font-bold"><td></td><td class="py-2 px-4 text-gray-300">Total</td><td class="py-2 px-4 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.sessions,0))}</td><td class="py-2 px-4 text-right text-white">${fmtNum(countries.reduce((s,c)=>s+c.activeUsers,0))}</td></tr>
+                        </tbody></table>
+                    </div>`;
                 }
             }
 
             // ======================== ASSEMBLE LAYOUT ========================
-            const headerTitle = cfg.name;
-            const headerSub = cfg.subtitle;
+            const headerTitle = fc.label + ' Analytics';
+            const headerSub = 'GSC + GA4 Data';
+            const viewLabel = _analyticsView.charAt(0).toUpperCase() + _analyticsView.slice(1).replace(/-/g,' ');
 
             contentArea.innerHTML = `
                 ${tplSelector}
@@ -2650,9 +2620,9 @@
                     <div class="flex-1 p-5 overflow-y-auto">
                         <div class="flex items-center justify-between mb-5">
                             <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(${acRgb},0.15)"><i data-lucide="${cfg.icon}" class="w-5 h-5" style="color:${ac}"></i></div>
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(${acRgb},0.15)"><i data-lucide="bar-chart-3" class="w-5 h-5" style="color:${ac}"></i></div>
                                 <div>
-                                    <h2 class="text-lg font-bold text-white">${headerTitle} - <span style="color:${ac}">${_analyticsView.charAt(0).toUpperCase()+_analyticsView.slice(1).replace('-',' ')}</span></h2>
+                                    <h2 class="text-lg font-bold text-white">${headerTitle} — <span style="color:${ac}">${viewLabel}</span></h2>
                                     <p class="text-xs text-gray-500">${headerSub}</p>
                                 </div>
                             </div>
@@ -2672,13 +2642,13 @@
             `;
 
             lucide.createIcons();
-            setTimeout(() => initPremiumCharts(gsc, ga4, tpl, ac, acRgb), 80);
+            setTimeout(() => initPremiumCharts(gsc, ga4, _analyticsView, ac, acRgb), 80);
         }
 
         // =====================================================================
         // PREMIUM CHART INITIALIZATION
         // =====================================================================
-        function initPremiumCharts(gsc, ga4, tpl, ac, acRgb) {
+        function initPremiumCharts(gsc, ga4, view, ac, acRgb) {
             const chartFont = { family: "'Inter','system-ui',sans-serif", size: 10 };
             const gridColor = 'rgba(255,255,255,0.04)';
             const tickColor = '#6b7280';
@@ -2692,12 +2662,14 @@
                 gradient.addColorStop(1, 'rgba('+acRgb+',0)');
 
                 let labels, dataCurr, dataPrev, labelsPrev;
-                if (tpl === 'gsc') {
+                if (view === 'overview' && gsc.timeseries && gsc.timeseries.length > 0) {
+                    // Overview uses GSC impressions line
                     labels = (gsc.timeseries||[]).map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
                     labelsPrev = (gsc.prevTimeseries||[]).map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
                     dataCurr = (gsc.timeseries||[]).map(r => r.impressions);
                     dataPrev = (gsc.prevTimeseries||[]).map(r => r.impressions);
                 } else {
+                    // Engagements, conversions, all-traffic use GA4 sessions
                     labels = (ga4.timeseries||[]).map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
                     labelsPrev = (ga4.prevTimeseries||[]).map(r => { const d = new Date(r.date); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
                     dataCurr = (ga4.timeseries||[]).map(r => r.sessions);
@@ -2707,7 +2679,7 @@
                 window.premiumLineChartInstance = new Chart(lineEl, {
                     type: 'line',
                     data: { labels, datasets: [
-                        { label: tpl==='gsc'?'Impressions':'Sessions', data: dataCurr, borderColor: ac, backgroundColor: gradient, fill: true, tension: 0.35, borderWidth: 2, pointRadius: 2, pointBackgroundColor: ac, pointBorderColor: ac, pointHoverRadius: 5 },
+                        { label: (view==='overview' && gsc.timeseries && gsc.timeseries.length > 0)?'Impressions':'Sessions', data: dataCurr, borderColor: ac, backgroundColor: gradient, fill: true, tension: 0.35, borderWidth: 2, pointRadius: 2, pointBackgroundColor: ac, pointBorderColor: ac, pointHoverRadius: 5 },
                         { label: 'Previous', data: dataPrev, borderColor: '#4b5563', borderDash: [5,5], fill: false, tension: 0.35, borderWidth: 1.5, pointRadius: 0 }
                     ]},
                     options: { 
@@ -2740,7 +2712,7 @@
             if (donutEl) {
                 const devColors = { 'DESKTOP': '#6366f1', 'desktop': '#6366f1', 'MOBILE': ac, 'mobile': ac, 'TABLET': '#f59e0b', 'tablet': '#f59e0b' };
                 let devData, devLabels, devMetric;
-                if (tpl === 'gsc') {
+                if (view === 'overview' && gsc.devices && gsc.devices.length > 0 && (!ga4.devices || ga4.devices.length === 0)) {
                     devLabels = (gsc.devices||[]).map(d => d.device);
                     devData = (gsc.devices||[]).map(d => d.impressions);
                     devMetric = 'impressions';
@@ -3109,9 +3081,9 @@
                         <div>
                             <label class="block text-sm text-gray-400 mb-1">Focus</label>
                             <select name="focus" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
-                                <option value="Product">Product (E-commerce)</option>
-                                <option value="Service">Service</option>
-                                <option value="Local">Local Business</option>
+                                <option value="Ecommerce">E-Commerce</option>
+                                <option value="Service">Service / Local</option>
+                                <option value="Leadgen">Lead Generation</option>
                                 <option value="SaaS">SaaS</option>
                             </select>
                         </div>

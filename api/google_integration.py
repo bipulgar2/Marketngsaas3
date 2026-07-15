@@ -693,6 +693,32 @@ def get_google_metrics():
                     'purchasers': 0
                 }
                 
+                # Previous period ecom metrics
+                try:
+                    prev_ecom_resp = _ga4_report(['keyEvents', 'totalRevenue', 'transactions'], start=prev_start, end=prev_end, limit=1)
+                    prev_ecom_rows = prev_ecom_resp.get('rows', [])
+                    if prev_ecom_rows:
+                        pev = prev_ecom_rows[0].get('metricValues', [])
+                        prev_kpi['conversions'] = _parse_value(pev[0].get('value', 0), False) if len(pev) > 0 else 0
+                        prev_kpi['totalRevenue'] = _parse_value(pev[1].get('value', 0), False) if len(pev) > 1 else 0
+                        prev_kpi['transactions'] = _parse_value(pev[2].get('value', 0)) if len(pev) > 2 else 0
+                except Exception:
+                    pass
+                
+                # i) Key events breakdown by event name (for focus-specific conversions)
+                key_events = []
+                try:
+                    ke_resp = _ga4_report(['keyEvents', 'totalRevenue'], dimensions=['eventName'], start=current_start, end=current_end, limit=20)
+                    for row in ke_resp.get('rows', []):
+                        key_events.append({
+                            'event': row['dimensionValues'][0]['value'],
+                            'count': _parse_value(row['metricValues'][0]['value']),
+                            'revenue': _parse_value(row['metricValues'][1]['value'], False)
+                        })
+                    key_events.sort(key=lambda x: x['count'], reverse=True)
+                except Exception as ke_err:
+                    logger.warning(f"GA4 key events breakdown not available: {ke_err}")
+                
                 # c) Time-series (sessions by day) — current
                 ts_resp = _ga4_report(['sessions', 'activeUsers'], dimensions=['date'], limit=None) # Set limit=None for full timeseries
                 ga4_timeseries = []
@@ -767,7 +793,8 @@ def get_google_metrics():
                     'devices': ga4_devices,
                     'countries': ga4_countries,
                     'channels': ga4_channels,
-                    'landingPages': ga4_landing_pages
+                    'landingPages': ga4_landing_pages,
+                    'keyEvents': key_events
                 }
             except Exception as e:
                 logger.error(f"GA4 Metrics Error: {e}")

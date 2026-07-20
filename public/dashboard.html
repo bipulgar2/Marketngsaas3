@@ -5333,10 +5333,15 @@
                             <label class="block text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Task Title *</label>
                             <input type="text" id="ctTitle" required class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500 placeholder-gray-700" placeholder="e.g. Write blog post">
                         </div>
-                        <div>
-                            <label class="block text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Custom URL (Optional)</label>
-                            <input type="url" id="ctUrl" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500 placeholder-gray-700" placeholder="https://...">
-                            <p class="text-[10px] text-gray-500 mt-1">This URL will be clickable when the task is opened.</p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Affected URL (Optional)</label>
+                                <input type="url" id="ctAffectedUrl" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500 placeholder-gray-700" placeholder="https://...">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Sheet URL (Optional)</label>
+                                <input type="url" id="ctSheetUrl" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500 placeholder-gray-700" placeholder="https://docs.google.com/...">
+                            </div>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
@@ -5377,16 +5382,21 @@
             lucide.createIcons();
             
             const title = document.getElementById('ctTitle').value;
-            const url = document.getElementById('ctUrl').value;
+            const affectedUrl = document.getElementById('ctAffectedUrl').value;
+            const sheetUrl = document.getElementById('ctSheetUrl').value;
             const assigned_to = document.getElementById('ctAssignee').value;
             const priority = parseInt(document.getElementById('ctPriority').value, 10);
+            
+            const checklist = [];
+            if (affectedUrl) checklist.push(`${affectedUrl} (Affected Page)`);
+            if (sheetUrl) checklist.push(`${sheetUrl} (Sheet Logger)`);
             
             const payload = {
                 campaign_id: currentClient?.id,
                 type: 'custom',
                 title: title,
                 description: 'Custom Task',
-                checklist: url ? [url] : [],
+                checklist: checklist,
                 assigned_to: assigned_to || null,
                 priority: priority
             };

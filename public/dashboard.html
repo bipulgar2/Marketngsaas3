@@ -2547,7 +2547,7 @@
                 } else if (_analyticsView === 'overview') {
                     viewHtml = `
                     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        ${[{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Users',v:ga4.activeUsers,p:ga4Prev.activeUsers},{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'},{l:'Page Views',v:ga4.pageViews,p:ga4Prev.pageViews},{l:'Bounce Rate',v:ga4.bounceRate,p:ga4Prev.bounceRate,fmt:'pctraw',inv:true}].map(m => {
+                        ${[{l:'Sessions',v:ga4.sessions,p:ga4Prev.sessions},{l:'Users',v:ga4.activeUsers,p:ga4Prev.activeUsers},{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'},{l:'Page Views',v:ga4.pageViews,p:ga4Prev.pageViews},{l:'Bounce Rate',v:(ga4.bounceRate||0)*100,p:(ga4Prev.bounceRate||0)*100,fmt:'pctraw',inv:true}].map(m => {
                             let display = m.fmt === 'dur' ? formatDuration(m.v||0) : m.fmt === 'pctraw' ? (m.v||0).toFixed(2)+'%' : fmtK(m.v||0);
                             return '<div class="border border-gray-700/60 rounded-xl p-5 text-center" style="background:rgba('+acRgb+',0.05)"><div class="text-xs uppercase tracking-wider text-gray-500 mb-2">'+m.l+'</div><div class="text-3xl font-bold text-white mb-1">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div></div>';
                         }).join('')}
@@ -2560,7 +2560,7 @@
                         <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
                             <h4 class="text-sm font-semibold text-white mb-3">Top Landing Pages (GA4)</h4>
                             <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac}"><th class="text-left pb-2">#</th><th class="text-left pb-2">Page</th><th class="text-right pb-2">Sessions</th><th class="text-right pb-2">Bounce</th></tr></thead><tbody>
-                            ${(ga4.landingPages||[]).slice(0,10).map((p,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">'+(i+1)+'</td><td class="py-1.5 text-white truncate max-w-[200px]" title="'+p.page+'">'+(p.page.length>40?p.page.substring(0,40)+'...':p.page)+'</td><td class="py-1.5 text-right font-semibold" style="color:'+ac+'">'+fmtNum(p.sessions)+'</td><td class="py-1.5 text-right text-gray-400">'+(p.bounceRate||0).toFixed(1)+'%</td></tr>').join('')}
+                            ${(ga4.landingPages||[]).slice(0,10).map((p,i) => '<tr class="border-t border-gray-800"><td class="py-1.5 text-gray-500">'+(i+1)+'</td><td class="py-1.5 text-white truncate max-w-[200px]" title="'+p.page+'">'+(p.page.length>40?p.page.substring(0,40)+'...':p.page)+'</td><td class="py-1.5 text-right font-semibold" style="color:'+ac+'">'+fmtNum(p.sessions)+'</td><td class="py-1.5 text-right text-gray-400">'+((p.bounceRate||0)*100).toFixed(1)+'%</td></tr>').join('')}
                             </tbody></table>
                         </div>
                         <div class="border border-gray-700/60 rounded-xl p-4" style="background:rgba(${acRgb},0.03)">
@@ -2575,7 +2575,7 @@
                     viewHtml = `
                     <p class="text-xs text-gray-500 mb-4">Focus on user behavior: Engaged Sessions, Bounce Rate, and Top Pages.</p>
                     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        ${[{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Bounce Rate',v:ga4.bounceRate,p:ga4Prev.bounceRate,fmt:'pctraw',inv:true},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'},{l:'Page Views',v:ga4.pageViews,p:ga4Prev.pageViews}].map(m => {
+                        ${[{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Bounce Rate',v:(ga4.bounceRate||0)*100,p:(ga4Prev.bounceRate||0)*100,fmt:'pctraw',inv:true},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'},{l:'Page Views',v:ga4.pageViews,p:ga4Prev.pageViews}].map(m => {
                             let display = m.fmt === 'dur' ? formatDuration(m.v||0) : m.fmt === 'pctraw' ? (m.v||0).toFixed(2)+'%' : fmtK(m.v||0);
                             return '<div class="border border-gray-700/60 rounded-xl p-5 text-center" style="background:rgba('+acRgb+',0.05)"><div class="text-xs uppercase tracking-wider text-gray-500 mb-2">'+m.l+'</div><div class="text-3xl font-bold text-white mb-1">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div></div>';
                         }).join('')}
@@ -2584,7 +2584,7 @@
                         <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
                             <h4 class="text-sm font-semibold text-white px-4 pt-4 mb-3">Top Landing Pages (Engagement)</h4>
                             <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Page</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th><th class="text-right py-3 px-4">Bounce Rate</th></tr></thead><tbody>
-                            ${(ga4.landingPages||[]).map((p,i) => '<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2.5 px-4 text-white font-medium truncate max-w-sm" title="'+p.page+'">'+(p.page.length>60?p.page.substring(0,60)+'...':p.page)+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(p.sessions)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(p.activeUsers)+'</td><td class="py-2.5 px-4 text-right text-gray-400">'+(p.bounceRate||0).toFixed(1)+'%</td></tr>').join('')}
+                            ${(ga4.landingPages||[]).map((p,i) => '<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2.5 px-4 text-white font-medium truncate max-w-sm" title="'+p.page+'">'+(p.page.length>60?p.page.substring(0,60)+'...':p.page)+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(p.sessions)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(p.activeUsers)+'</td><td class="py-2.5 px-4 text-right text-gray-400">'+((p.bounceRate||0)*100).toFixed(1)+'%</td></tr>').join('')}
                             </tbody></table>
                         </div>
                     </div>`;

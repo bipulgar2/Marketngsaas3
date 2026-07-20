@@ -654,11 +654,24 @@ def get_google_metrics():
                     'bounceRate': _kpi(3, False),
                     'avgSessionDuration': _kpi(4, False),
                     'pageViews': _kpi(5),
+                    'newUsers': 0,
+                    'eventCount': 0,
                     'conversions': 0,
                     'totalRevenue': 0,
                     'transactions': 0,
                     'purchasers': 0
                 }
+                
+                # Fetch newUsers and eventCount separately
+                try:
+                    extra_resp = _ga4_report(['newUsers', 'eventCount'], start=current_start, end=current_end, limit=1)
+                    extra_rows = extra_resp.get('rows', [])
+                    if extra_rows:
+                        exv = extra_rows[0].get('metricValues', [])
+                        kpi['newUsers'] = _parse_value(exv[0].get('value', 0)) if len(exv) > 0 else 0
+                        kpi['eventCount'] = _parse_value(exv[1].get('value', 0)) if len(exv) > 1 else 0
+                except Exception:
+                    pass
                 
                 # Try optional e-commerce / key events metrics (may not exist)
                 try:
@@ -687,11 +700,23 @@ def get_google_metrics():
                     'bounceRate': _prev_kpi(3, False),
                     'avgSessionDuration': _prev_kpi(4, False),
                     'pageViews': _prev_kpi(5),
+                    'newUsers': 0,
+                    'eventCount': 0,
                     'conversions': 0,
                     'totalRevenue': 0,
                     'transactions': 0,
                     'purchasers': 0
                 }
+                
+                try:
+                    prev_extra_resp = _ga4_report(['newUsers', 'eventCount'], start=prev_start, end=prev_end, limit=1)
+                    prev_extra_rows = prev_extra_resp.get('rows', [])
+                    if prev_extra_rows:
+                        pexv = prev_extra_rows[0].get('metricValues', [])
+                        prev_kpi['newUsers'] = _parse_value(pexv[0].get('value', 0)) if len(pexv) > 0 else 0
+                        prev_kpi['eventCount'] = _parse_value(pexv[1].get('value', 0)) if len(pexv) > 1 else 0
+                except Exception:
+                    pass
                 
                 # Previous period ecom metrics
                 try:
@@ -792,31 +817,42 @@ def get_google_metrics():
                         'keyEvents': _parse_value(row['metricValues'][5]['value'])
                     })
 
-                # g2) Source breakdown (for AI Overview)
-                source_resp = _ga4_report(channel_metrics, dimensions=['sessionSource'], limit=100)
+                # g2) Source breakdown (for AI Overview) — includes engagement metrics
+                source_metrics = ['sessions', 'activeUsers', 'newUsers', 'eventCount', 'totalRevenue', 'keyEvents', 'engagedSessions', 'engagementRate', 'averageSessionDuration', 'eventsPerSession']
+                source_resp = _ga4_report(source_metrics, dimensions=['sessionSource'], limit=100)
                 ga4_sources = []
                 for row in source_resp.get('rows', []):
+                    mv = row['metricValues']
                     ga4_sources.append({
                         'source': row['dimensionValues'][0]['value'],
-                        'sessions': _parse_value(row['metricValues'][0]['value']),
-                        'activeUsers': _parse_value(row['metricValues'][1]['value']),
-                        'newUsers': _parse_value(row['metricValues'][2]['value']),
-                        'eventCount': _parse_value(row['metricValues'][3]['value']),
-                        'totalRevenue': _parse_value(row['metricValues'][4]['value'], False),
-                        'keyEvents': _parse_value(row['metricValues'][5]['value'])
+                        'sessions': _parse_value(mv[0]['value']),
+                        'activeUsers': _parse_value(mv[1]['value']),
+                        'newUsers': _parse_value(mv[2]['value']),
+                        'eventCount': _parse_value(mv[3]['value']),
+                        'totalRevenue': _parse_value(mv[4]['value'], False),
+                        'keyEvents': _parse_value(mv[5]['value']),
+                        'engagedSessions': _parse_value(mv[6]['value']),
+                        'engagementRate': _parse_value(mv[7]['value'], False),
+                        'avgEngagementTime': _parse_value(mv[8]['value'], False),
+                        'eventsPerSession': _parse_value(mv[9]['value'], False)
                     })
                 
-                prev_source_resp = _ga4_report(channel_metrics, dimensions=['sessionSource'], start=prev_start, end=prev_end, limit=100)
+                prev_source_resp = _ga4_report(source_metrics, dimensions=['sessionSource'], start=prev_start, end=prev_end, limit=100)
                 ga4_prev_sources = []
                 for row in prev_source_resp.get('rows', []):
+                    mv = row['metricValues']
                     ga4_prev_sources.append({
                         'source': row['dimensionValues'][0]['value'],
-                        'sessions': _parse_value(row['metricValues'][0]['value']),
-                        'activeUsers': _parse_value(row['metricValues'][1]['value']),
-                        'newUsers': _parse_value(row['metricValues'][2]['value']),
-                        'eventCount': _parse_value(row['metricValues'][3]['value']),
-                        'totalRevenue': _parse_value(row['metricValues'][4]['value'], False),
-                        'keyEvents': _parse_value(row['metricValues'][5]['value'])
+                        'sessions': _parse_value(mv[0]['value']),
+                        'activeUsers': _parse_value(mv[1]['value']),
+                        'newUsers': _parse_value(mv[2]['value']),
+                        'eventCount': _parse_value(mv[3]['value']),
+                        'totalRevenue': _parse_value(mv[4]['value'], False),
+                        'keyEvents': _parse_value(mv[5]['value']),
+                        'engagedSessions': _parse_value(mv[6]['value']),
+                        'engagementRate': _parse_value(mv[7]['value'], False),
+                        'avgEngagementTime': _parse_value(mv[8]['value'], False),
+                        'eventsPerSession': _parse_value(mv[9]['value'], False)
                     })
                 
                 # h) Top landing pages (top 15)

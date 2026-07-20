@@ -2624,46 +2624,81 @@
                     </div>` : '<div class="text-gray-500 text-center py-10 border border-gray-800 rounded-xl">No key events recorded in this period. Configure key events in GA4 to track conversions.</div>'}`;
 
                 } else if (_analyticsView === 'ai-overview') {
-                // Auto-generate insights from the available data
-                const insights = [];
-                if (gscProp && !gsc.error) {
-                    const clickChange = gscPrev.clicks ? ((gsc.clicks - gscPrev.clicks) / gscPrev.clicks * 100) : 0;
-                    const posChange = gscPrev.position ? (gsc.position - gscPrev.position) : 0;
-                    insights.push({icon:'search', title:'Search Visibility', text: `${fmtK(gsc.impressions)} impressions and ${fmtK(gsc.clicks)} clicks. Clicks ${clickChange >= 0 ? 'up' : 'down'} ${Math.abs(clickChange).toFixed(1)}% vs previous period. Average position: ${(gsc.position||0).toFixed(1)} (${posChange <= 0 ? 'improved' : 'declined'} by ${Math.abs(posChange).toFixed(1)} positions).`});
-                    insights.push({icon:'trending-up', title:'Top Performing Query', text: (gsc.queries && gsc.queries.length > 0) ? `"${gsc.queries[0].query}" — ${gsc.queries[0].clicks} clicks, ${gsc.queries[0].impressions} impressions, position ${gsc.queries[0].position.toFixed(1)}` : 'No query data available.'});
-                }
-                if (ga4Prop && !ga4.error) {
-                    const sessChange = ga4Prev.sessions ? ((ga4.sessions - ga4Prev.sessions) / ga4Prev.sessions * 100) : 0;
-                    insights.push({icon:'users', title:'User Engagement', text: `${fmtK(ga4.sessions)} sessions from ${fmtK(ga4.activeUsers)} users. Sessions ${sessChange >= 0 ? 'up' : 'down'} ${Math.abs(sessChange).toFixed(1)}%. Bounce rate: ${(ga4.bounceRate||0).toFixed(1)}%. Avg session duration: ${formatDuration(ga4.avgSessionDuration||0)}.`});
-                    if (ga4.channels && ga4.channels.length > 0) {
-                        const topCh = ga4.channels[0];
-                        insights.push({icon:'git-branch', title:'Top Traffic Channel', text: `${topCh.channel} drives ${fmtNum(topCh.sessions)} sessions (${ga4.sessions ? (topCh.sessions/ga4.sessions*100).toFixed(0) : 0}% of total traffic).`});
-                    }
-                    if (focusGroup === 'ecommerce' && ga4.totalRevenue) {
-                        insights.push({icon:'dollar-sign', title:'Revenue', text: `$${fmtK(ga4.totalRevenue)} revenue from ${ga4.transactions} transactions. ${ga4Prev.totalRevenue ? (ga4.totalRevenue > ga4Prev.totalRevenue ? '📈 Revenue is UP vs previous period.' : '📉 Revenue is DOWN vs previous period.') : ''}`});
-                    }
-                    if (ga4.conversions > 0) {
-                        insights.push({icon:'target', title:'Conversions', text: `${fmtK(ga4.conversions)} key events recorded. Conversion rate: ${ga4.sessions ? (ga4.conversions/ga4.sessions*100).toFixed(2) : 0}%.`});
-                    }
-                }
-                if (insights.length === 0) {
-                    insights.push({icon:'alert-circle', title:'No Data', text: 'Connect GSC and GA4 in Settings → Google to see AI-generated insights.'});
-                }
+                    // Extract AI Sources
+                    const sources = ga4.sources || [];
+                    const prevSources = ga4.prevSources || [];
+                    const aiRegex = /chatgpt|openai|gemini|perplexity|claude|anthropic|phind|poe\\.com|copilot|you\\.com/i;
+                    const aiCurrent = sources.filter(s => aiRegex.test(s.source));
+                    const aiPrev = prevSources.filter(s => aiRegex.test(s.source));
+                    
+                    const ai = aiCurrent.reduce((acc, curr) => {
+                        acc.sessions += curr.sessions||0; acc.activeUsers += curr.activeUsers||0; acc.newUsers += curr.newUsers||0; acc.keyEvents += curr.keyEvents||0; acc.totalRevenue += curr.totalRevenue||0; return acc;
+                    }, {sessions: 0, activeUsers: 0, newUsers: 0, keyEvents: 0, totalRevenue: 0});
+                    
+                    const aiP = aiPrev.reduce((acc, curr) => {
+                        acc.sessions += curr.sessions||0; acc.activeUsers += curr.activeUsers||0; acc.newUsers += curr.newUsers||0; acc.keyEvents += curr.keyEvents||0; acc.totalRevenue += curr.totalRevenue||0; return acc;
+                    }, {sessions: 0, activeUsers: 0, newUsers: 0, keyEvents: 0, totalRevenue: 0});
 
-                viewHtml = `
-                <p class="text-xs text-gray-500 mb-4">Auto-generated performance summary based on your GSC & GA4 data.</p>
-                <div class="space-y-4">
-                    ${insights.map(ins => `
-                    <div class="border border-gray-700/60 rounded-xl p-5" style="background:rgba(${acRgb},0.03)">
-                        <div class="flex items-start gap-3">
-                            <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center" style="background:rgba(${acRgb},0.15)"><i data-lucide="${ins.icon}" class="w-4 h-4" style="color:${ac}"></i></div>
-                            <div>
-                                <h4 class="text-sm font-semibold text-white mb-1">${ins.title}</h4>
-                                <p class="text-sm text-gray-400 leading-relaxed">${ins.text}</p>
+                    const aiKpis = [
+                        {l:'Sessions', v:ai.sessions, p:aiP.sessions},
+                        {l:'Active users', v:ai.activeUsers, p:aiP.activeUsers},
+                        {l:'New users', v:ai.newUsers, p:aiP.newUsers},
+                        {l:'Key events', v:ai.keyEvents, p:aiP.keyEvents},
+                        {l:'Total revenue', v:ai.totalRevenue, p:aiP.totalRevenue, fmt:'money'},
+                        {l:'Session key event rate', v:ai.sessions ? (ai.keyEvents/ai.sessions)*100 : 0, p:aiP.sessions ? (aiP.keyEvents/aiP.sessions)*100 : 0, fmt:'pctraw'}
+                    ];
+
+                    const insights = [];
+                    if (gscProp && !gsc.error) {
+                        const clickChange = gscPrev.clicks ? ((gsc.clicks - gscPrev.clicks) / gscPrev.clicks * 100) : 0;
+                        const posChange = gscPrev.position ? (gsc.position - gscPrev.position) : 0;
+                        insights.push({icon:'search', title:'Search Visibility', text: `${fmtK(gsc.impressions)} impressions and ${fmtK(gsc.clicks)} clicks. Clicks ${clickChange >= 0 ? 'up' : 'down'} ${Math.abs(clickChange).toFixed(1)}% vs previous period. Average position: ${(gsc.position||0).toFixed(1)} (${posChange <= 0 ? 'improved' : 'declined'} by ${Math.abs(posChange).toFixed(1)} positions).`});
+                        insights.push({icon:'trending-up', title:'Top Performing Query', text: (gsc.queries && gsc.queries.length > 0) ? `"${gsc.queries[0].query}" — ${gsc.queries[0].clicks} clicks, ${gsc.queries[0].impressions} impressions, position ${gsc.queries[0].position.toFixed(1)}` : 'No query data available.'});
+                    }
+                    if (ga4Prop && !ga4.error) {
+                        const sessChange = ga4Prev.sessions ? ((ga4.sessions - ga4Prev.sessions) / ga4Prev.sessions * 100) : 0;
+                        insights.push({icon:'users', title:'User Engagement', text: `${fmtK(ga4.sessions)} sessions from ${fmtK(ga4.activeUsers)} users. Sessions ${sessChange >= 0 ? 'up' : 'down'} ${Math.abs(sessChange).toFixed(1)}%. Bounce rate: ${(ga4.bounceRate||0).toFixed(1)}%. Avg session duration: ${formatDuration(ga4.avgSessionDuration||0)}.`});
+                        if (ga4.channels && ga4.channels.length > 0) {
+                            const topCh = ga4.channels[0];
+                            insights.push({icon:'git-branch', title:'Top Traffic Channel', text: `${topCh.channel} drives ${fmtNum(topCh.sessions)} sessions (${ga4.sessions ? (topCh.sessions/ga4.sessions*100).toFixed(0) : 0}% of total traffic).`});
+                        }
+                        if (focusGroup === 'ecommerce' && ga4.totalRevenue) {
+                            insights.push({icon:'dollar-sign', title:'Revenue', text: `$${fmtK(ga4.totalRevenue)} revenue from ${ga4.transactions} transactions. ${ga4Prev.totalRevenue ? (ga4.totalRevenue > ga4Prev.totalRevenue ? '📈 Revenue is UP vs previous period.' : '📉 Revenue is DOWN vs previous period.') : ''}`});
+                        }
+                        if (ga4.conversions > 0) {
+                            insights.push({icon:'target', title:'Conversions', text: `${fmtK(ga4.conversions)} key events recorded. Conversion rate: ${ga4.sessions ? (ga4.conversions/ga4.sessions*100).toFixed(2) : 0}%.`});
+                        }
+                    }
+                    if (insights.length === 0) {
+                        insights.push({icon:'alert-circle', title:'No Data', text: 'Connect GSC and GA4 in Settings → Google to see AI-generated insights.'});
+                    }
+
+                    viewHtml = `
+                    <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
+                        ${aiKpis.map(m => {
+                            let display = m.fmt === 'money' ? '$'+fmtK(m.v||0) : m.fmt === 'pctraw' ? (m.v||0).toFixed(1)+'%' : fmtK(m.v||0);
+                            return '<div class="border border-gray-700/60 rounded-xl p-4 text-center" style="background:rgba('+acRgb+',0.05)"><div class="text-[10px] uppercase tracking-wider text-gray-500 mb-2">'+m.l+'</div><div class="text-xl font-bold text-white mb-1">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p)+'</div></div>';
+                        }).join('')}
+                    </div>
+                    <div class="border border-gray-700/60 rounded-xl overflow-hidden mb-8" style="background:rgba(${acRgb},0.03)">
+                        <h4 class="text-sm font-semibold text-white px-4 pt-4 mb-3">AI Platforms (Source Breakdown)</h4>
+                        <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">AI Platform</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Active Users</th><th class="text-right py-3 px-4">Key Events</th><th class="text-right py-3 px-4">Revenue</th></tr></thead><tbody>
+                        ${aiCurrent.length > 0 ? aiCurrent.map((s,i) => '<tr class="border-t border-gray-800/60"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2.5 px-4 text-white font-medium">'+s.source+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(s.sessions)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(s.activeUsers)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(s.keyEvents)+'</td><td class="py-2.5 px-4 text-right text-green-400">$'+fmtNum(s.totalRevenue)+'</td></tr>').join('') : '<tr class="border-t border-gray-800/60"><td colspan="6" class="py-8 text-center text-gray-500">No traffic detected from AI platforms in this period.</td></tr>'}
+                        </tbody></table>
+                    </div>
+                    <h4 class="text-sm font-semibold text-white mb-4">Auto-generated Insights</h4>
+                    <div class="space-y-4">
+                        ${insights.map(ins => `
+                        <div class="border border-gray-700/60 rounded-xl p-5" style="background:rgba(${acRgb},0.03)">
+                            <div class="flex items-start gap-3">
+                                <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center" style="background:rgba(${acRgb},0.15)"><i data-lucide="${ins.icon}" class="w-4 h-4" style="color:${ac}"></i></div>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-white mb-1">${ins.title}</h4>
+                                    <p class="text-sm text-gray-400 leading-relaxed">${ins.text}</p>
+                                </div>
                             </div>
-                        </div>
-                    </div>`).join('')}
-                </div>`;
+                        </div>`).join('')}
+                    </div>`;
 
                 } else if (_analyticsView === 'all-traffic') {
                     const channels = ga4.channels || [];
@@ -2695,28 +2730,25 @@
                     if (!gscProp || gsc.error) {
                         viewHtml = '<div class="text-gray-500 text-center py-16">GSC not connected. Organic data requires GSC. Go to Settings → Google.</div>';
                     } else {
-                        // Extract Organic traffic from GA4 channels
                         const channels = ga4.channels || [];
-                        const organicChannel = channels.find(c => c.channel === 'Organic Search') || { sessions: 0, activeUsers: 0 };
+                        const prevChannels = ga4.prevChannels || [];
+                        const org = channels.find(c => c.channel === 'Organic Search') || { sessions: 0, activeUsers: 0, newUsers: 0, eventCount: 0, totalRevenue: 0 };
+                        const orgP = prevChannels.find(c => c.channel === 'Organic Search') || { sessions: 0, activeUsers: 0, newUsers: 0, eventCount: 0, totalRevenue: 0 };
                         
+                        const orgKpis = [
+                            {l:'Sessions', v:org.sessions, p:orgP.sessions},
+                            {l:'Active users', v:org.activeUsers, p:orgP.activeUsers},
+                            {l:'New users', v:org.newUsers, p:orgP.newUsers},
+                            {l:'Total events', v:org.eventCount, p:orgP.eventCount},
+                            {l:'Total revenue', v:org.totalRevenue, p:orgP.totalRevenue, fmt:'money'}
+                        ];
+
                         viewHtml = `
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                            <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-center">
-                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">GA4 Sessions</p>
-                                <p class="text-2xl font-bold text-white">${fmtNum(organicChannel.sessions)}</p>
-                            </div>
-                            <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-center">
-                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">GA4 Users</p>
-                                <p class="text-2xl font-bold text-white">${fmtNum(organicChannel.activeUsers)}</p>
-                            </div>
-                            <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-center">
-                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">GSC Clicks</p>
-                                <p class="text-2xl font-bold text-white">${fmtNum(gsc.clicks || 0)}</p>
-                            </div>
-                            <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-center">
-                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">GSC Impressions</p>
-                                <p class="text-2xl font-bold text-white">${fmtNum(gsc.impressions || 0)}</p>
-                            </div>
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                            ${orgKpis.map(m => {
+                                let display = m.fmt === 'money' ? '$'+fmtK(m.v||0) : fmtK(m.v||0);
+                                return '<div class="border border-gray-700/60 rounded-xl p-5 text-center" style="background:rgba('+acRgb+',0.05)"><div class="text-xs uppercase tracking-wider text-gray-500 mb-2">'+m.l+'</div><div class="text-2xl font-bold text-white mb-1">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p)+'</div></div>';
+                            }).join('')}
                         </div>
 
                         <div class="mb-6">

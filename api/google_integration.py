@@ -764,14 +764,59 @@ def get_google_metrics():
                         'activeUsers': _parse_value(row['metricValues'][1]['value'])
                     })
                 
-                # g) Channel breakdown (top 10)
-                channel_resp = _ga4_report(['sessions', 'activeUsers'], dimensions=['sessionDefaultChannelGroup'], limit=10)
+                # g) Channel breakdown
+                channel_metrics = ['sessions', 'activeUsers', 'newUsers', 'eventCount', 'totalRevenue', 'keyEvents']
+                channel_resp = _ga4_report(channel_metrics, dimensions=['sessionDefaultChannelGroup'], limit=20)
                 ga4_channels = []
                 for row in channel_resp.get('rows', []):
                     ga4_channels.append({
                         'channel': row['dimensionValues'][0]['value'],
                         'sessions': _parse_value(row['metricValues'][0]['value']),
-                        'activeUsers': _parse_value(row['metricValues'][1]['value'])
+                        'activeUsers': _parse_value(row['metricValues'][1]['value']),
+                        'newUsers': _parse_value(row['metricValues'][2]['value']),
+                        'eventCount': _parse_value(row['metricValues'][3]['value']),
+                        'totalRevenue': _parse_value(row['metricValues'][4]['value'], False),
+                        'keyEvents': _parse_value(row['metricValues'][5]['value'])
+                    })
+                
+                prev_channel_resp = _ga4_report(channel_metrics, dimensions=['sessionDefaultChannelGroup'], start=prev_start, end=prev_end, limit=20)
+                ga4_prev_channels = []
+                for row in prev_channel_resp.get('rows', []):
+                    ga4_prev_channels.append({
+                        'channel': row['dimensionValues'][0]['value'],
+                        'sessions': _parse_value(row['metricValues'][0]['value']),
+                        'activeUsers': _parse_value(row['metricValues'][1]['value']),
+                        'newUsers': _parse_value(row['metricValues'][2]['value']),
+                        'eventCount': _parse_value(row['metricValues'][3]['value']),
+                        'totalRevenue': _parse_value(row['metricValues'][4]['value'], False),
+                        'keyEvents': _parse_value(row['metricValues'][5]['value'])
+                    })
+
+                # g2) Source breakdown (for AI Overview)
+                source_resp = _ga4_report(channel_metrics, dimensions=['sessionSource'], limit=100)
+                ga4_sources = []
+                for row in source_resp.get('rows', []):
+                    ga4_sources.append({
+                        'source': row['dimensionValues'][0]['value'],
+                        'sessions': _parse_value(row['metricValues'][0]['value']),
+                        'activeUsers': _parse_value(row['metricValues'][1]['value']),
+                        'newUsers': _parse_value(row['metricValues'][2]['value']),
+                        'eventCount': _parse_value(row['metricValues'][3]['value']),
+                        'totalRevenue': _parse_value(row['metricValues'][4]['value'], False),
+                        'keyEvents': _parse_value(row['metricValues'][5]['value'])
+                    })
+                
+                prev_source_resp = _ga4_report(channel_metrics, dimensions=['sessionSource'], start=prev_start, end=prev_end, limit=100)
+                ga4_prev_sources = []
+                for row in prev_source_resp.get('rows', []):
+                    ga4_prev_sources.append({
+                        'source': row['dimensionValues'][0]['value'],
+                        'sessions': _parse_value(row['metricValues'][0]['value']),
+                        'activeUsers': _parse_value(row['metricValues'][1]['value']),
+                        'newUsers': _parse_value(row['metricValues'][2]['value']),
+                        'eventCount': _parse_value(row['metricValues'][3]['value']),
+                        'totalRevenue': _parse_value(row['metricValues'][4]['value'], False),
+                        'keyEvents': _parse_value(row['metricValues'][5]['value'])
                     })
                 
                 # h) Top landing pages (top 15)
@@ -793,6 +838,9 @@ def get_google_metrics():
                     'devices': ga4_devices,
                     'countries': ga4_countries,
                     'channels': ga4_channels,
+                    'prevChannels': ga4_prev_channels,
+                    'sources': ga4_sources,
+                    'prevSources': ga4_prev_sources,
                     'landingPages': ga4_landing_pages,
                     'keyEvents': key_events
                 }

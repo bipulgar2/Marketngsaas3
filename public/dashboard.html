@@ -5194,7 +5194,12 @@
                     <td class="px-6 py-4" onclick="event.stopPropagation()">
                         <select ${['admin', 'campaign_manager'].includes(currentUser.role) ? '' : 'disabled'} onchange="updateTaskAssignee('${t.id}', this.value)" class="bg-gray-900 border border-gray-700 text-gray-400 capitalize text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 max-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed">
                             <option value="">Any</option>
-                            ${(window.teamMembers || []).map(m => `
+                            ${(window.teamMembers || []).filter(m => {
+                                if (!t.assigned_role) return true;
+                                const mRole = (m.role || '').replace(/_/g, ' ').toLowerCase();
+                                const tRole = t.assigned_role.toLowerCase();
+                                return mRole === tRole || ['admin', 'administrator'].includes(mRole);
+                            }).map(m => `
                                 <option value="${m.id}" ${t.assigned_to === m.id ? 'selected' : ''}>
                                     ${m.full_name || m.email.split('@')[0]}
                                 </option>
@@ -7959,10 +7964,21 @@
 
         async function updateTaskAssignee(taskId, assigneeId) {
             try {
+                let payload = { assigned_to: assigneeId || null };
+                let memberRole = null;
+                
+                if (assigneeId) {
+                    const member = (window.teamMembers || []).find(m => m.id === assigneeId);
+                    if (member && member.role) {
+                        memberRole = member.role.replace(/_/g, ' ').replace(/\\b\\w/g, l => l.toUpperCase());
+                        payload.assigned_role = memberRole;
+                    }
+                }
+
                 const res = await fetch(`/api/tasks/${taskId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ assigned_to: assigneeId || null })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await res.json();
@@ -7974,6 +7990,9 @@
                 const taskIndex = currentLoadedTasks.findIndex(t => t.id === taskId);
                 if (taskIndex !== -1) {
                     currentLoadedTasks[taskIndex].assigned_to = assigneeId || null;
+                    if (memberRole) {
+                        currentLoadedTasks[taskIndex].assigned_role = memberRole;
+                    }
                 }
                 window.renderTasksTable();
 

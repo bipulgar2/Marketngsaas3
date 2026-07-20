@@ -5157,6 +5157,7 @@
             const pendingTasks = tasksToRender.filter(t => t.status === 'pending');
             const inProgressTasks = tasksToRender.filter(t => t.status === 'in_progress');
             const completedTasks = tasksToRender.filter(t => t.status === 'done');
+            const otherTasks = tasksToRender.filter(t => !['pending', 'in_progress', 'done'].includes(t.status));
 
             const getPriorityBadge = (pLevel) => {
                 const level = Number(pLevel);
@@ -5298,6 +5299,20 @@
                                 </tbody>
                                 ` : ''}
 
+                                ${otherTasks.length > 0 ? `
+                                <tbody class="divide-y divide-gray-800 border-t border-gray-700">
+                                    <tr>
+                                        <td colspan="6" class="px-6 py-3 bg-gray-800/20 text-xs font-semibold uppercase text-cyan-400">
+                                            <div class="flex items-center gap-2">
+                                                <i data-lucide="tag" class="w-4 h-4"></i>
+                                                Custom Status (${otherTasks.length})
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    ${otherTasks.map(renderTaskRow).join('')}
+                                </tbody>
+                                ` : ''}
+
                                 ${completedTasks.length > 0 ? `
                                 <tbody class="divide-y divide-gray-800 border-t-2 border-dashed border-gray-700">
                                     <tr>
@@ -5343,7 +5358,16 @@
                                 <input type="url" id="ctSheetUrl" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500 placeholder-gray-700" placeholder="https://docs.google.com/...">
                             </div>
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Status</label>
+                                <select id="ctStatus" onchange="if(this.value==='_add_custom_'){ const s = prompt('Custom Status:'); if(s && s.trim()){ const opt=document.createElement('option'); opt.value=s.trim(); opt.text=s.trim(); opt.selected=true; this.add(opt); } else { this.value='pending'; } }" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500">
+                                    <option value="pending">Pending</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="done">Done</option>
+                                    <option value="_add_custom_">+ Add Custom...</option>
+                                </select>
+                            </div>
                             <div>
                                 <label class="block text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Assignee</label>
                                 <select id="ctAssignee" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500">
@@ -5386,6 +5410,8 @@
             const sheetUrl = document.getElementById('ctSheetUrl').value;
             const assigned_to = document.getElementById('ctAssignee').value;
             const priority = parseInt(document.getElementById('ctPriority').value, 10);
+            const rawStatus = document.getElementById('ctStatus').value;
+            const status = rawStatus === '_add_custom_' ? 'pending' : rawStatus;
             
             const checklist = [];
             if (affectedUrl) checklist.push(`${affectedUrl} (Affected Page)`);
@@ -5398,7 +5424,8 @@
                 description: 'Custom Task',
                 checklist: checklist,
                 assigned_to: assigned_to || null,
-                priority: priority
+                priority: priority,
+                status: status
             };
             
             try {

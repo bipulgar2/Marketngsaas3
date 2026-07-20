@@ -2630,7 +2630,7 @@ def create_task():
             'assigned_role': data.get('assigned_role'),
             'priority': data.get('priority', 0),
             'due_date': data.get('due_date'),
-            'status': 'pending'
+            'status': data.get('status', 'pending')
         }).execute()
         
         return jsonify({'task': response.data[0]})

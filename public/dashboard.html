@@ -2571,6 +2571,23 @@
                             <div id="premiumDonutLegend" class="mt-3"></div>
                         </div>
                     </div>`;
+                } else if (_analyticsView === 'engagements') {
+                    viewHtml = `
+                    <p class="text-xs text-gray-500 mb-4">Focus on user behavior: Engaged Sessions, Bounce Rate, and Top Pages.</p>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        ${[{l:'Engaged Sessions',v:ga4.engagedSessions,p:ga4Prev.engagedSessions},{l:'Bounce Rate',v:ga4.bounceRate,p:ga4Prev.bounceRate,fmt:'pctraw',inv:true},{l:'Avg. Duration',v:ga4.avgSessionDuration,p:ga4Prev.avgSessionDuration,fmt:'dur'},{l:'Page Views',v:ga4.pageViews,p:ga4Prev.pageViews}].map(m => {
+                            let display = m.fmt === 'dur' ? formatDuration(m.v||0) : m.fmt === 'pctraw' ? (m.v||0).toFixed(2)+'%' : fmtK(m.v||0);
+                            return '<div class="border border-gray-700/60 rounded-xl p-5 text-center" style="background:rgba('+acRgb+',0.05)"><div class="text-xs uppercase tracking-wider text-gray-500 mb-2">'+m.l+'</div><div class="text-3xl font-bold text-white mb-1">'+display+'</div><div>'+changeBadgeHtml(m.v,m.p,m.inv)+'</div></div>';
+                        }).join('')}
+                    </div>
+                    <div class="grid grid-cols-1 gap-4">
+                        <div class="border border-gray-700/60 rounded-xl overflow-hidden" style="background:rgba(${acRgb},0.03)">
+                            <h4 class="text-sm font-semibold text-white px-4 pt-4 mb-3">Top Landing Pages (Engagement)</h4>
+                            <table class="w-full text-sm"><thead><tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)"><th class="text-left py-3 px-4">#</th><th class="text-left py-3 px-4">Page</th><th class="text-right py-3 px-4">Sessions</th><th class="text-right py-3 px-4">Users</th><th class="text-right py-3 px-4">Bounce Rate</th></tr></thead><tbody>
+                            ${(ga4.landingPages||[]).map((p,i) => '<tr class="border-t border-gray-800/60 hover:bg-white/[0.02]"><td class="py-2.5 px-4 text-gray-500">'+(i+1)+'</td><td class="py-2.5 px-4 text-white font-medium truncate max-w-sm" title="'+p.page+'">'+(p.page.length>60?p.page.substring(0,60)+'...':p.page)+'</td><td class="py-2.5 px-4 text-right font-semibold" style="color:'+ac+'">'+fmtNum(p.sessions)+'</td><td class="py-2.5 px-4 text-right text-gray-300">'+fmtNum(p.activeUsers)+'</td><td class="py-2.5 px-4 text-right text-gray-400">'+(p.bounceRate||0).toFixed(1)+'%</td></tr>').join('')}
+                            </tbody></table>
+                        </div>
+                    </div>`;
                 } else if (_analyticsView === 'conversions') {
                     // Focus-specific KPI cards
                     let convKpis = [];

@@ -2673,10 +2673,26 @@ def update_task(task_id):
             update_data['assigned_to'] = data['assigned_to']
         if 'assigned_role' in data and user.get('role', '').lower() in ['admin', 'administrator', 'campaign_manager']:
             update_data['assigned_role'] = data['assigned_role']
+        if 'priority' in data:
+            update_data['priority'] = data['priority']
         
         response = client.table('tasks').update(update_data).eq('id', task_id).execute()
         
         return jsonify({'task': response.data[0]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/tasks/<task_id>', methods=['DELETE'])
+@login_required
+@permission_required('assign_tasks')
+def delete_task(task_id):
+    """Delete a task."""
+    client = supabase_admin or supabase
+    
+    try:
+        response = client.table('tasks').delete().eq('id', task_id).execute()
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

@@ -644,7 +644,7 @@ def get_current_user():
         'optimization_specialist': ['dashboard', 'audit-2', 'tech-audit', 'tasks'],
         'link_builder': ['dashboard', 'links', 'tasks'],
         'reporting_manager': ['dashboard', 'reports'],
-        'viewer': ['reports']
+        'viewer': ['reports', 'tasks']
     }
     
     return jsonify({

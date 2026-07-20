@@ -251,7 +251,7 @@
                     class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-1.5 focus:border-violet-500 focus:outline-none min-w-[200px] pointer-events-none appearance-none">
                     <option value="">Select Client...</option>
                 </select>
-                <button onclick="showNewClientModal()"
+                <button id="newClientBtn" onclick="showNewClientModal()"
                     class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5">
                     <i data-lucide="plus" class="w-4 h-4"></i>
                     New Client
@@ -530,6 +530,12 @@
                 buildSideTabs();
                 await loadClients();
                 loadContent();
+
+                // Hide UI elements not relevant to client/viewer role
+                if (currentUser.role === 'viewer') {
+                    const newClientBtn = document.getElementById('newClientBtn');
+                    if (newClientBtn) newClientBtn.style.display = 'none';
+                }
 
                 lucide.createIcons();
             } catch (error) {

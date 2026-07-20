@@ -5209,6 +5209,8 @@
                             <option value="pending" ${t.status === 'pending' ? 'selected' : ''} class="text-gray-300">Pending</option>
                             <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''} class="text-gray-300">In Progress</option>
                             <option value="done" ${t.status === 'done' ? 'selected' : ''} class="text-green-500">Done</option>
+                            ${!['pending', 'in_progress', 'done'].includes(t.status) ? `<option value="${t.status}" selected class="text-violet-400 capitalize">${t.status.replace(/_/g, ' ')}</option>` : ''}
+                            <option value="_add_custom_" class="text-violet-400 font-medium">+ Add Custom...</option>
                         </select>
                     </td>
                 </tr>
@@ -5244,6 +5246,11 @@
                                     <option value="Reporting Manager" ${roleFilter === 'Reporting Manager' ? 'selected' : ''}>Reporting Manager</option>
                                 </select>
                                 <span class="bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg text-sm">${tasksToRender.length} Total</span>
+                                ${['admin', 'campaign_manager'].includes(currentUser.role) ? `
+                                <button onclick="window.openCustomTaskModal()" class="bg-violet-600 hover:bg-violet-500 text-white p-2 rounded-lg text-sm flex items-center justify-center transition-colors">
+                                    <i data-lucide="plus" class="w-4 h-4"></i>
+                                </button>
+                                ` : ''}
                             </div>
                         </div>
 
@@ -5303,8 +5310,102 @@
                         </div>
                     </div>`;
             }
+            }
             lucide.createIcons();
         }
+
+        window.openCustomTaskModal = function() {
+            const modal = document.createElement('div');
+            modal.id = 'customTaskModal';
+            modal.className = 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm';
+            modal.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-white">Add Custom Task</h3>
+                        <button type="button" onclick="document.getElementById('customTaskModal').remove()" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    </div>
+                    <form onsubmit="window.submitCustomTask(event)" class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Task Title *</label>
+                            <input type="text" id="ctTitle" required class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500 placeholder-gray-700" placeholder="e.g. Write blog post">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Custom URL (Optional)</label>
+                            <input type="url" id="ctUrl" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500 placeholder-gray-700" placeholder="https://...">
+                            <p class="text-[10px] text-gray-500 mt-1">This URL will be clickable when the task is opened.</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Assignee</label>
+                                <select id="ctAssignee" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500">
+                                    <option value="">Unassigned</option>
+                                    ${(window.teamMembers || []).map(m => `<option value="${m.id}">${m.full_name || m.email}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 font-medium mb-1 uppercase tracking-wider">Priority</label>
+                                <select id="ctPriority" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500">
+                                    <option value="0">Low</option>
+                                    <option value="1">Medium</option>
+                                    <option value="2">High</option>
+                                    <option value="3">Critical</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="pt-4 flex justify-end gap-3">
+                            <button type="button" onclick="document.getElementById('customTaskModal').remove()" class="px-4 py-2 text-sm text-gray-400 hover:text-white">Cancel</button>
+                            <button type="submit" id="ctSubmitBtn" class="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center">
+                                Add Task
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            lucide.createIcons();
+        };
+
+        window.submitCustomTask = async function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('ctSubmitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin mr-2"></i> Adding...';
+            lucide.createIcons();
+            
+            const title = document.getElementById('ctTitle').value;
+            const url = document.getElementById('ctUrl').value;
+            const assigned_to = document.getElementById('ctAssignee').value;
+            const priority = parseInt(document.getElementById('ctPriority').value, 10);
+            
+            const payload = {
+                campaign_id: currentClient?.id,
+                type: 'custom',
+                title: title,
+                description: 'Custom Task',
+                checklist: url ? [url] : [],
+                assigned_to: assigned_to || null,
+                priority: priority
+            };
+            
+            try {
+                const res = await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to add task');
+                
+                // Add to local state and re-render
+                currentLoadedTasks.unshift(data.task);
+                document.getElementById('customTaskModal').remove();
+                window.renderTasksTable();
+            } catch (err) {
+                alert(err.message);
+                btn.disabled = false;
+                btn.innerHTML = 'Add Task';
+            }
+        };
 
         // =====================================================================
         // TASK DETAIL MODAL — Affected Pages + SOP
@@ -7795,6 +7896,14 @@
 
 
         async function updateTaskStatus(taskId, newStatus) {
+            if (newStatus === '_add_custom_') {
+                const customStatus = prompt("Enter custom status:");
+                if (!customStatus || !customStatus.trim()) {
+                    window.renderTasksTable();
+                    return;
+                }
+                newStatus = customStatus.trim();
+            }
             try {
                 const res = await fetch(`/api/tasks/${taskId}`, {
                     method: 'PUT',

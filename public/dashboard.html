@@ -5321,19 +5321,41 @@
                                 </tbody>
                                 ` : ''}
 
-                                ${completedTasks.length > 0 ? `
-                                <tbody class="divide-y divide-gray-800 border-t-2 border-dashed border-gray-700">
-                                    <tr>
-                                        <td colspan="6" class="px-6 py-3 bg-gray-800/40 text-xs font-semibold uppercase text-gray-400">
-                                            <div class="flex items-center gap-2">
-                                                <i data-lucide="check-circle-2" class="w-4 h-4 text-green-500"></i>
-                                                Completed Tasks (${completedTasks.length})
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    ${completedTasks.map(renderTaskRow).join('')}
-                                </tbody>
-                                ` : ''}
+                                ${completedTasks.length > 0 ? (() => {
+                                    const byMonth = {};
+                                    completedTasks.forEach(t => {
+                                        const d = new Date(t.updated_at || t.created_at || Date.now());
+                                        const m = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+                                        if (!byMonth[m]) byMonth[m] = [];
+                                        byMonth[m].push(t);
+                                    });
+                                    return Object.keys(byMonth).map((month, idx) => `
+                                    <tbody class="divide-y divide-gray-800 border-t-2 border-dashed border-gray-700">
+                                        <tr class="cursor-pointer hover:bg-gray-800/60 transition-colors" onclick="
+                                            const body = document.getElementById('completed-month-${idx}');
+                                            const icon = document.getElementById('completed-icon-${idx}');
+                                            body.classList.toggle('hidden');
+                                            if(body.classList.contains('hidden')) {
+                                                icon.setAttribute('data-lucide', 'chevron-right');
+                                            } else {
+                                                icon.setAttribute('data-lucide', 'chevron-down');
+                                            }
+                                            lucide.createIcons();
+                                        ">
+                                            <td colspan="6" class="px-6 py-3 bg-gray-800/40 text-xs font-semibold uppercase text-gray-400">
+                                                <div class="flex items-center gap-2">
+                                                    <i id="completed-icon-${idx}" data-lucide="chevron-right" class="w-4 h-4"></i>
+                                                    <i data-lucide="check-circle-2" class="w-4 h-4 text-green-500"></i>
+                                                    Completed Tasks - ${month} (${byMonth[month].length})
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tbody id="completed-month-${idx}" class="divide-y divide-gray-800 hidden">
+                                        ${byMonth[month].map(renderTaskRow).join('')}
+                                    </tbody>
+                                    `).join('');
+                                })() : ''}
                             </table>
                         </div>
                     </div>`;

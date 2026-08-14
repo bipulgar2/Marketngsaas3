@@ -1505,7 +1505,8 @@
 
             const gscProp = currentClient.settings.gsc_property;
             if (!gscProp) {
-                contentArea.innerHTML = `<div class="text-gray-500 text-center py-16">GSC not connected. Go to Settings → Google to connect.</div>`;
+                const msg = currentUser && currentUser.role === 'viewer' ? 'Please contact your agency to connect GSC.' : 'Go to Settings → Google to connect.';
+                contentArea.innerHTML = `<div class="text-gray-500 text-center py-16">GSC not connected. ${msg}</div>`;
                 return;
             }
 
@@ -1688,15 +1689,24 @@
             const ga4Prop = currentClient.settings.ga4_property;
 
             if (!gscProp && !ga4Prop) {
-                contentArea.innerHTML = `
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center max-w-2xl mx-auto mt-8">
-                        <i data-lucide="alert-triangle" class="w-12 h-12 text-yellow-500 mx-auto mb-4"></i>
-                        <h3 class="text-lg font-semibold text-white mb-2">No Google Properties Connected</h3>
-                        <p class="text-gray-400 mb-6">Please go to Client Settings &gt; Google (GSC, GA4) to map a property to this client.</p>
-                        <button onclick="switchSideTab('google'); switchTopTab('client-settings');" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                            Go to Settings
-                        </button>
-                    </div>`;
+                if (currentUser && currentUser.role === 'viewer') {
+                    contentArea.innerHTML = `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center max-w-2xl mx-auto mt-8">
+                            <i data-lucide="bar-chart-2" class="w-12 h-12 text-gray-600 mx-auto mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">Analytics Not Connected</h3>
+                            <p class="text-gray-400">Please contact your agency to connect analytics data for this project.</p>
+                        </div>`;
+                } else {
+                    contentArea.innerHTML = `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center max-w-2xl mx-auto mt-8">
+                            <i data-lucide="alert-triangle" class="w-12 h-12 text-yellow-500 mx-auto mb-4"></i>
+                            <h3 class="text-lg font-semibold text-white mb-2">No Google Properties Connected</h3>
+                            <p class="text-gray-400 mb-6">Please go to Client Settings &gt; Google (GSC, GA4) to map a property to this client.</p>
+                            <button onclick="switchSideTab('google'); switchTopTab('client-settings');" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                Go to Settings
+                            </button>
+                        </div>`;
+                }
                 lucide.createIcons();
                 return;
             }
@@ -2465,7 +2475,8 @@
                 if (gsc.error) {
                     viewHtml = `<div class="bg-red-900/20 border border-red-800 rounded-xl p-6 text-center"><span class="text-red-400 font-medium">GSC Error:</span> <span class="text-gray-400">${gsc.error}</span><br><button onclick="switchSideTab('google'); switchTopTab('client-settings');" class="mt-3 text-white px-4 py-1.5 rounded-lg text-xs font-medium" style="background:${ac}">Reconnect Google</button></div>`;
                 } else if (!gscProp) {
-                    viewHtml = '<div class="text-gray-500 text-center py-16">GSC not connected. Go to Settings → Google to connect.</div>';
+                    const msg = currentUser && currentUser.role === 'viewer' ? 'Please contact your agency to connect GSC.' : 'Go to Settings → Google to connect.';
+                    viewHtml = `<div class="text-gray-500 text-center py-16">GSC not connected. ${msg}</div>`;
                 } else if (_analyticsView === 'overview') {
                     const countries = gsc.countries || [];
                     viewHtml = `
@@ -2735,7 +2746,8 @@
                     const pages = gsc.pages || [];
                     const tracked = currentClient.tracked_keywords || [];
                     if (!gscProp || gsc.error) {
-                        viewHtml = '<div class="text-gray-500 text-center py-16">GSC not connected. Organic data requires GSC. Go to Settings → Google.</div>';
+                        const msg = currentUser && currentUser.role === 'viewer' ? 'Please contact your agency to connect GSC.' : 'Go to Settings → Google.';
+                        viewHtml = `<div class="text-gray-500 text-center py-16">GSC not connected. Organic data requires GSC. ${msg}</div>`;
                     } else {
                         const channels = ga4.channels || [];
                         const prevChannels = ga4.prevChannels || [];

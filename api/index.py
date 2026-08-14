@@ -693,7 +693,6 @@ def create_organization():
 
 @app.route('/api/team', methods=['GET'])
 @login_required
-@role_required('admin')
 def list_team_members():
     """List all team members in the current organization."""
     user = session['user']

@@ -3678,7 +3678,7 @@
             if (clients && clients.length > 0) {
                 checklistHtml = `
                     <div class="mt-4">
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Assigned Projects (Leave empty for All)</label>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Assigned Projects <span class="text-xs text-gray-500 font-normal ml-1">(Leave unchecked for none)</span></label>
                         <div class="max-h-40 overflow-y-auto bg-gray-900 border border-gray-700 rounded-lg p-3 space-y-2">
                 `;
                 clients.forEach(c => {

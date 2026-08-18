@@ -661,6 +661,23 @@
         function selectClient(clientId, skipReload = false) {
             currentClient = clients.find(c => c.id === clientId) || null;
             
+            if (currentClient && currentClient.settings && currentClient.settings.analytics_date_filter) {
+                const df = currentClient.settings.analytics_date_filter;
+                _analyticsDuration = df.duration || '1m';
+                _analyticsCustomStart = df.start || null;
+                _analyticsCustomEnd = df.end || null;
+                _analyticsCompareMode = df.compare_mode || 'prev_period';
+                _analyticsCompareCustomStart = df.compare_start || null;
+                _analyticsCompareCustomEnd = df.compare_end || null;
+            } else {
+                _analyticsDuration = localStorage.getItem('analytics_duration') || '1m';
+                _analyticsCustomStart = localStorage.getItem('analytics_custom_start') || null;
+                _analyticsCustomEnd = localStorage.getItem('analytics_custom_end') || null;
+                _analyticsCompareMode = localStorage.getItem('analytics_compare_mode') || 'prev_period';
+                _analyticsCompareCustomStart = localStorage.getItem('analytics_compare_custom_start') || null;
+                _analyticsCompareCustomEnd = localStorage.getItem('analytics_compare_custom_end') || null;
+            }
+            
             // Update the display indicator
             const selector = document.getElementById('clientSelector');
             if (selector) {
@@ -1264,6 +1281,30 @@
             if (picker) picker.style.display = 'none';
         }
 
+        async function saveDateFilterToCampaign() {
+            if (!currentClient || (currentUser && currentUser.role === 'viewer')) return;
+            const newFilter = {
+                duration: _analyticsDuration,
+                start: _analyticsCustomStart,
+                end: _analyticsCustomEnd,
+                compare_mode: _analyticsCompareMode,
+                compare_start: _analyticsCompareCustomStart,
+                compare_end: _analyticsCompareCustomEnd
+            };
+            if (!currentClient.settings) currentClient.settings = {};
+            currentClient.settings.analytics_date_filter = newFilter;
+            
+            try {
+                await fetch(`/api/campaigns/${currentClient.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings: currentClient.settings })
+                });
+            } catch (err) {
+                console.error('Failed to save date filter to campaign', err);
+            }
+        }
+
         function applyDatePreset(presetKey) {
             _analyticsDuration = presetKey;
             _analyticsCustomStart = null;
@@ -1275,6 +1316,7 @@
             }
             localStorage.setItem('analytics_duration', presetKey);
             closeDatePicker();
+            saveDateFilterToCampaign();
             loadAnalyticsDashboard();
         }
 
@@ -1304,6 +1346,7 @@
                 _analyticsDuration = 'custom';
             }
             closeDatePicker();
+            saveDateFilterToCampaign();
             loadAnalyticsDashboard();
         }
 
@@ -2384,11 +2427,18 @@
                     </div>
                     <div class="relative flex items-center gap-3 mt-2 sm:mt-0">
                         <!-- Date Range Button -->
+                        ${currentUser && currentUser.role === 'viewer' ? `
+                        <button disabled class="dp-trigger-btn opacity-70 cursor-not-allowed" id="datePickerTrigger">
+                            <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                            <span>${getAnalyticsDateLabel()}</span>
+                        </button>
+                        ` : `
                         <button onclick="toggleDatePicker()" class="dp-trigger-btn" id="datePickerTrigger">
                             <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
                             <span>${getAnalyticsDateLabel()}</span>
                             <i data-lucide="chevron-down" class="w-3 h-3 opacity-50"></i>
                         </button>
+                        `}
                         <!-- Date Picker Dropdown -->
                         <div id="analyticsDatePicker" class="dp-dropdown" style="display:none">
                             <div class="dp-header">

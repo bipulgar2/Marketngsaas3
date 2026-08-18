@@ -633,6 +633,18 @@ def logout():
 def get_current_user():
     """Get current user info including role permissions and assigned campaigns."""
     user = session.get('user', {})
+    
+    # Refresh user data from database to ensure assigned_campaigns and role are up to date
+    try:
+        client = supabase_admin or supabase
+        profile_res = client.table('profiles').select('role, assigned_campaigns').eq('id', user.get('id')).execute()
+        if profile_res.data:
+            user['role'] = profile_res.data[0].get('role', 'viewer')
+            user['assigned_campaigns'] = profile_res.data[0].get('assigned_campaigns', [])
+            session['user'] = user # Update session with fresh data
+    except Exception as e:
+        logger.error(f"Failed to refresh user data in /auth/me: {e}")
+
     role = user.get('role', 'viewer')
     
     # Define which top-level tabs each role can see

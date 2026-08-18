@@ -1606,6 +1606,7 @@
                             <p class="text-sm text-gray-400">Monitoring ${trackedQueries.length} exact targeted search terms</p>
                         </div>
                         <div class="flex items-center gap-2 mt-2 sm:mt-0 flex-wrap">
+                            ${currentUser && currentUser.role === 'viewer' ? '' : `
                             <form onsubmit="event.preventDefault(); const inp = document.getElementById('manualKwInput'); if(inp.value.trim()){ addTrackedKeywords([inp.value.trim()]); inp.value=''; }" class="flex items-center">
                                 <input type="text" id="manualKwInput" placeholder="Add a keyword..." class="bg-gray-900 border border-gray-700 text-white text-xs rounded-l-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 w-48">
                                 <button type="submit" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-r-lg text-xs font-medium border border-violet-600 transition">Add</button>
@@ -1615,8 +1616,9 @@
                                 <i data-lucide="zap" class="w-3.5 h-3.5"></i> Fetch Live SERP
                             </button>
                             <div class="w-px h-6 bg-gray-700 mx-1"></div>
+                            `}
                             <span class="text-[10px] text-gray-600 uppercase tracking-widest">Duration</span>
-                            <select onchange="_analyticsDuration = this.value; loadTrackedKeywordsDashboard();" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
+                            <select ${currentUser && currentUser.role === 'viewer' ? 'disabled' : ''} onchange="_analyticsDuration = this.value; saveDateFilterToCampaign(); loadTrackedKeywordsDashboard();" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 ${currentUser && currentUser.role === 'viewer' ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
                                 <option value="1m" ${_analyticsDuration === '1m' ? 'selected' : ''}>1 Month</option>
                                 <option value="3m" ${_analyticsDuration === '3m' ? 'selected' : ''}>3 Months</option>
                                 <option value="6m" ${_analyticsDuration === '6m' ? 'selected' : ''}>6 Months</option>
@@ -1636,7 +1638,7 @@
                         <table class="w-full text-sm mt-1">
                             <thead>
                                 <tr class="text-xs uppercase tracking-wider" style="color:${ac};background:rgba(${acRgb},0.1)">
-                                    <th class="text-left py-3 px-4 w-12"><input type="checkbox" onchange="toggleAllTracked(this)" class="rounded bg-gray-900 border-gray-600 outline-none ring-0"></th>
+                                    <th class="text-left py-3 px-4 w-12">${currentUser && currentUser.role === 'viewer' ? '' : '<input type="checkbox" onchange="toggleAllTracked(this)" class="rounded bg-gray-900 border-gray-600 outline-none ring-0">'}</th>
                                     <th class="text-left py-3 px-4 w-12 text-center">Status</th>
                                     <th class="text-left py-3 px-4">Query</th>
                                     <th class="text-right py-3 px-4">Live SERP <span class="text-[9px] text-gray-500 block">DataForSEO</span></th>
@@ -1681,7 +1683,7 @@
                                     }
                                     
                                     return `<tr class="border-t border-gray-800/60 hover:bg-white/[0.02] group">
-                                        <td class="py-3 px-4"><input type="checkbox" value="${q.query}" onchange="updateTrackedSelection()" class="tracked-checkbox rounded bg-gray-900 border-gray-600 outline-none ring-0"></td>
+                                        <td class="py-3 px-4">${currentUser && currentUser.role === 'viewer' ? '' : `<input type="checkbox" value="${q.query}" onchange="updateTrackedSelection()" class="tracked-checkbox rounded bg-gray-900 border-gray-600 outline-none ring-0">`}</td>
                                         <td class="py-3 px-4 text-center">${rankStatus}</td>
                                         <td class="py-3 px-4 text-white font-medium">${q.query}</td>
                                         <td class="py-3 px-4 text-right">${serpCellHtml}</td>

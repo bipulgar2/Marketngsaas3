@@ -1625,7 +1625,7 @@
                             <div class="w-px h-6 bg-gray-700 mx-1"></div>
                             `}
                             <span class="text-[10px] text-gray-600 uppercase tracking-widest">Duration</span>
-                            <select ${currentUser && currentUser.role === 'viewer' ? 'disabled' : ''} onchange="_analyticsDuration = this.value; saveDateFilterToCampaign(); loadTrackedKeywordsDashboard();" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 ${currentUser && currentUser.role === 'viewer' ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
+                            <select onchange="_analyticsDuration = this.value; loadTrackedKeywordsDashboard();" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
                                 <option value="1m" ${_analyticsDuration === '1m' ? 'selected' : ''}>1 Month</option>
                                 <option value="3m" ${_analyticsDuration === '3m' ? 'selected' : ''}>3 Months</option>
                                 <option value="6m" ${_analyticsDuration === '6m' ? 'selected' : ''}>6 Months</option>
@@ -2436,18 +2436,11 @@
                     </div>
                     <div class="relative flex items-center gap-3 mt-2 sm:mt-0">
                         <!-- Date Range Button -->
-                        ${currentUser && currentUser.role === 'viewer' ? `
-                        <button disabled class="dp-trigger-btn opacity-70 cursor-not-allowed" id="datePickerTrigger">
-                            <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
-                            <span>${getAnalyticsDateLabel()}</span>
-                        </button>
-                        ` : `
                         <button onclick="toggleDatePicker()" class="dp-trigger-btn" id="datePickerTrigger">
                             <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
                             <span>${getAnalyticsDateLabel()}</span>
                             <i data-lucide="chevron-down" class="w-3 h-3 opacity-50"></i>
                         </button>
-                        `}
                         <!-- Date Picker Dropdown -->
                         <div id="analyticsDatePicker" class="dp-dropdown" style="display:none">
                             <div class="dp-header">

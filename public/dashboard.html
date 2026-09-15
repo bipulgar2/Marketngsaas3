@@ -535,6 +535,13 @@
                 if (currentUser.role === 'viewer') {
                     const newClientBtn = document.getElementById('newClientBtn');
                     if (newClientBtn) newClientBtn.style.display = 'none';
+                } else {
+                    // For non-client roles, disable the top-right client dropdown selector
+                    const clientSel = document.getElementById('clientSelector');
+                    if (clientSel) {
+                        clientSel.disabled = true;
+                        clientSel.classList.add('opacity-70', 'cursor-not-allowed');
+                    }
                 }
 
                 lucide.createIcons();

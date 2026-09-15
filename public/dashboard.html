@@ -5279,6 +5279,7 @@
                         <div class="flex items-center justify-between">
                             <h2 class="text-xl font-semibold text-white">Tasks</h2>
                             <div class="flex gap-4 items-center">
+                                ${currentUser.role !== 'viewer' ? `
                                 <select id="priorityFilterSelect" onchange="window.renderTasksTable()" class="bg-gray-900 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-violet-500">
                                     <option value="all" ${priorityFilter === 'all' ? 'selected' : ''}>All Priorities</option>
                                     <option value="3" ${priorityFilter === '3' ? 'selected' : ''}>Critical</option>
@@ -5295,6 +5296,7 @@
                                     <option value="Link Builder" ${roleFilter === 'Link Builder' ? 'selected' : ''}>Link Builder</option>
                                     <option value="Reporting Manager" ${roleFilter === 'Reporting Manager' ? 'selected' : ''}>Reporting Manager</option>
                                 </select>
+                                ` : ''}
                                 <span class="bg-gray-800 text-gray-300 px-3 py-1.5 rounded-lg text-sm">${tasksToRender.length} Total</span>
                                 ${['admin', 'campaign_manager'].includes(currentUser.role) ? `
                                 <button onclick="window.openCustomTaskModal()" class="bg-violet-600 hover:bg-violet-500 text-white p-2 rounded-lg text-sm flex items-center justify-center transition-colors">

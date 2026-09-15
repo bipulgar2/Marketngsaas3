@@ -693,6 +693,13 @@
             }
             window.history.pushState({}, '', url);
 
+            // For viewer/client users, update the bottom-left sidebar name to match the selected client
+            if (currentUser && currentUser.role === 'viewer' && currentClient) {
+                const clientDisplayName = currentClient.name || currentClient.domain || 'Client';
+                document.getElementById('userName').textContent = clientDisplayName;
+                document.getElementById('userAvatar').textContent = clientDisplayName[0].toUpperCase();
+            }
+
             // Only reload if not being chained with another navigation action
             if (!skipReload) {
                 loadContent();
